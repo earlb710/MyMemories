@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample HTML File</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 25px;
+        }
+        .feature {
+            background: #ecf0f1;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        .info-box {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to My Memories File Viewer</h1>
+        
+        <div class="info-box">
+            This is a sample HTML file demonstrating the HTML viewing capability of the application.
+        </div>
+
+        <h2>Features</h2>
+        
+        <div class="feature">
+            <strong>📷 Image Viewing:</strong> Display JPG, PNG, GIF, BMP and other image formats
+        </div>
+        
+        <div class="feature">
+            <strong>🌐 HTML Rendering:</strong> View HTML files with full CSS and JavaScript support using WebView2
+        </div>
+        
+        <div class="feature">
+            <strong>📄 PDF Support:</strong> Open and read PDF documents directly in the application
+        </div>
+        
+        <div class="feature">
+            <strong>📝 Text Files:</strong> View various text formats including JSON, XML, Markdown, and more
+        </div>
+
+        <h2>How to Use</h2>
+        <ol>
+            <li>Click the <code>Open File</code> button in the toolbar</li>
+            <li>Select any supported file type from your computer</li>
+            <li>The file will be displayed using the appropriate viewer</li>
+            <li>File information is shown in the status bar</li>
+        </ol>
+
+        <h2>Technical Details</h2>
+        <p>
+            This application is built using <strong>WinUI 3</strong>, Microsoft's modern native UI framework 
+            for Windows applications. It leverages:
+        </p>
+        <ul>
+            <li><strong>WebView2:</strong> Chromium-based web control for HTML and PDF</li>
+            <li><strong>Windows App SDK:</strong> Latest Windows platform features</li>
+            <li><strong>.NET 8:</strong> Modern cross-platform .NET runtime</li>
+        </ul>
+
+        <div class="info-box">
+            <strong>Note:</strong> This HTML file includes CSS styling which is properly rendered 
+            by the WebView2 control in the application.
+        </div>
+    </div>
+
+    <script>
+        // JavaScript also works in the WebView2 control
+        console.log('HTML viewer is working correctly!');
+        
+        // Add a timestamp
+        const footer = document.createElement('p');
+        footer.style.textAlign = 'center';
+        footer.style.marginTop = '30px';
+        footer.style.color = '#7f8c8d';
+        footer.innerHTML = `Page loaded at: ${new Date().toLocaleString()}`;
+        document.querySelector('.container').appendChild(footer);
+    </script>
+</body>
+</html>
