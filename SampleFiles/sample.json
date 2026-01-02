@@ -1,0 +1,60 @@
+{
+  "application": {
+    "name": "My Memories",
+    "version": "1.0.0",
+    "description": "Windows application to view and manage files, links, and documents",
+    "framework": "WinUI 3",
+    "targetFramework": "net8.0-windows10.0.19041.0",
+    "platform": "Windows"
+  },
+  "features": {
+    "imageViewing": {
+      "enabled": true,
+      "supportedFormats": ["jpg", "jpeg", "png", "gif", "bmp", "ico"],
+      "viewer": "Image Control"
+    },
+    "htmlViewing": {
+      "enabled": true,
+      "supportedFormats": ["html", "htm"],
+      "viewer": "WebView2",
+      "features": ["CSS", "JavaScript", "Modern Web Standards"]
+    },
+    "pdfViewing": {
+      "enabled": true,
+      "supportedFormats": ["pdf"],
+      "viewer": "WebView2 Native PDF Viewer"
+    },
+    "textViewing": {
+      "enabled": true,
+      "supportedFormats": ["txt", "xml", "json", "md", "log", "cs", "xaml", "config", "ini", "yaml", "yml", "csv"],
+      "viewer": "TextBlock with Syntax Preservation"
+    }
+  },
+  "dependencies": {
+    "Microsoft.WindowsAppSDK": "1.6.240923002",
+    "Microsoft.Windows.SDK.BuildTools": "10.0.26100.1742",
+    "Microsoft.Web.WebView2": "1.0.2792.45"
+  },
+  "requirements": {
+    "minimumOS": "Windows 10 version 1809 (build 17763)",
+    "recommendedOS": "Windows 11",
+    "runtime": ".NET 8.0 or higher",
+    "additionalComponents": ["WebView2 Runtime"]
+  },
+  "ui": {
+    "mainWindow": {
+      "title": "My Memories - File Viewer",
+      "components": [
+        "File Picker Button",
+        "Current File Display",
+        "Multi-Purpose Viewer Area",
+        "Status Bar"
+      ]
+    },
+    "viewers": [
+      "ImageViewer",
+      "WebViewer",
+      "TextViewer"
+    ]
+  }
+}
