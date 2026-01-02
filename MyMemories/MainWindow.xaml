@@ -52,40 +52,36 @@
                     x:Name="WebViewer"
                     Visibility="Collapsed"/>
 
-                <!-- Text Viewer -->
-                <TextBlock 
-                    x:Name="TextViewer"
-                    Visibility="Collapsed"
-                    TextWrapping="Wrap"
-                    FontFamily="Consolas"
-                    Padding="16"
-                    IsTextSelectionEnabled="True"/>
+                <!-- TreeView Header -->
+                <Grid Grid.Row="0" Padding="12,8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock 
+                        Grid.Column="0"
+                        Text="My Memories"
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Center"/>
+                    
+                    <Button 
+                        Grid.Column="1"
+                        Content="+"
+                        ToolTipService.ToolTip="Add Bookmark"
+                        Click="AddBookmarkButton_Click"
+                        Width="32"
+                        Height="32"/>
+                </Grid>
 
-                <!-- Welcome Message -->
-                <StackPanel 
-                    x:Name="WelcomePanel"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Spacing="16">
-                    <TextBlock 
-                        Text="My Memories - File Viewer"
-                        FontSize="24"
-                        FontWeight="Bold"
-                        HorizontalAlignment="Center"/>
-                    <TextBlock 
-                        Text="Open a file to view its contents"
-                        FontSize="16"
-                        HorizontalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <TextBlock 
-                        Text="Supported formats: Images (JPG, PNG, GIF, BMP), HTML, PDF, Text files"
-                        FontSize="12"
-                        HorizontalAlignment="Center"
-                        TextWrapping="Wrap"
-                        TextAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        MaxWidth="400"/>
-                </StackPanel>
+                <!-- TreeView for Bookmarks -->
+                <TreeView 
+                    Grid.Row="1"
+                    x:Name="BookmarksTreeView"
+                    SelectionMode="Single"
+                    Padding="8">
+                </TreeView>
             </Grid>
         </ScrollViewer>
 
