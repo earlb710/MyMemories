@@ -43,27 +43,32 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left Panel: TreeView with Add Button -->
+            <!-- Left Panel: TreeView with Add Buttons -->
             <Grid Grid.Column="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Add Link Button -->
-                <Button 
-                    Grid.Row="0"
-                    Content="+ Add Link"
-                    Click="AddBookmarkButton_Click"
-                    Margin="8"
-                    HorizontalAlignment="Stretch"/>
+                <!-- Button Panel -->
+                <StackPanel Grid.Row="0" Margin="8" Spacing="8">
+                    <Button 
+                        Content="+ Create Category"
+                        Click="CreateCategoryButton_Click"
+                        HorizontalAlignment="Stretch"/>
+                    <Button 
+                        Content="+ Add Link"
+                        Click="AddBookmarkButton_Click"
+                        HorizontalAlignment="Stretch"/>
+                </StackPanel>
 
                 <!-- TreeView -->
                 <TreeView 
                     Grid.Row="1"
                     x:Name="LinksTreeView"
                     Margin="8,0,8,8"
-                    SelectionChanged="LinksTreeView_SelectionChanged">
+                    SelectionChanged="LinksTreeView_SelectionChanged"
+                    ItemInvoked="LinksTreeView_ItemInvoked">
                 </TreeView>
             </Grid>
 
