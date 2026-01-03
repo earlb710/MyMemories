@@ -17,6 +17,17 @@ public class LinkDetailsDialog
     private readonly Window _parentWindow;
     private readonly XamlRoot _xamlRoot;
 
+    // Generic category icons
+    private static readonly List<string> CategoryIcons = new()
+    {
+        "📁", "📂", "📚", "📖", "📝", "📄", "📋", "📌",
+        "🗂️", "🗃️", "🗄️", "📦", "🎯", "⭐", "💼", "🏠",
+        "🎨", "🎭", "🎪", "🎬", "🎮", "🎵", "🎸", "📷",
+        "🖼️", "🌍", "🌐", "🔧", "🔨", "⚙️", "🔗", "📊",
+        "📈", "📉", "💻", "⌨️", "🖥️", "📱", "☁️", "💾",
+        "🔒", "🔓", "🔑", "🏆", "🎓", "📚", "✏️", "📐"
+    };
+
     public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot)
     {
         _parentWindow = parentWindow;
@@ -422,49 +433,151 @@ public class LinkDetailsDialog
 
         return null;
     }
-}
 
-/// <summary>
-/// Result of link edit operation.
-/// </summary>
-public class LinkEditResult
-{
-    public string Title { get; set; } = string.Empty;
-    public string Url { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public bool IsDirectory { get; set; }
-}
+    /// <summary>
+    /// Shows the add/edit category dialog with icon picker.
+    /// </summary>
+    public async Task<CategoryEditResult?> ShowCategoryDialogAsync(string title, string? currentName = null, string? currentDescription = null, string? currentIcon = null)
+    {
+        // Create input fields FIRST
+        var categoryNameTextBox = new TextBox
+        {
+            Text = currentName ?? string.Empty,
+            PlaceholderText = "Enter category name (required)",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
 
-/// <summary>
-/// Result of add link operation.
-/// </summary>
-public class AddLinkResult
-{
-    public string Title { get; set; } = string.Empty;
-    public string Url { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public bool IsDirectory { get; set; }
-    public TreeViewNode? CategoryNode { get; set; }
-}
+        var categoryDescriptionTextBox = new TextBox
+        {
+            Text = currentDescription ?? string.Empty,
+            PlaceholderText = "Enter category description (optional)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 80,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
 
-/// <summary>
-/// Helper class for category node information.
-/// </summary>
-public class CategoryNode
-{
-    public string Name { get; set; } = string.Empty;
-    public TreeViewNode? Node { get; set; }
-}
+        // Icon picker with GridView - LAST
+        var iconGridView = new GridView
+        {
+            MaxHeight = 300,
+            SelectionMode = ListViewSelectionMode.Single,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
 
-/// <summary>
-/// Link item data.
-/// </summary>
-public class LinkItem
-{
-    public string Title { get; set; } = string.Empty;
-    public string Url { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public bool IsDirectory { get; set; }
+        // Populate icon grid and find the index for default/current icon
+        int selectedIndex = 0; // Default to folder icon (📁) at index 0
+        for (int i = 0; i < CategoryIcons.Count; i++)
+        {
+            var icon = CategoryIcons[i];
+            var iconButton = new Border
+            {
+                Width = 50,
+                Height = 50,
+                Margin = new Thickness(4),
+                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Child = new TextBlock
+                {
+                    Text = icon,
+                    FontSize = 28,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            iconGridView.Items.Add(iconButton);
 
-    public override string ToString() => IsDirectory ? $"📂 {Title}" : Title;
+            // Pre-select current icon if editing
+            if (!string.IsNullOrEmpty(currentIcon) && icon == currentIcon)
+            {
+                selectedIndex = i;
+            }
+        }
+
+        // Set initial selection (defaults to 0 which is folder icon 📁)
+        iconGridView.SelectedIndex = selectedIndex;
+
+        // Create stack panel for dialog content - Name, Description, THEN Icon
+        var stackPanel = new StackPanel();
+        
+        // Category Name - FIRST
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Category Name: *", 
+            Margin = new Thickness(0, 0, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        stackPanel.Children.Add(categoryNameTextBox);
+        
+        // Description - SECOND
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Description:", 
+            Margin = new Thickness(0, 8, 0, 4) 
+        });
+        stackPanel.Children.Add(categoryDescriptionTextBox);
+        
+        // Icon Picker - LAST
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Category Icon:", 
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        
+        var iconScrollViewer = new ScrollViewer
+        {
+            MaxHeight = 300,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        iconScrollViewer.Content = iconGridView;
+        stackPanel.Children.Add(iconScrollViewer);
+
+        // Create and configure the dialog
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = stackPanel,
+            PrimaryButtonText = currentName == null ? "Create" : "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = _xamlRoot,
+            IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(currentName)
+        };
+
+        // Validate form
+        categoryNameTextBox.TextChanged += (s, args) =>
+        {
+            dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(categoryNameTextBox.Text);
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            string categoryName = categoryNameTextBox.Text.Trim();
+            string categoryDescription = categoryDescriptionTextBox.Text.Trim();
+            string selectedIcon = CategoryIcons[0]; // Default to folder icon 📁
+
+            if (iconGridView.SelectedIndex >= 0 && iconGridView.SelectedIndex < CategoryIcons.Count)
+            {
+                selectedIcon = CategoryIcons[iconGridView.SelectedIndex];
+            }
+
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                return null;
+            }
+
+            return new CategoryEditResult
+            {
+                Name = categoryName,
+                Description = categoryDescription,
+                Icon = selectedIcon
+            };
+        }
+
+        return null;
+    }
 }

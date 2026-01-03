@@ -55,8 +55,9 @@ public class CategoryItem
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Icon { get; set; } = "📁"; // Default folder icon
 
-    public override string ToString() => $"📁 {Name}";
+    public override string ToString() => $"{Icon} {Name}";
 }
 
 /// <summary>
@@ -66,6 +67,7 @@ public class CategoryData
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Icon { get; set; } = "📁"; // Default folder icon
     public List<LinkData> Links { get; set; } = new();
 }
 
@@ -78,4 +80,14 @@ public class LinkData
     public string Url { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public bool IsDirectory { get; set; }
+}
+
+/// <summary>
+/// Result of category edit operation.
+/// </summary>
+public class CategoryEditResult
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Icon { get; set; } = "📁";
 }

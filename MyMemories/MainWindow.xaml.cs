@@ -99,7 +99,8 @@ public sealed partial class MainWindow : Window
                             Content = new CategoryItem
                             {
                                 Name = categoryData.Name,
-                                Description = categoryData.Description
+                                Description = categoryData.Description,
+                                Icon = categoryData.Icon
                             }
                         };
 
@@ -154,6 +155,7 @@ public sealed partial class MainWindow : Window
             {
                 Name = category.Name,
                 Description = category.Description,
+                Icon = category.Icon,
                 Links = new List<LinkData>()
             };
 
@@ -455,68 +457,24 @@ public sealed partial class MainWindow : Window
 
     private async void CreateCategoryButton_Click(object sender, RoutedEventArgs e)
     {
-        // Create input fields for the category dialog
-        var categoryNameTextBox = new TextBox
+        if (_linkDialog == null)
         {
-            PlaceholderText = "Enter category name",
-            Margin = new Thickness(0, 0, 0, 8)
-        };
+            StatusText.Text = "Dialog not initialized";
+            return;
+        }
 
-        var categoryDescriptionTextBox = new TextBox
+        var result = await _linkDialog.ShowCategoryDialogAsync("Create New Category");
+
+        if (result != null)
         {
-            PlaceholderText = "Enter category description (optional)",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 80,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        // Create stack panel for dialog content
-        var stackPanel = new StackPanel();
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Category Name:", 
-            Margin = new Thickness(0, 0, 0, 4) 
-        });
-        stackPanel.Children.Add(categoryNameTextBox);
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Description:", 
-            Margin = new Thickness(0, 8, 0, 4) 
-        });
-        stackPanel.Children.Add(categoryDescriptionTextBox);
-
-        // Create and configure the dialog
-        var dialog = new ContentDialog
-        {
-            Title = "Create New Category",
-            Content = stackPanel,
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = this.Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            string categoryName = categoryNameTextBox.Text.Trim();
-            string categoryDescription = categoryDescriptionTextBox.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(categoryName))
-            {
-                StatusText.Text = "Category name cannot be empty";
-                return;
-            }
-
             // Create a new category node
             var categoryNode = new TreeViewNode
             {
                 Content = new CategoryItem 
                 { 
-                    Name = categoryName, 
-                    Description = categoryDescription 
+                    Name = result.Name, 
+                    Description = result.Description,
+                    Icon = result.Icon
                 }
             };
 
@@ -526,7 +484,7 @@ public sealed partial class MainWindow : Window
             // Save the new category
             await SaveCategory(categoryNode);
             
-            StatusText.Text = $"Created category: {categoryName}";
+            StatusText.Text = $"Created category: {result.Name}";
         }
     }
 
@@ -817,6 +775,15 @@ public sealed partial class MainWindow : Window
         // Create details panel
         var detailsPanel = new StackPanel { Spacing = 12 };
 
+        // Category icon
+        detailsPanel.Children.Add(new TextBlock
+        {
+            Text = category.Icon,
+            FontSize = 48,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
         // Category name
         detailsPanel.Children.Add(new TextBlock
         {
@@ -885,7 +852,7 @@ public sealed partial class MainWindow : Window
         var confirmDialog = new ContentDialog
         {
             Title = "Delete Category",
-            Content = $"Are you sure you want to delete the category '{category.Name}' and all its links ({node.Children.Count} link(s))?",
+            Content = $"Are you sure you want to delete the category '{category.Icon} {category.Name}' and all its links ({node.Children.Count} link(s))?",
             PrimaryButtonText = "Delete",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -914,118 +881,76 @@ public sealed partial class MainWindow : Window
 
     private async Task EditCategoryDialog(CategoryItem category, TreeViewNode node)
     {
+        if (_linkDialog == null)
+        {
+            StatusText.Text = "Dialog not initialized";
+            return;
+        }
+
         string oldCategoryName = category.Name;
+        bool wasExpanded = node.IsExpanded;
         
-        // Create input fields for editing
-        var categoryNameTextBox = new TextBox
+        var result = await _linkDialog.ShowCategoryDialogAsync(
+            "Edit Category", 
+            category.Name, 
+            category.Description, 
+            category.Icon);
+
+        if (result != null)
         {
-            Text = category.Name,
-            PlaceholderText = "Enter category name",
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var categoryDescriptionTextBox = new TextBox
-        {
-            Text = category.Description,
-            PlaceholderText = "Enter category description (optional)",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 80,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        // Create stack panel for dialog content
-        var stackPanel = new StackPanel();
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Category Name:", 
-            Margin = new Thickness(0, 0, 0, 4) 
-        });
-        stackPanel.Children.Add(categoryNameTextBox);
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Description:", 
-            Margin = new Thickness(0, 8, 0, 4) 
-        });
-        stackPanel.Children.Add(categoryDescriptionTextBox);
-
-        // Create and configure the dialog
-        var dialog = new ContentDialog
-        {
-            Title = "Edit Category",
-            Content = stackPanel,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = this.Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            string newName = categoryNameTextBox.Text.Trim();
-            string newDescription = categoryDescriptionTextBox.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(newName))
-            {
-                StatusText.Text = "Category name cannot be empty";
-                return;
-            }
-
             // If name changed, delete old file
-            if (oldCategoryName != newName)
+            if (oldCategoryName != result.Name)
             {
                 await DeleteCategoryFile(oldCategoryName);
             }
 
-            category.Name = newName;
-            category.Description = newDescription;
+            // Create a new CategoryItem instance to force TreeView refresh
+            var updatedCategory = new CategoryItem
+            {
+                Name = result.Name,
+                Description = result.Description,
+                Icon = result.Icon
+            };
             
-            // Force TreeView to refresh the display
-            node.Content = null;
-            node.Content = category;
+            // Store children temporarily
+            var children = new List<TreeViewNode>();
+            foreach (var child in node.Children)
+            {
+                children.Add(child);
+            }
+            
+            // Find the node's position in the tree
+            int nodeIndex = LinksTreeView.RootNodes.IndexOf(node);
+            
+            // Remove the old node
+            LinksTreeView.RootNodes.Remove(node);
+            
+            // Create a new node with updated content
+            var newNode = new TreeViewNode
+            {
+                Content = updatedCategory,
+                IsExpanded = wasExpanded
+            };
+            
+            // Restore children
+            foreach (var child in children)
+            {
+                newNode.Children.Add(child);
+            }
+            
+            // Insert the new node at the same position
+            LinksTreeView.RootNodes.Insert(nodeIndex, newNode);
+            
+            // Update last used category reference if needed
+            if (_lastUsedCategory == node)
+            {
+                _lastUsedCategory = newNode;
+            }
 
             // Save with new name
-            await SaveCategory(node);
+            await SaveCategory(newNode);
 
-            StatusText.Text = $"Updated category: {newName}";
+            StatusText.Text = $"Updated category: {result.Name}";
         }
-    }
-
-    // Data classes for JSON serialization
-    private class CategoryData
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public List<LinkData> Links { get; set; } = new();
-    }
-
-    private class LinkData
-    {
-        public string Title { get; set; } = string.Empty;
-        public string Url { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public bool IsDirectory { get; set; }
-    }
-
-    // Helper class to store category information
-    private class CategoryItem
-    {
-        public string Name { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-
-        public override string ToString() => $"📁 {Name}";
-    }
-
-    // Helper class to store link information
-    private class LinkItem
-    {
-        public string Title { get; set; } = string.Empty;
-        public string Url { get; set; } = string.Empty;
-        public string Description { get; set; } = string.Empty;
-        public bool IsDirectory { get; set; }
-
-        public override string ToString() => IsDirectory ? $"📂 {Title}" : Title;
     }
 }
