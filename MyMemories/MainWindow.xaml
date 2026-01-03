@@ -68,7 +68,24 @@
                     x:Name="LinksTreeView"
                     Margin="8,0,8,8"
                     SelectionChanged="LinksTreeView_SelectionChanged"
-                    ItemInvoked="LinksTreeView_ItemInvoked">
+                    RightTapped="LinksTreeView_RightTapped">
+                    
+                    <!-- Context Menu for Category Nodes -->
+                    <TreeView.Resources>
+                        <MenuFlyout x:Key="CategoryContextMenu">
+                            <MenuFlyoutItem Text="Add Link" Icon="Add" Click="CategoryMenu_AddLink_Click"/>
+                            <MenuFlyoutItem Text="Edit Category" Icon="Edit" Click="CategoryMenu_Edit_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Remove Category" Icon="Delete" Click="CategoryMenu_Remove_Click"/>
+                        </MenuFlyout>
+                        
+                        <!-- Context Menu for Link Nodes -->
+                        <MenuFlyout x:Key="LinkContextMenu">
+                            <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
+                        </MenuFlyout>
+                    </TreeView.Resources>
                 </TreeView>
             </Grid>
 
@@ -100,6 +117,14 @@
                         Background="Transparent"
                         FontFamily="Consolas"
                         Padding="12"/>
+                </ScrollViewer>
+
+                <!-- Node Details Viewer -->
+                <ScrollViewer
+                    x:Name="DetailsViewerScroll"
+                    Visibility="Collapsed"
+                    Padding="20">
+                    <StackPanel x:Name="DetailsPanel" Spacing="12"/>
                 </ScrollViewer>
 
                 <!-- Welcome Panel -->

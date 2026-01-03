@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,7 @@ public sealed partial class MainWindow : Window
     private TreeViewNode? _lastUsedCategory;
     private readonly string _dataFolder;
     private LinkDetailsDialog? _linkDialog;
+    private TreeViewNode? _contextMenuNode;
 
     public MainWindow()
     {
@@ -327,6 +329,7 @@ public sealed partial class MainWindow : Window
         ImageViewer.Visibility = Visibility.Collapsed;
         WebViewer.Visibility = Visibility.Collapsed;
         TextViewerScroll.Visibility = Visibility.Collapsed;
+        DetailsViewerScroll.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
     }
 
@@ -587,7 +590,12 @@ public sealed partial class MainWindow : Window
     {
         if (e.AddedItems.Count > 0 && e.AddedItems[0] is TreeViewNode node)
         {
-            if (node.Content is LinkItem linkItem)
+            if (node.Content is CategoryItem category)
+            {
+                // Show category details on the right side
+                await ShowCategoryDetails(category, node);
+            }
+            else if (node.Content is LinkItem linkItem)
             {
                 string filePath = linkItem.Url;
                 if (!string.IsNullOrEmpty(filePath))
@@ -598,7 +606,7 @@ public sealed partial class MainWindow : Window
                         if (linkItem.IsDirectory || System.IO.Directory.Exists(filePath))
                         {
                             // Show directory details
-                            await ShowDirectoryDetails(linkItem);
+                            await ShowLinkDirectoryDetails(linkItem);
                             return;
                         }
 
@@ -607,12 +615,18 @@ public sealed partial class MainWindow : Window
                         {
                             if (uri.IsFile)
                             {
+                                // Show link details first
+                                await ShowLinkDetails(linkItem);
+                                
                                 // Load local file
                                 StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
                                 await LoadFile(file);
                             }
                             else
                             {
+                                // Show link details for URL
+                                await ShowLinkDetails(linkItem);
+                                
                                 // Load URL in WebView
                                 HideAllViewers();
                                 if (WebViewer.CoreWebView2 == null)
@@ -629,71 +643,391 @@ public sealed partial class MainWindow : Window
                     catch (Exception ex)
                     {
                         StatusText.Text = $"Error loading link: {ex.Message}";
+                        await ShowLinkDetails(linkItem);
                     }
+                }
+                else
+                {
+                    // Show link details even if URL is empty
+                    await ShowLinkDetails(linkItem);
                 }
             }
         }
     }
 
-    private async Task ShowDirectoryDetails(LinkItem linkItem)
+    private async Task ShowCategoryDetails(CategoryItem category, TreeViewNode node)
     {
         HideAllViewers();
-        
-        var detailsPanel = new StackPanel { Spacing = 12, Margin = new Thickness(20) };
+        DetailsPanel.Children.Clear();
 
-        detailsPanel.Children.Add(new TextBlock
+        // Category icon (large)
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = category.Icon,
+            FontSize = 64,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        // Category name
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = category.Name,
+            FontSize = 28,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        // Divider
+        DetailsPanel.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 16, 0, 16)
+        });
+
+        // Description section
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Description",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(category.Description) 
+                ? "(No description provided)" 
+                : category.Description,
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16),
+            Foreground = string.IsNullOrWhiteSpace(category.Description)
+                ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                : null
+        });
+
+        // Statistics section
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Statistics",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"📊 Total Links: {node.Children.Count}",
+            FontSize = 14
+        });
+
+        int fileCount = 0;
+        int dirCount = 0;
+        int urlCount = 0;
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link)
+            {
+                if (link.IsDirectory)
+                    dirCount++;
+                else if (Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && !uri.IsFile)
+                    urlCount++;
+                else
+                    fileCount++;
+            }
+        }
+
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"📄 Files: {fileCount}",
+            FontSize = 14
+        });
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"📁 Directories: {dirCount}",
+            FontSize = 14
+        });
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"🌐 URLs: {urlCount}",
+            FontSize = 14
+        });
+
+        DetailsPanel.Children.Add(statsPanel);
+
+        // Links list
+        if (node.Children.Count > 0)
+        {
+            DetailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Links in this Category",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var linksListPanel = new StackPanel { Spacing = 8 };
+            foreach (var child in node.Children)
+            {
+                if (child.Content is LinkItem link)
+                {
+                    var linkCard = new Border
+                    {
+                        Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                            Microsoft.UI.Colors.Transparent),
+                        BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(12),
+                        Margin = new Thickness(0, 0, 0, 4)
+                    };
+
+                    var linkInfo = new StackPanel { Spacing = 4 };
+                    linkInfo.Children.Add(new TextBlock
+                    {
+                        Text = link.ToString(),
+                        FontSize = 14,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                    });
+
+                    if (!string.IsNullOrWhiteSpace(link.Description))
+                    {
+                        linkInfo.Children.Add(new TextBlock
+                        {
+                            Text = link.Description,
+                            FontSize = 12,
+                            TextWrapping = TextWrapping.Wrap,
+                            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                        });
+                    }
+
+                    linkCard.Child = linkInfo;
+                    linksListPanel.Children.Add(linkCard);
+                }
+            }
+            DetailsPanel.Children.Add(linksListPanel);
+        }
+
+        DetailsViewerScroll.Visibility = Visibility.Visible;
+        CurrentFileText.Text = $"Category: {category.Name}";
+        StatusText.Text = $"Viewing category: {category.Name} ({node.Children.Count} link(s))";
+    }
+
+    private async Task ShowLinkDetails(LinkItem linkItem)
+    {
+        HideAllViewers();
+        DetailsPanel.Children.Clear();
+
+        // Link icon
+        string linkIcon = linkItem.IsDirectory ? "📁" : "🔗";
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = linkIcon,
+            FontSize = 64,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+
+        // Link title
+        DetailsPanel.Children.Add(new TextBlock
         {
             Text = linkItem.Title,
-            FontSize = 24,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            FontSize = 28,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 8),
+            TextWrapping = TextWrapping.Wrap
         });
 
-        detailsPanel.Children.Add(new TextBlock
+        // Type badge
+        string typeText = linkItem.IsDirectory ? "Directory" : 
+            (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out var uri) && !uri.IsFile ? "Web URL" : "File");
+        
+        var typeBorder = new Border
         {
-            Text = "Directory Path:",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 16, 0, 4)
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(12, 4, 12, 4),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        typeBorder.Child = new TextBlock
+        {
+            Text = typeText,
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        DetailsPanel.Children.Add(typeBorder);
+
+        // Divider
+        DetailsPanel.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 16)
         });
-        detailsPanel.Children.Add(new TextBlock
+
+        // Path/URL section
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = linkItem.IsDirectory ? "Directory Path" : "Path/URL",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        DetailsPanel.Children.Add(new TextBlock
         {
             Text = linkItem.Url,
-            IsTextSelectionEnabled = true
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+            Margin = new Thickness(0, 0, 0, 16)
         });
 
-        if (!string.IsNullOrWhiteSpace(linkItem.Description))
+        // Description section
+        DetailsPanel.Children.Add(new TextBlock
         {
-            detailsPanel.Children.Add(new TextBlock
+            Text = "Description",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        DetailsPanel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(linkItem.Description) 
+                ? "(No description provided)" 
+                : linkItem.Description,
+            FontSize = 14,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 16),
+            Foreground = string.IsNullOrWhiteSpace(linkItem.Description)
+                ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                : null
+        });
+
+        // File/Directory information
+        try
+        {
+            if (linkItem.IsDirectory && Directory.Exists(linkItem.Url))
             {
-                Text = "Description:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 16, 0, 4)
-            });
-            detailsPanel.Children.Add(new TextBlock
+                var dirInfo = new DirectoryInfo(linkItem.Url);
+                
+                DetailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Directory Information",
+                    FontSize = 18,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+
+                var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📅 Created: {dirInfo.CreationTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📝 Last Modified: {dirInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"👁️ Last Accessed: {dirInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+
+                try
+                {
+                    var files = dirInfo.GetFiles();
+                    var dirs = dirInfo.GetDirectories();
+                    infoPanel.Children.Add(new TextBlock
+                    {
+                        Text = $"📄 Contains: {files.Length} file(s), {dirs.Length} folder(s)",
+                        FontSize = 14
+                    });
+                }
+                catch { }
+
+                DetailsPanel.Children.Add(infoPanel);
+            }
+            else if (File.Exists(linkItem.Url))
             {
-                Text = linkItem.Description,
-                TextWrapping = TextWrapping.Wrap
+                var fileInfo = new FileInfo(linkItem.Url);
+                
+                DetailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "File Information",
+                    FontSize = 18,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+
+                var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📦 Size: {FormatFileSize((ulong)fileInfo.Length)}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📂 Extension: {fileInfo.Extension}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📅 Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📝 Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = $"👁️ Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}",
+                    FontSize = 14
+                });
+
+                DetailsPanel.Children.Add(infoPanel);
+            }
+        }
+        catch (Exception ex)
+        {
+            DetailsPanel.Children.Add(new TextBlock
+            {
+                Text = $"⚠️ Unable to access file/directory information: {ex.Message}",
+                FontSize = 12,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 16)
             });
         }
+
+        DetailsViewerScroll.Visibility = Visibility.Visible;
+        CurrentFileText.Text = linkItem.Title;
+        StatusText.Text = $"Viewing link: {linkItem.Title}";
+    }
+
+    private async Task ShowLinkDirectoryDetails(LinkItem linkItem)
+    {
+        await ShowLinkDetails(linkItem);
 
         try
         {
             var folder = await StorageFolder.GetFolderFromPathAsync(linkItem.Url);
             var items = await folder.GetItemsAsync();
 
-            detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "Contents:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 16, 0, 4)
-            });
-            detailsPanel.Children.Add(new TextBlock
-            {
-                Text = $"{items.Count} item(s)"
-            });
-
+            // Add open button at the end
             var openButton = new Button
             {
                 Content = "Open in File Explorer",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Margin = new Thickness(0, 16, 0, 0)
             };
             openButton.Click += async (s, e) =>
@@ -707,142 +1041,18 @@ public sealed partial class MainWindow : Window
                     StatusText.Text = $"Error opening folder: {ex.Message}";
                 }
             };
-            detailsPanel.Children.Add(openButton);
+            DetailsPanel.Children.Add(openButton);
         }
         catch (Exception ex)
         {
-            detailsPanel.Children.Add(new TextBlock
+            DetailsPanel.Children.Add(new TextBlock
             {
                 Text = $"Error accessing directory: {ex.Message}",
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 16, 0, 0)
             });
-        }
-
-        var scrollViewer = new ScrollViewer
-        {
-            Content = detailsPanel
-        };
-
-        ContentGrid.Children.Add(scrollViewer);
-        scrollViewer.Visibility = Visibility.Visible;
-        
-        CurrentFileText.Text = linkItem.Title;
-        StatusText.Text = $"Viewing directory: {linkItem.Title}";
-    }
-
-    private async void LinksTreeView_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
-    {
-        if (args.InvokedItem is TreeViewNode node && node.Content is CategoryItem category)
-        {
-            await ShowCategoryDetailsDialog(category, node);
-        }
-        else if (args.InvokedItem is TreeViewNode linkNode && linkNode.Content is LinkItem link)
-        {
-            if (_linkDialog != null)
-            {
-                bool shouldEdit = await _linkDialog.ShowAsync(link);
-                if (shouldEdit)
-                {
-                    var editResult = await _linkDialog.ShowEditAsync(link);
-                    if (editResult != null)
-                    {
-                        link.Title = editResult.Title;
-                        link.Url = editResult.Url;
-                        link.Description = editResult.Description;
-                        link.IsDirectory = editResult.IsDirectory;
-                        
-                        // Force TreeView to refresh the display
-                        linkNode.Content = null;
-                        linkNode.Content = link;
-
-                        // Save the updated category
-                        var parentCategory = linkNode.Parent;
-                        if (parentCategory != null)
-                        {
-                            await SaveCategory(parentCategory);
-                        }
-
-                        StatusText.Text = $"Updated link: {editResult.Title}";
-                    }
-                }
-            }
-        }
-    }
-
-    private async Task ShowCategoryDetailsDialog(CategoryItem category, TreeViewNode node)
-    {
-        // Create details panel
-        var detailsPanel = new StackPanel { Spacing = 12 };
-
-        // Category icon
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = category.Icon,
-            FontSize = 48,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        // Category name
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "Category Name:",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = category.Name,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        // Category description
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "Description:",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrWhiteSpace(category.Description) 
-                ? "(No description)" 
-                : category.Description,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        // Item count
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "Links:",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        detailsPanel.Children.Add(new TextBlock
-        {
-            Text = $"{node.Children.Count} link(s)",
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        // Create and show dialog
-        var dialog = new ContentDialog
-        {
-            Title = "Category Details",
-            Content = detailsPanel,
-            CloseButtonText = "Close",
-            SecondaryButtonText = "Edit",
-            PrimaryButtonText = "Delete",
-            XamlRoot = this.Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Secondary)
-        {
-            await EditCategoryDialog(category, node);
-        }
-        else if (result == ContentDialogResult.Primary)
-        {
-            await DeleteCategoryDialog(category, node);
         }
     }
 
@@ -874,6 +1084,9 @@ public sealed partial class MainWindow : Window
             {
                 _lastUsedCategory = null;
             }
+            
+            // Show welcome screen
+            ShowWelcome();
             
             StatusText.Text = $"Deleted category: {category.Name}";
         }
@@ -951,6 +1164,189 @@ public sealed partial class MainWindow : Window
             await SaveCategory(newNode);
 
             StatusText.Text = $"Updated category: {result.Name}";
+            
+            // Refresh details view if this node is selected
+            if (LinksTreeView.SelectedNode == newNode)
+            {
+                await ShowCategoryDetails(updatedCategory, newNode);
+            }
+        }
+    }
+
+    // Right-click context menu handlers
+    private void LinksTreeView_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is FrameworkElement element)
+        {
+            // Find the TreeViewItem that was right-clicked
+            var treeViewItem = FindParent<TreeViewItem>(element);
+            if (treeViewItem?.Content is TreeViewNode node)
+            {
+                _contextMenuNode = node;
+                
+                // Show appropriate context menu based on node type
+                if (node.Content is CategoryItem)
+                {
+                    var categoryMenu = LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout;
+                    categoryMenu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
+                }
+                else if (node.Content is LinkItem)
+                {
+                    var linkMenu = LinksTreeView.Resources["LinkContextMenu"] as MenuFlyout;
+                    linkMenu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
+                }
+                
+                e.Handled = true;
+            }
+        }
+    }
+
+    private T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        DependencyObject parentObject = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(child);
+
+        if (parentObject == null)
+            return null;
+
+        if (parentObject is T parent)
+            return parent;
+
+        return FindParent<T>(parentObject);
+    }
+
+    // Category context menu handlers
+    private async void CategoryMenu_AddLink_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode == null || _linkDialog == null)
+            return;
+
+        var categories = LinksTreeView.RootNodes
+            .Where(n => n.Content is CategoryItem)
+            .Select(n => new CategoryNode 
+            { 
+                Name = ((CategoryItem)n.Content).Name, 
+                Node = n 
+            })
+            .ToList();
+
+        var selectedCategoryNode = new CategoryNode 
+        { 
+            Name = ((CategoryItem)_contextMenuNode.Content).Name, 
+            Node = _contextMenuNode 
+        };
+
+        var result = await _linkDialog.ShowAddAsync(categories, selectedCategoryNode);
+
+        if (result != null && result.CategoryNode != null)
+        {
+            var linkNode = new TreeViewNode
+            {
+                Content = new LinkItem 
+                { 
+                    Title = result.Title, 
+                    Url = result.Url,
+                    Description = result.Description,
+                    IsDirectory = result.IsDirectory
+                }
+            };
+
+            result.CategoryNode.Children.Add(linkNode);
+            result.CategoryNode.IsExpanded = true;
+            
+            await SaveCategory(result.CategoryNode);
+            
+            StatusText.Text = $"Added link '{result.Title}'";
+            
+            // Refresh details if category is still selected
+            if (LinksTreeView.SelectedNode == result.CategoryNode)
+            {
+                await ShowCategoryDetails((CategoryItem)result.CategoryNode.Content, result.CategoryNode);
+            }
+        }
+    }
+
+    private async void CategoryMenu_Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is CategoryItem category)
+        {
+            await EditCategoryDialog(category, _contextMenuNode);
+        }
+    }
+
+    private async void CategoryMenu_Remove_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is CategoryItem category)
+        {
+            await DeleteCategoryDialog(category, _contextMenuNode);
+        }
+    }
+
+    // Link context menu handlers
+    private async void LinkMenu_Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is LinkItem link && _linkDialog != null)
+        {
+            var editResult = await _linkDialog.ShowEditAsync(link);
+            if (editResult != null)
+            {
+                link.Title = editResult.Title;
+                link.Url = editResult.Url;
+                link.Description = editResult.Description;
+                link.IsDirectory = editResult.IsDirectory;
+                
+                // Force TreeView to refresh
+                _contextMenuNode.Content = null;
+                _contextMenuNode.Content = link;
+
+                // Save the updated category
+                var parentCategory = _contextMenuNode.Parent;
+                if (parentCategory != null)
+                {
+                    await SaveCategory(parentCategory);
+                }
+
+                StatusText.Text = $"Updated link: {editResult.Title}";
+                
+                // Refresh details if link is still selected
+                if (LinksTreeView.SelectedNode == _contextMenuNode)
+                {
+                    await ShowLinkDetails(link);
+                }
+            }
+        }
+    }
+
+    private async void LinkMenu_Remove_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is LinkItem link && _contextMenuNode.Parent != null)
+        {
+            var confirmDialog = new ContentDialog
+            {
+                Title = "Remove Link",
+                Content = $"Are you sure you want to remove the link '{link.Title}'?",
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = this.Content.XamlRoot
+            };
+
+            var result = await confirmDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                var parentCategory = _contextMenuNode.Parent;
+                parentCategory.Children.Remove(_contextMenuNode);
+                
+                await SaveCategory(parentCategory);
+                
+                // Show welcome screen or parent category details
+                if (LinksTreeView.SelectedNode == _contextMenuNode)
+                {
+                    ShowWelcome();
+                }
+                
+                StatusText.Text = $"Removed link: {link.Title}";
+            }
         }
     }
 }
