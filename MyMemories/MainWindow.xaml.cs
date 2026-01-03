@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -127,7 +127,7 @@ public sealed partial class MainWindow : Window
     {
         ImageViewer.Visibility = Visibility.Collapsed;
         WebViewer.Visibility = Visibility.Collapsed;
-        TextViewer.Visibility = Visibility.Collapsed;
+        TextViewerScroll.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
     }
 
@@ -221,7 +221,7 @@ public sealed partial class MainWindow : Window
         {
             string content = await FileIO.ReadTextAsync(file);
             TextViewer.Text = content;
-            TextViewer.Visibility = Visibility.Visible;
+            TextViewerScroll.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
@@ -254,5 +254,157 @@ public sealed partial class MainWindow : Window
             len = len / 1024;
         }
         return $"{len:0.##} {sizes[order]}";
+    }
+
+    private async void AddBookmarkButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Create input fields for the dialog
+        var titleTextBox = new TextBox
+        {
+            PlaceholderText = "Enter link title",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var urlTextBox = new TextBox
+        {
+            PlaceholderText = "Enter file path or URL",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var browseButton = new Button
+        {
+            Content = "Browse...",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        // Handle browse button click
+        browseButton.Click += async (s, args) =>
+        {
+            try
+            {
+                var openPicker = new FileOpenPicker();
+                var hWnd = WindowNative.GetWindowHandle(this);
+                InitializeWithWindow.Initialize(openPicker, hWnd);
+
+                openPicker.FileTypeFilter.Add("*");
+                
+                StorageFile? file = await openPicker.PickSingleFileAsync();
+                if (file != null)
+                {
+                    urlTextBox.Text = file.Path;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = file.Name;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error browsing file: {ex.Message}";
+            }
+        };
+
+        // Create stack panel for dialog content
+        var stackPanel = new StackPanel();
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Title:", 
+            Margin = new Thickness(0, 0, 0, 4) 
+        });
+        stackPanel.Children.Add(titleTextBox);
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "File Path or URL:", 
+            Margin = new Thickness(0, 8, 0, 4) 
+        });
+        stackPanel.Children.Add(urlTextBox);
+        stackPanel.Children.Add(browseButton);
+
+        // Create and configure the dialog
+        var dialog = new ContentDialog
+        {
+            Title = "Add Link",
+            Content = stackPanel,
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = this.Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            string title = titleTextBox.Text.Trim();
+            string url = urlTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(url))
+            {
+                StatusText.Text = "Link title and path cannot be empty";
+                return;
+            }
+
+            // Add to TreeView - Use TreeViewNode instead of TreeViewItem
+            var treeViewNode = new TreeViewNode
+            {
+                Content = new LinkItem { Title = title, Url = url }
+            };
+
+            LinksTreeView.RootNodes.Add(treeViewNode);
+            StatusText.Text = $"Added link: {title}";
+        }
+    }
+
+    private async void LinksTreeView_SelectionChanged(object sender, TreeViewSelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count > 0 && e.AddedItems[0] is TreeViewNode node)
+        {
+            if (node.Content is LinkItem linkItem)
+            {
+                string filePath = linkItem.Url;
+                if (!string.IsNullOrEmpty(filePath))
+                {
+                    try
+                    {
+                        // Check if it's a URL or local file
+                        if (Uri.TryCreate(filePath, UriKind.Absolute, out Uri? uri))
+                        {
+                            if (uri.IsFile)
+                            {
+                                // Load local file
+                                StorageFile file = await StorageFile.GetFileFromPathAsync(filePath);
+                                await LoadFile(file);
+                            }
+                            else
+                            {
+                                // Load URL in WebView
+                                HideAllViewers();
+                                if (WebViewer.CoreWebView2 == null)
+                                {
+                                    await WebViewer.EnsureCoreWebView2Async();
+                                }
+                                WebViewer.Source = uri;
+                                WebViewer.Visibility = Visibility.Visible;
+                                CurrentFileText.Text = linkItem.Title;
+                                StatusText.Text = $"Loaded: {uri}";
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusText.Text = $"Error loading link: {ex.Message}";
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper class to store link information
+    private class LinkItem
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
+
+        public override string ToString() => Title;
     }
 }

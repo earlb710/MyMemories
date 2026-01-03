@@ -36,9 +36,39 @@
                 Margin="8,0,0,0"/>
         </Grid>
 
-        <!-- Content Viewer Area -->
-        <ScrollViewer Grid.Row="1" x:Name="ContentScrollViewer">
-            <Grid x:Name="ContentGrid">
+        <!-- Main Content Area with TreeView and Viewer -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" MinWidth="150"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: TreeView with Add Button -->
+            <Grid Grid.Column="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Add Link Button -->
+                <Button 
+                    Grid.Row="0"
+                    Content="+ Add Link"
+                    Click="AddBookmarkButton_Click"
+                    Margin="8"
+                    HorizontalAlignment="Stretch"/>
+
+                <!-- TreeView -->
+                <TreeView 
+                    Grid.Row="1"
+                    x:Name="LinksTreeView"
+                    Margin="8,0,8,8"
+                    SelectionChanged="LinksTreeView_SelectionChanged">
+                </TreeView>
+            </Grid>
+
+            <!-- Content Viewer Area -->
+            <Grid Grid.Column="1" x:Name="ContentGrid">
                 <!-- Image Viewer -->
                 <Image 
                     x:Name="ImageViewer"
@@ -53,41 +83,40 @@
                     Visibility="Collapsed"/>
 
                 <!-- Text Viewer -->
-                <TextBlock 
-                    x:Name="TextViewer"
-                    Visibility="Collapsed"
-                    TextWrapping="Wrap"
-                    FontFamily="Consolas"
-                    Padding="16"
-                    IsTextSelectionEnabled="True"/>
+                <ScrollViewer
+                    x:Name="TextViewerScroll"
+                    Visibility="Collapsed">
+                    <TextBox 
+                        x:Name="TextViewer"
+                        IsReadOnly="True"
+                        AcceptsReturn="True"
+                        TextWrapping="Wrap"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        FontFamily="Consolas"
+                        Padding="12"/>
+                </ScrollViewer>
 
-                <!-- Welcome Message -->
+                <!-- Welcome Panel -->
                 <StackPanel 
                     x:Name="WelcomePanel"
+                    Visibility="Visible"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Spacing="16">
                     <TextBlock 
-                        Text="My Memories - File Viewer"
+                        Text="Welcome to My Memories"
                         FontSize="24"
-                        FontWeight="Bold"
+                        FontWeight="SemiBold"
                         HorizontalAlignment="Center"/>
                     <TextBlock 
-                        Text="Open a file to view its contents"
-                        FontSize="16"
+                        Text="Click 'Open File' to view images, HTML, PDF, or text files"
+                        FontSize="14"
                         HorizontalAlignment="Center"
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                    <TextBlock 
-                        Text="Supported formats: Images (JPG, PNG, GIF, BMP), HTML, PDF, Text files"
-                        FontSize="12"
-                        HorizontalAlignment="Center"
-                        TextWrapping="Wrap"
-                        TextAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                        MaxWidth="400"/>
                 </StackPanel>
             </Grid>
-        </ScrollViewer>
+        </Grid>
 
         <!-- Status Bar -->
         <Grid Grid.Row="2" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
