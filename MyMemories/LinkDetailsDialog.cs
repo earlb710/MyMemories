@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -206,6 +207,106 @@ public class LinkDetailsDialog
     }
 
     /// <summary>
+    /// Shows the move link dialog to select a new category.
+    /// </summary>
+    public async Task<MoveLinkResult?> ShowMoveLinkAsync(IEnumerable<CategoryNode> allCategories, TreeViewNode currentCategoryNode, string linkTitle)
+    {
+        // Create category selector ComboBox
+        var categoryComboBox = new ComboBox
+        {
+            PlaceholderText = "Select target category (required)",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        // Populate categories, excluding the current category
+        int currentIndex = 0;
+        
+        foreach (var category in allCategories)
+        {
+            // Don't allow moving to the same category
+            if (category.Node != currentCategoryNode)
+            {
+                categoryComboBox.Items.Add(new ComboBoxItem 
+                { 
+                    Content = category.Name, 
+                    Tag = category.Node
+                });
+            }
+        }
+
+        if (categoryComboBox.Items.Count == 0)
+        {
+            // No other categories available
+            var noCategoriesDialog = new ContentDialog
+            {
+                Title = "No Categories Available",
+                Content = "There are no other categories to move this link to. Please create another category first.",
+                CloseButtonText = "OK",
+                XamlRoot = _xamlRoot
+            };
+            await noCategoriesDialog.ShowAsync();
+            return null;
+        }
+
+        // Create info text
+        var infoText = new TextBlock
+        {
+            Text = $"Move '{linkTitle}' to:",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+
+        // Create stack panel for dialog content
+        var stackPanel = new StackPanel();
+        stackPanel.Children.Add(infoText);
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Target Category: *", 
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        stackPanel.Children.Add(categoryComboBox);
+
+        // Create and configure the dialog
+        var dialog = new ContentDialog
+        {
+            Title = "Move Link",
+            Content = stackPanel,
+            PrimaryButtonText = "Move",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = _xamlRoot,
+            IsPrimaryButtonEnabled = false // Initially disabled
+        };
+
+        // Enable button when category is selected
+        categoryComboBox.SelectionChanged += (s, args) =>
+        {
+            dialog.IsPrimaryButtonEnabled = categoryComboBox.SelectedIndex >= 0;
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary && categoryComboBox.SelectedIndex >= 0)
+        {
+            var selectedItem = categoryComboBox.SelectedItem as ComboBoxItem;
+            var targetCategory = selectedItem?.Tag as TreeViewNode;
+
+            if (targetCategory != null)
+            {
+                return new MoveLinkResult
+                {
+                    TargetCategoryNode = targetCategory
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Shows the add link dialog.
     /// </summary>
     public async Task<AddLinkResult?> ShowAddAsync(IEnumerable<CategoryNode> categories, CategoryNode? selectedCategory)
@@ -219,6 +320,9 @@ public class LinkDetailsDialog
         };
 
         // Populate categories
+        int selectedIndex = -1;
+        int currentIndex = 0;
+        
         foreach (var category in categories)
         {
             categoryComboBox.Items.Add(new ComboBoxItem 
@@ -230,8 +334,15 @@ public class LinkDetailsDialog
             // Pre-select if this is the selected category
             if (selectedCategory?.Node == category.Node)
             {
-                categoryComboBox.SelectedIndex = categoryComboBox.Items.Count - 1;
+                selectedIndex = currentIndex;
             }
+            currentIndex++;
+        }
+
+        // Set selected index after all items are added
+        if (selectedIndex >= 0)
+        {
+            categoryComboBox.SelectedIndex = selectedIndex;
         }
 
         // Create input fields for the dialog
@@ -315,7 +426,7 @@ public class LinkDetailsDialog
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = _xamlRoot,
-            IsPrimaryButtonEnabled = false // Initially disabled
+            IsPrimaryButtonEnabled = selectedIndex >= 0 // Enable if category is pre-selected
         };
 
         // Method to validate form and enable/disable Add button

@@ -43,37 +43,94 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left Panel: TreeView with Add Buttons -->
+            <!-- Left Panel: TreeView with Search and Add Buttons -->
             <Grid Grid.Column="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- Button Panel -->
-                <StackPanel Grid.Row="0" Margin="8" Spacing="8">
+                <!-- Search Box Panel -->
+                <Grid Grid.Row="0" Margin="8,8,8,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <ComboBox 
+                        Grid.Column="0"
+                        x:Name="SearchComboBox"
+                        IsEditable="True"
+                        PlaceholderText="Search categories and links..."
+                        HorizontalAlignment="Stretch"
+                        TextSubmitted="SearchComboBox_TextSubmitted"
+                        KeyDown="SearchComboBox_KeyDown"
+                        Margin="0,0,4,0"/>
+                    
                     <Button 
-                        Content="+ Create Category"
+                        Grid.Column="1"
+                        x:Name="SearchButton"
+                        Click="SearchButton_Click"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        ToolTipService.ToolTip="Search">
+                        <FontIcon Glyph="&#xE721;" FontSize="16"/>
+                    </Button>
+                </Grid>
+
+                <!-- Icon Button Panel -->
+                <Grid Grid.Row="1" Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Button 
+                        Grid.Column="0"
                         Click="CreateCategoryButton_Click"
-                        HorizontalAlignment="Stretch"/>
+                        HorizontalAlignment="Stretch"
+                        Margin="0,0,4,0"
+                        ToolTipService.ToolTip="Create Category">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8F4;" FontSize="16"/>
+                            <TextBlock Text="Category" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    
                     <Button 
-                        Content="+ Add Link"
+                        Grid.Column="1"
                         Click="AddBookmarkButton_Click"
-                        HorizontalAlignment="Stretch"/>
-                </StackPanel>
+                        HorizontalAlignment="Stretch"
+                        Margin="4,0,0,0"
+                        ToolTipService.ToolTip="Add Link">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE71B;" FontSize="16"/>
+                            <TextBlock Text="Link" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
 
                 <!-- TreeView -->
                 <TreeView 
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="LinksTreeView"
                     Margin="8,0,8,8"
                     SelectionChanged="LinksTreeView_SelectionChanged"
-                    RightTapped="LinksTreeView_RightTapped">
+                    RightTapped="LinksTreeView_RightTapped"
+                    DoubleTapped="LinksTreeView_DoubleTapped">
                     
                     <!-- Context Menu for Category Nodes -->
                     <TreeView.Resources>
                         <MenuFlyout x:Key="CategoryContextMenu">
                             <MenuFlyoutItem Text="Add Link" Icon="Add" Click="CategoryMenu_AddLink_Click"/>
+                            <MenuFlyoutItem Text="Add Sub Category" Click="CategoryMenu_AddSubCategory_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8F4;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Edit Category" Icon="Edit" Click="CategoryMenu_Edit_Click"/>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Remove Category" Icon="Delete" Click="CategoryMenu_Remove_Click"/>
@@ -81,6 +138,17 @@
                         
                         <!-- Context Menu for Link Nodes -->
                         <MenuFlyout x:Key="LinkContextMenu">
+                            <MenuFlyoutItem Text="Add Sub Category" Click="LinkMenu_AddSubCategory_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8F4;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Move Link" Click="LinkMenu_Move_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8DE;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
