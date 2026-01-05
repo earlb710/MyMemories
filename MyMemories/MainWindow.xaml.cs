@@ -84,6 +84,12 @@ public sealed partial class MainWindow : Window
             {
                 _treeViewService!.InsertCategoryNode(category);
             }
+            
+            // Check for folder changes and auto-refresh if enabled
+            foreach (var category in LinksTreeView.RootNodes)
+            {
+                CheckFolderChangesRecursively(category);
+            }
 
             StatusText.Text = categories.Count > 0
                 ? $"Loaded {categories.Count} categor{(categories.Count == 1 ? "y" : "ies")}"
@@ -92,6 +98,92 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = $"Error loading categories: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Recursively checks all folder links for changes and auto-refreshes if enabled.
+    /// </summary>
+    private async void CheckFolderChangesRecursively(TreeViewNode node)
+    {
+        if (node.Content is LinkItem link)
+        {
+            // Check if this is a folder link with a catalog that might have changed
+            if (link.IsDirectory && !link.IsCatalogEntry && 
+                link.LastCatalogUpdate.HasValue && Directory.Exists(link.Url))
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(link.Url);
+                    if (dirInfo.LastWriteTime > link.LastCatalogUpdate.Value)
+                    {
+                        // Folder has changed - if auto-refresh is enabled, refresh it
+                        if (link.AutoRefreshCatalog)
+                        {
+                            await RefreshCatalogSilentlyAsync(link, node);
+                        }
+                        else
+                        {
+                            // Just update the display to show the change indicator
+                            var tempContent = node.Content;
+                            node.Content = null;
+                            node.Content = tempContent;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Folder not accessible - ignore
+                }
+            }
+        }
+
+        // Recursively check all children
+        foreach (var child in node.Children)
+        {
+            CheckFolderChangesRecursively(child);
+        }
+    }
+
+    /// <summary>
+    /// Silently refreshes a catalog in the background without user interaction.
+    /// </summary>
+    private async Task RefreshCatalogSilentlyAsync(LinkItem linkItem, TreeViewNode linkNode)
+    {
+        try
+        {
+            // Remove existing catalog entries
+            _categoryService!.RemoveCatalogEntries(linkNode);
+
+            // Create new catalog entries
+            var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+
+            // Update the folder link's LastCatalogUpdate timestamp
+            linkItem.LastCatalogUpdate = DateTime.Now;
+
+            // Add new catalog entries to the tree
+            foreach (var entry in catalogEntries)
+            {
+                var entryNode = new TreeViewNode
+                {
+                    Content = entry
+                };
+                linkNode.Children.Add(entryNode);
+            }
+
+            // Update the catalog file count
+            _categoryService.UpdateCatalogFileCount(linkNode);
+
+            // Refresh the link node to update the display
+            _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+
+            // Save the changes
+            var rootNode = GetRootCategoryNode(linkNode);
+            await _categoryService.SaveCategoryAsync(rootNode);
+        }
+        catch
+        {
+            // Silently fail - don't interrupt startup
         }
     }
 
@@ -1051,23 +1143,12 @@ public sealed partial class MainWindow : Window
             // Update the catalog file count
             _categoryService.UpdateCatalogFileCount(linkNode);
 
-            // Refresh the link node to update the display (remove asterisk and update count)
-            var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+            // Refresh the link node to update the display
+            _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
             // Save the changes
-            var rootNode = GetRootCategoryNode(refreshedNode);
+            var rootNode = GetRootCategoryNode(linkNode);
             await _categoryService.SaveCategoryAsync(rootNode);
-
-            // Restore expansion state
-            refreshedNode.IsExpanded = wasExpanded;
-            
-            // Refresh the view
-            await _detailsViewService!.ShowLinkDetailsAsync(
-                linkItem,
-                refreshedNode,
-                async () => await CreateCatalogAsync(linkItem, refreshedNode),
-                async () => await RefreshCatalogAsync(linkItem, refreshedNode)
-            );
 
             StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
         }
@@ -1075,9 +1156,12 @@ public sealed partial class MainWindow : Window
         {
             StatusText.Text = $"Error refreshing catalog: {ex.Message}";
         }
+        finally
+        {
+            // Restore the expanded state
+            linkNode.IsExpanded = wasExpanded;
+        }
     }
-
-    #endregion
 
     #region Context Menu
 
@@ -1289,6 +1373,84 @@ public sealed partial class MainWindow : Window
             T typedParent => typedParent,
             _ => FindParent<T>(parent)
         };
+    }
+
+    #endregion
+
+    #region Splitter Resizing
+
+    private bool _isDraggingSplitter = false;
+    private double _startX = 0;
+    private double _startWidth = 0;
+
+    private void Splitter_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border splitter)
+        {
+            _isDraggingSplitter = true;
+            
+            // Get the pointer position relative to the entire window/grid
+            var pointerPoint = e.GetCurrentPoint(this.Content as UIElement);
+            _startX = pointerPoint.Position.X;
+            _startWidth = TreeViewColumn.ActualWidth;
+            
+            splitter.CapturePointer(e.Pointer);
+            e.Handled = true;
+        }
+    }
+
+    private void Splitter_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isDraggingSplitter)
+        {
+            // Get current pointer position relative to the window/grid
+            var pointerPoint = e.GetCurrentPoint(this.Content as UIElement);
+            var currentX = pointerPoint.Position.X;
+            
+            // Calculate the change in X position
+            var deltaX = currentX - _startX;
+            
+            // Calculate new width
+            var newWidth = _startWidth + deltaX;
+            
+            // Constrain to min/max values
+            if (newWidth >= TreeViewColumn.MinWidth && newWidth <= TreeViewColumn.MaxWidth)
+            {
+                TreeViewColumn.Width = new GridLength(newWidth);
+            }
+            
+            e.Handled = true;
+        }
+    }
+
+    private void Splitter_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isDraggingSplitter && sender is Border splitter)
+        {
+            _isDraggingSplitter = false;
+            splitter.ReleasePointerCapture(e.Pointer);
+            e.Handled = true;
+        }
+    }
+
+    private void Splitter_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        // Visual feedback: make splitter more visible when hovering
+        if (sender is Border splitter)
+        {
+            splitter.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Microsoft.UI.Colors.LightGray) { Opacity = 0.3 };
+        }
+    }
+
+    private void Splitter_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border splitter && !_isDraggingSplitter)
+        {
+            // Restore transparent background
+            splitter.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Microsoft.UI.Colors.Transparent);
+        }
     }
 
     #endregion

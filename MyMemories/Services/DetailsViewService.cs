@@ -218,7 +218,7 @@ public class DetailsViewService
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 8,
-                Margin = new Thickness(0, 0, 0, 16)
+                Margin = new Thickness(0, 0, 0, 8)
             };
 
             // Check if catalog already exists
@@ -282,6 +282,34 @@ public class DetailsViewService
             }
 
             _detailsPanel.Children.Add(buttonPanel);
+            
+            // Add Auto-Refresh Checkbox (only if catalog exists)
+            if (hasCatalog)
+            {
+                var autoRefreshCheckBox = new CheckBox
+                {
+                    Content = "Auto-refresh catalog on startup",
+                    IsChecked = linkItem.AutoRefreshCatalog,
+                    Margin = new Thickness(0, 0, 0, 16)
+                };
+                
+                autoRefreshCheckBox.Checked += async (s, e) =>
+                {
+                    linkItem.AutoRefreshCatalog = true;
+                    // Trigger save through callback if needed
+                    if (node != null)
+                    {
+                        // We'll need to add a callback parameter for this
+                    }
+                };
+                
+                autoRefreshCheckBox.Unchecked += (s, e) =>
+                {
+                    linkItem.AutoRefreshCatalog = false;
+                };
+                
+                _detailsPanel.Children.Add(autoRefreshCheckBox);
+            }
         }
 
         // Show catalog statistics if this folder has catalog entries

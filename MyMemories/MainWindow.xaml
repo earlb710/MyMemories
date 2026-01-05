@@ -16,7 +16,7 @@
         <!-- Main Content Area with TreeView and Viewer -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250" MinWidth="150" MaxWidth="600"/>
+                <ColumnDefinition Width="250" MinWidth="150" MaxWidth="600" x:Name="TreeViewColumn"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
@@ -141,13 +141,19 @@
                 </TreeView>
             </Grid>
 
-            <!-- GridSplitter for resizing -->
+            <!-- Draggable Splitter -->
             <Border 
                 Grid.Column="1" 
                 Width="6" 
                 Background="Transparent"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch">
+                VerticalAlignment="Stretch"
+                PointerPressed="Splitter_PointerPressed"
+                PointerMoved="Splitter_PointerMoved"
+                PointerReleased="Splitter_PointerReleased"
+                PointerCaptureLost="Splitter_PointerReleased"
+                PointerEntered="Splitter_PointerEntered"
+                PointerExited="Splitter_PointerExited">
                 <Grid>
                     <Rectangle 
                         Width="1" 

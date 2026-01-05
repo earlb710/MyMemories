@@ -37,6 +37,7 @@ public class LinkItem
     public bool IsCatalogEntry { get; set; }
     public DateTime? LastCatalogUpdate { get; set; }
     public ulong? FileSize { get; set; }
+    public bool AutoRefreshCatalog { get; set; } = false; // NEW PROPERTY
     
     // Internal property to store catalog count for display
     [JsonIgnore]
@@ -45,15 +46,30 @@ public class LinkItem
     public override string ToString()
     {
         var icon = GetIcon();
+        var changedIndicator = "";
+        
+        // Add asterisk for changed folders
+        if (IsDirectory && !IsCatalogEntry && LastCatalogUpdate.HasValue && Directory.Exists(Url))
+        {
+            try
+            {
+                var dirInfo = new DirectoryInfo(Url);
+                if (dirInfo.LastWriteTime > LastCatalogUpdate.Value)
+                {
+                    changedIndicator = " *";
+                }
+            }
+            catch { }
+        }
         
         // Show file count for catalog folders
         if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
         {
             var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
-            return $"{icon} {Title}{catalogInfo}";
+            return $"{icon} {Title}{catalogInfo}{changedIndicator}";
         }
         
-        return $"{icon} {Title}";
+        return $"{icon} {Title}{changedIndicator}";
     }
 
     public string GetIcon()
@@ -168,6 +184,9 @@ public class LinkData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ulong? FileSize { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoRefreshCatalog { get; set; } // NEW PROPERTY
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.UI.Xaml.Controls;
@@ -197,9 +197,24 @@ public class TreeViewService
         if (oldNode.Parent == null)
         {
             Debug.WriteLine($"[TreeViewService] WARNING: Link node has no parent, just updating content");
-            // Link nodes should always have a parent
             oldNode.Content = updatedLink;
             return oldNode;
+        }
+
+        // Check if folder has changed and update display
+        if (updatedLink.IsDirectory && !updatedLink.IsCatalogEntry && 
+            updatedLink.LastCatalogUpdate.HasValue && System.IO.Directory.Exists(updatedLink.Url))
+        {
+            try
+            {
+                var dirInfo = new System.IO.DirectoryInfo(updatedLink.Url);
+                if (dirInfo.LastWriteTime > updatedLink.LastCatalogUpdate.Value)
+                {
+                    // Mark as changed - the ToString() method will add the asterisk
+                    // The GetIcon() method will show 📂 instead of 📁
+                }
+            }
+            catch { }
         }
 
         // Store the node's children and expansion state

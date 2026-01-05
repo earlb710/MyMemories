@@ -145,6 +145,7 @@ public class CategoryService
                     IsCatalogEntry = link.IsCatalogEntry ? true : null,
                     LastCatalogUpdate = link.LastCatalogUpdate,
                     FileSize = link.FileSize,
+                    AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null, // NEW LINE
                     CatalogEntries = null
                 };
 
@@ -255,7 +256,8 @@ public class CategoryService
                     FileFilters = linkData.FileFilters ?? string.Empty,
                     IsCatalogEntry = linkData.IsCatalogEntry ?? false,
                     LastCatalogUpdate = linkData.LastCatalogUpdate,
-                    FileSize = linkData.FileSize
+                    FileSize = linkData.FileSize,
+                    AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false // NEW LINE
                 };
 
                 if (linkData.CatalogEntries != null)
