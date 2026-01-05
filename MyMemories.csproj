@@ -31,4 +31,10 @@
     <WindowsPackageType>None</WindowsPackageType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Content Include="Assets\AppIcon.ico">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

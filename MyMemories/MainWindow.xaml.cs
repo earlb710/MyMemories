@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using WinRT.Interop;
+using Microsoft.UI.Windowing;
+using Microsoft.UI; // Add this for Win32Interop
 
 namespace MyMemories;
 
@@ -39,7 +41,36 @@ public sealed partial class MainWindow : Window
             "Categories"
         );
 
+        // Set window icon
+        SetWindowIcon();
+
         _ = InitializeAsync();
+    }
+
+    /// <summary>
+    /// Sets the window icon to the book emoji icon (📚).
+    /// </summary>
+    private void SetWindowIcon()
+    {
+        try
+        {
+            var hWnd = WindowNative.GetWindowHandle(this);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            
+            // Path to the icon file
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            
+            if (File.Exists(iconPath))
+            {
+                appWindow.SetIcon(iconPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't crash the app
+            System.Diagnostics.Debug.WriteLine($"Failed to set window icon: {ex.Message}");
+        }
     }
 
     private async Task InitializeAsync()
