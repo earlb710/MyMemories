@@ -72,18 +72,43 @@ public class CategoryService
     /// </summary>
     public async Task SaveCategoryAsync(TreeViewNode categoryNode)
     {
-        if (categoryNode.Content is not CategoryItem category)
+        try
         {
-            throw new ArgumentException("Node must contain a CategoryItem", nameof(categoryNode));
+            if (categoryNode.Content is not CategoryItem category)
+            {
+                throw new ArgumentException("Node must contain a CategoryItem", nameof(categoryNode));
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] Starting save for category: {category.Name}");
+            
+            var categoryData = ConvertNodeToCategoryData(categoryNode);
+            
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] Converted to CategoryData successfully");
+
+            var json = JsonSerializer.Serialize(categoryData, _jsonOptions);
+            
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] Serialized to JSON successfully");
+            
+            var fileName = SanitizeFileName(category.Name) + ".json";
+            var filePath = Path.Combine(_dataFolder, fileName);
+            
+            await File.WriteAllTextAsync(filePath, json);
+            
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] Saved to file successfully: {fileName}");
         }
-
-        var categoryData = ConvertNodeToCategoryData(categoryNode);
-
-        var json = JsonSerializer.Serialize(categoryData, _jsonOptions);
-        var fileName = SanitizeFileName(category.Name) + ".json";
-        var filePath = Path.Combine(_dataFolder, fileName);
-        
-        await File.WriteAllTextAsync(filePath, json);
+        catch (ArgumentException ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] ArgumentException: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] ParamName: {ex.ParamName}");
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] StackTrace: {ex.StackTrace}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] Exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[SaveCategory] StackTrace: {ex.StackTrace}");
+            throw;
+        }
     }
 
     /// <summary>
@@ -107,149 +132,192 @@ public class CategoryService
     /// </summary>
     private CategoryData ConvertNodeToCategoryData(TreeViewNode categoryNode)
     {
-        if (categoryNode.Content is not CategoryItem category)
+        try
         {
-            throw new ArgumentException("Node must contain a CategoryItem");
-        }
-
-        var categoryData = new CategoryData
-        {
-            Name = category.Name,
-            Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
-            Icon = category.Icon == "📁" ? null : category.Icon,
-            CreatedDate = category.CreatedDate,
-            ModifiedDate = category.ModifiedDate,
-            Links = null,
-            SubCategories = null
-        };
-
-        var links = new List<LinkData>();
-        var subCategories = new List<CategoryData>();
-
-        // Process all children
-        foreach (var child in categoryNode.Children)
-        {
-            if (child.Content is LinkItem link)
+            if (categoryNode.Content is not CategoryItem category)
             {
-                var linkData = new LinkData
-                {
-                    Title = link.Title,
-                    Url = link.Url,
-                    Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
-                    IsDirectory = link.IsDirectory ? true : null,
-                    CategoryPath = link.CategoryPath,
-                    CreatedDate = link.CreatedDate,
-                    ModifiedDate = link.ModifiedDate,
-                    FolderType = link.IsDirectory && link.FolderType != FolderLinkType.LinkOnly ? link.FolderType : null,
-                    FileFilters = !string.IsNullOrWhiteSpace(link.FileFilters) ? link.FileFilters : null,
-                    IsCatalogEntry = link.IsCatalogEntry ? true : null,
-                    LastCatalogUpdate = link.LastCatalogUpdate,
-                    FileSize = link.FileSize,
-                    AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null, // NEW LINE
-                    CatalogEntries = null
-                };
+                var contentType = categoryNode.Content?.GetType().Name ?? "null";
+                System.Diagnostics.Debug.WriteLine($"[ConvertNode] ERROR: Expected CategoryItem, got {contentType}");
+                throw new ArgumentException($"Node must contain a CategoryItem, but contains: {contentType}");
+            }
 
-                // Process catalog entries
-                if (child.Children.Count > 0)
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] Processing category: {category.Name}");
+
+            var categoryData = new CategoryData
+            {
+                Name = category.Name,
+                Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
+                Icon = category.Icon == "📁" ? null : category.Icon,
+                CreatedDate = category.CreatedDate,
+                ModifiedDate = category.ModifiedDate,
+                Links = null,
+                SubCategories = null
+            };
+
+            var links = new List<LinkData>();
+            var subCategories = new List<CategoryData>();
+
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] Processing {categoryNode.Children.Count} children");
+
+            // Process all children
+            foreach (var child in categoryNode.Children)
+            {
+                if (child.Content is LinkItem link)
                 {
-                    var catalogEntries = new List<LinkData>();
-                    
-                    foreach (var catalogChild in child.Children)
+                    // Skip catalog entries that are direct children of categories
+                    // (they should only be children of folder links)
+                    if (link.IsCatalogEntry)
                     {
-                        if (catalogChild.Content is LinkItem catalogEntry)
+                        System.Diagnostics.Debug.WriteLine($"[ConvertNode] WARNING: Skipping orphaned catalog entry: {link.Title}");
+                        continue;
+                    }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[ConvertNode] Processing link: {link.Title}, IsDir: {link.IsDirectory}, IsCatalogEntry: {link.IsCatalogEntry}");
+                    
+                    var linkData = new LinkData
+                    {
+                        Title = link.Title,
+                        Url = link.Url,
+                        Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
+                        IsDirectory = link.IsDirectory ? true : null,
+                        CategoryPath = link.CategoryPath,
+                        CreatedDate = link.CreatedDate,
+                        ModifiedDate = link.ModifiedDate,
+                        FolderType = link.IsDirectory && link.FolderType != FolderLinkType.LinkOnly ? link.FolderType : null,
+                        FileFilters = !string.IsNullOrWhiteSpace(link.FileFilters) ? link.FileFilters : null,
+                        IsCatalogEntry = link.IsCatalogEntry ? true : null,
+                        LastCatalogUpdate = link.LastCatalogUpdate,
+                        FileSize = link.FileSize,
+                        AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null,
+                        CatalogEntries = null
+                    };
+
+                    // Process catalog entries (only for non-catalog-entry links)
+                    if (child.Children.Count > 0 && !link.IsCatalogEntry)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ConvertNode] Link has {child.Children.Count} catalog children");
+                        
+                        var catalogEntries = new List<LinkData>();
+                        
+                        foreach (var catalogChild in child.Children)
                         {
-                            string relativeUrl = catalogEntry.Url;
-                            if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url))
+                            if (catalogChild.Content is LinkItem catalogEntry)
                             {
-                                relativeUrl = catalogEntry.IsDirectory 
-                                    ? new DirectoryInfo(catalogEntry.Url).Name
-                                    : Path.GetFileName(catalogEntry.Url);
-                            }
-
-                            var catalogData = new LinkData
-                            {
-                                Title = catalogEntry.Title,
-                                Url = relativeUrl,
-                                Description = string.IsNullOrWhiteSpace(catalogEntry.Description) ? null : catalogEntry.Description,
-                                IsDirectory = catalogEntry.IsDirectory ? true : null,
-                                CategoryPath = catalogEntry.CategoryPath,
-                                CreatedDate = catalogEntry.CreatedDate,
-                                ModifiedDate = catalogEntry.ModifiedDate,
-                                FolderType = null,
-                                FileFilters = null,
-                                IsCatalogEntry = null,
-                                LastCatalogUpdate = null,
-                                FileSize = catalogEntry.FileSize,
-                                CatalogEntries = null
-                            };
-
-                            // Recursively process subdirectory catalog entries
-                            if (catalogEntry.IsDirectory && catalogChild.Children.Count > 0)
-                            {
-                                var subCatalogEntries = new List<LinkData>();
+                                System.Diagnostics.Debug.WriteLine($"[ConvertNode]   Catalog entry: {catalogEntry.Title}, IsDir: {catalogEntry.IsDirectory}, Children: {catalogChild.Children.Count}");
                                 
-                                foreach (var subCatalogChild in catalogChild.Children)
+                                string relativeUrl = catalogEntry.Url;
+                                if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    if (subCatalogChild.Content is LinkItem subCatalogEntry)
-                                    {
-                                        string subRelativeUrl = subCatalogEntry.Url;
-                                        if (!string.IsNullOrEmpty(catalogEntry.Url) && subCatalogEntry.Url.StartsWith(catalogEntry.Url))
-                                        {
-                                            subRelativeUrl = subCatalogEntry.IsDirectory
-                                                ? new DirectoryInfo(subCatalogEntry.Url).Name
-                                                : Path.GetFileName(subCatalogEntry.Url);
-                                        }
+                                    relativeUrl = catalogEntry.IsDirectory 
+                                        ? new DirectoryInfo(catalogEntry.Url).Name
+                                        : Path.GetFileName(catalogEntry.Url);
+                                }
 
-                                        subCatalogEntries.Add(new LinkData
+                                var catalogData = new LinkData
+                                {
+                                    Title = catalogEntry.Title,
+                                    Url = relativeUrl,
+                                    Description = string.IsNullOrWhiteSpace(catalogEntry.Description) ? null : catalogEntry.Description,
+                                    IsDirectory = catalogEntry.IsDirectory ? true : null,
+                                    CategoryPath = catalogEntry.CategoryPath,
+                                    CreatedDate = catalogEntry.CreatedDate,
+                                    ModifiedDate = catalogEntry.ModifiedDate,
+                                    FolderType = null,
+                                    FileFilters = null,
+                                    IsCatalogEntry = null,
+                                    LastCatalogUpdate = null,
+                                    FileSize = catalogEntry.FileSize,
+                                    CatalogEntries = null
+                                };
+
+                                // Recursively process subdirectory catalog entries ONLY if they have children
+                                if (catalogEntry.IsDirectory && catalogChild.Children.Count > 0)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[ConvertNode]     Processing subdirectory: {catalogEntry.Title} with {catalogChild.Children.Count} children");
+                                    
+                                    var subCatalogEntries = new List<LinkData>();
+                                    
+                                    foreach (var subCatalogChild in catalogChild.Children)
+                                    {
+                                        if (subCatalogChild.Content is LinkItem subCatalogEntry)
                                         {
-                                            Title = subCatalogEntry.Title,
-                                            Url = subRelativeUrl,
-                                            Description = string.IsNullOrWhiteSpace(subCatalogEntry.Description) ? null : subCatalogEntry.Description,
-                                            IsDirectory = subCatalogEntry.IsDirectory ? true : null,
-                                            CategoryPath = subCatalogEntry.CategoryPath,
-                                            CreatedDate = subCatalogEntry.CreatedDate,
-                                            ModifiedDate = subCatalogEntry.ModifiedDate,
-                                            FileSize = subCatalogEntry.FileSize
-                                        });
+                                            string subRelativeUrl = subCatalogEntry.Url;
+                                            if (!string.IsNullOrEmpty(catalogEntry.Url) && subCatalogEntry.Url.StartsWith(catalogEntry.Url, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                subRelativeUrl = subCatalogEntry.IsDirectory
+                                                    ? new DirectoryInfo(subCatalogEntry.Url).Name
+                                                    : Path.GetFileName(subCatalogEntry.Url);
+                                            }
+
+                                            subCatalogEntries.Add(new LinkData
+                                            {
+                                                Title = subCatalogEntry.Title,
+                                                Url = subRelativeUrl,
+                                                Description = string.IsNullOrWhiteSpace(subCatalogEntry.Description) ? null : subCatalogEntry.Description,
+                                                IsDirectory = subCatalogEntry.IsDirectory ? true : null,
+                                                CategoryPath = subCatalogEntry.CategoryPath,
+                                                CreatedDate = subCatalogEntry.CreatedDate,
+                                                ModifiedDate = subCatalogEntry.ModifiedDate,
+                                                FileSize = subCatalogEntry.FileSize,
+                                                CatalogEntries = null  // IMPORTANT: Don't go deeper than 2 levels
+                                            });
+                                        }
+                                    }
+                                    
+                                    if (subCatalogEntries.Count > 0)
+                                    {
+                                        catalogData.CatalogEntries = subCatalogEntries;
+                                        System.Diagnostics.Debug.WriteLine($"[ConvertNode]     Added {subCatalogEntries.Count} sub-entries");
                                     }
                                 }
-                                
-                                if (subCatalogEntries.Count > 0)
-                                {
-                                    catalogData.CatalogEntries = subCatalogEntries;
-                                }
-                            }
 
-                            catalogEntries.Add(catalogData);
+                                catalogEntries.Add(catalogData);
+                            }
+                        }
+                        
+                        if (catalogEntries.Count > 0)
+                        {
+                            linkData.CatalogEntries = catalogEntries;
+                            System.Diagnostics.Debug.WriteLine($"[ConvertNode] Added {catalogEntries.Count} catalog entries to link");
                         }
                     }
-                    
-                    if (catalogEntries.Count > 0)
-                    {
-                        linkData.CatalogEntries = catalogEntries;
-                    }
+
+                    links.Add(linkData);
                 }
-
-                links.Add(linkData);
+                else if (child.Content is CategoryItem)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ConvertNode] Recursing into subcategory");
+                    var subCategoryData = ConvertNodeToCategoryData(child);
+                    subCategories.Add(subCategoryData);
+                }
             }
-            else if (child.Content is CategoryItem)
+
+            if (links.Count > 0)
             {
-                var subCategoryData = ConvertNodeToCategoryData(child);
-                subCategories.Add(subCategoryData);
+                categoryData.Links = links;
             }
-        }
+            
+            if (subCategories.Count > 0)
+            {
+                categoryData.SubCategories = subCategories;
+            }
 
-        if (links.Count > 0)
-        {
-            categoryData.Links = links;
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] Successfully converted category: {category.Name} with {links.Count} links and {subCategories.Count} subcategories");
+            
+            return categoryData;
         }
-        
-        if (subCategories.Count > 0)
+        catch (ArgumentException ex)
         {
-            categoryData.SubCategories = subCategories;
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] ArgumentException: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] StackTrace: {ex.StackTrace}");
+            throw;
         }
-
-        return categoryData;
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] Exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ConvertNode] StackTrace: {ex.StackTrace}");
+            throw;
+        }
     }
 
     /// <summary>
@@ -561,7 +629,7 @@ public class CategoryService
 
         foreach (var entry in catalogEntries)
         {
-                node.Children.Remove(entry);
+            node.Children.Remove(entry);
         }
     }
 
@@ -610,5 +678,72 @@ public class CategoryService
         }
         
         return count;
+    }
+
+    private TreeViewNode GetRootCategoryNode(TreeViewNode node)
+    {
+        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Starting from node: {node.Content?.GetType().Name}");
+        
+        var current = node;
+        int safetyCounter = 0;
+        const int maxDepth = 100; // Prevent infinite loops
+        
+        // Navigate up until we find a root category node (one without a parent)
+        while (current.Parent != null && safetyCounter < maxDepth)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Moving to parent: {current.Parent.Content?.GetType().Name}");
+            current = current.Parent;
+            safetyCounter++;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Reached top after {safetyCounter} levels");
+        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Top node content: {current.Content?.GetType().Name}");
+        
+        // If we still have a parent after max depth, something is wrong
+        if (safetyCounter >= maxDepth)
+        {
+            throw new InvalidOperationException($"Node hierarchy too deep (>{maxDepth} levels). Possible circular reference.");
+        }
+        
+        // At this point, current should be a root node
+        // Verify it's actually a CategoryItem
+        if (current.Content is CategoryItem category)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found root category: {category.Name}");
+            return current;
+        }
+        
+        // If the root is a LinkItem, search all root nodes to find its category
+        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Root is not CategoryItem, searching TreeView roots...");
+        
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Checking root: {(rootNode.Content as CategoryItem)?.Name ?? "not a category"}");
+            
+            if (rootNode.Content is CategoryItem && NodeContainsDescendant(rootNode, node))
+            {
+                var catName = (rootNode.Content as CategoryItem)?.Name;
+                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found containing category: {catName}");
+                return rootNode;
+            }
+        }
+        
+        // If we somehow ended up with a non-category root, throw an error
+        var contentType = current.Content?.GetType().Name ?? "null";
+        throw new InvalidOperationException($"Could not find root category node. Found: {contentType}");
+    }
+
+    private bool NodeContainsDescendant(TreeViewNode ancestor, TreeViewNode target)
+    {
+        if (ancestor == target)
+            return true;
+            
+        foreach (var child in ancestor.Children)
+        {
+            if (NodeContainsDescendant(child, target))
+                return true;
+        }
+        
+        return false;
     }
 }

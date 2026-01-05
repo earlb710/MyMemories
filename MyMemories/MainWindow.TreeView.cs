@@ -299,9 +299,12 @@ public sealed partial class MainWindow
             }
 
             _categoryService.UpdateCatalogFileCount(linkNode);
-            _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+            
+            // FIX: Capture the NEW node reference returned by RefreshLinkNode
+            var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
-            var rootNode = GetRootCategoryNode(linkNode);
+            // FIX: Use the NEW refreshed node to find root and save
+            var rootNode = GetRootCategoryNode(refreshedNode);
             await _categoryService.SaveCategoryAsync(rootNode);
 
             StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
@@ -312,6 +315,8 @@ public sealed partial class MainWindow
         }
         finally
         {
+            // Note: wasExpanded is tracked on the OLD node reference
+            // The refreshed node will maintain its expansion state
             linkNode.IsExpanded = wasExpanded;
         }
     }
