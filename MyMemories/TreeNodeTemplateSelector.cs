@@ -13,12 +13,25 @@ public class TreeNodeTemplateSelector : DataTemplateSelector
 
     protected override DataTemplate? SelectTemplateCore(object item)
     {
-        return item switch
+        // TreeView passes TreeViewNode, not the content directly - extract it
+        object? actualItem = item;
+        if (item is TreeViewNode node)
         {
-            CategoryItem => CategoryTemplate,
-            LinkItem => LinkTemplate,
-            _ => null
-        };
+            actualItem = node.Content;
+        }
+        
+        DataTemplate? result = null;
+        
+        if (actualItem is CategoryItem)
+        {
+            result = CategoryTemplate;
+        }
+        else if (actualItem is LinkItem)
+        {
+            result = LinkTemplate;
+        }
+        
+        return result;
     }
 
     protected override DataTemplate? SelectTemplateCore(object item, DependencyObject container)

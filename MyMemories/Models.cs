@@ -145,14 +145,26 @@ public class LinkItem : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the icon without the warning badge (for binding)
+    /// </summary>
+    [JsonIgnore]
+    public string IconWithoutBadge => GetIconWithoutBadge();
+
+    /// <summary>
     /// Gets the icon without the warning badge (for XAML binding)
     /// </summary>
     public string GetIconWithoutBadge()
     {
-        // For directories - always return normal folder icon
+        // For directories - return appropriate icon based on folder type
         if (IsDirectory)
         {
-            return "📁";
+            return FolderType switch
+            {
+                FolderLinkType.LinkOnly => "🔗",           // Link icon for link-only folders
+                FolderLinkType.CatalogueFiles => "📂",     // Open folder for cataloged folders
+                FolderLinkType.FilteredCatalogue => "🗂️",  // Card index/filtered folder icon
+                _ => "📁"                                   // Default folder icon (fallback)
+            };
         }
         
         // For web URLs (non-file URIs)
@@ -166,7 +178,7 @@ public class LinkItem : INotifyPropertyChanged
             ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "🖼️",
             ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "🎬",
             ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "🎵",
-            ".pdf" => "📄",
+            ".pdf" => "📋",
             ".doc" or ".docx" => "📝",
             ".xls" or ".xlsx" => "📊",
             ".zip" or ".rar" or ".7z" => "📦",
