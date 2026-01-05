@@ -174,12 +174,6 @@
                         
                         <!-- Context Menu for Link Nodes -->
                         <MenuFlyout x:Key="LinkContextMenu">
-                            <MenuFlyoutItem Text="Add Sub Category" Click="LinkMenu_AddSubCategory_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8F4;"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Move Link" Click="LinkMenu_Move_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8DE;"/>

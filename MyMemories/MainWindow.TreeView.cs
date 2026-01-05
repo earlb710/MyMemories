@@ -2,11 +2,13 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.System;
-using System.IO.Compression;
 
 namespace MyMemories;
 
@@ -54,11 +56,20 @@ public sealed partial class MainWindow
             // Check if this is a zip entry (URL contains "::")
             if (linkItem.Url.Contains("::"))
             {
-                await OpenZipEntryAsync(linkItem);
+                // If it's a directory within the zip, just expand/collapse
+                if (linkItem.IsDirectory)
+                {
+                    LinksTreeView.SelectedNode.IsExpanded = !LinksTreeView.SelectedNode.IsExpanded;
+                }
+                else
+                {
+                    // It's a file within the zip - extract and open it
+                    await OpenZipEntryAsync(linkItem);
+                }
             }
             else if (linkItem.IsDirectory)
             {
-                // Expand/collapse directory
+                // Expand/collapse regular directory
                 LinksTreeView.SelectedNode.IsExpanded = !LinksTreeView.SelectedNode.IsExpanded;
             }
             else
@@ -71,10 +82,39 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Opens a file using the default system application.
+    /// </summary>
+    private async Task OpenFileAsync(string filePath)
+    {
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                var errorMsg = $"File not found: {filePath}";
+                Debug.WriteLine($"[OpenFileAsync] {errorMsg}");
+                StatusText.Text = errorMsg;
+                return;
+            }
+
+            var file = await StorageFile.GetFileFromPathAsync(filePath);
+            await Launcher.LaunchFileAsync(file);
+            StatusText.Text = $"Opened: {Path.GetFileName(filePath)}";
+            Debug.WriteLine($"[OpenFileAsync] Successfully opened: {filePath}");
+        }
+        catch (Exception ex)
+        {
+            var errorMsg = $"Error opening file: {ex.Message}";
+            Debug.WriteLine($"[OpenFileAsync] Exception: {ex}");
+            StatusText.Text = errorMsg;
+        }
+    }
+
     private async Task OpenLinkAsync(LinkItem linkItem)
     {
         if (string.IsNullOrEmpty(linkItem.Url))
         {
+            Debug.WriteLine("[OpenLinkAsync] Link has no URL");
             StatusText.Text = "Link has no URL to open";
             return;
         }
@@ -85,6 +125,7 @@ public sealed partial class MainWindow
             {
                 await Launcher.LaunchFolderPathAsync(linkItem.Url);
                 StatusText.Text = $"Opened directory: {linkItem.Title}";
+                Debug.WriteLine($"[OpenLinkAsync] Opened directory: {linkItem.Url}");
             }
             else if (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out Uri? uri))
             {
@@ -93,17 +134,21 @@ public sealed partial class MainWindow
                     var file = await StorageFile.GetFileFromPathAsync(linkItem.Url);
                     await Launcher.LaunchFileAsync(file);
                     StatusText.Text = $"Opened file: {linkItem.Title}";
+                    Debug.WriteLine($"[OpenLinkAsync] Opened file: {linkItem.Url}");
                 }
                 else
                 {
                     await Launcher.LaunchUriAsync(uri);
                     StatusText.Text = $"Opened URL: {linkItem.Title}";
+                    Debug.WriteLine($"[OpenLinkAsync] Opened URL: {uri}");
                 }
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error opening link: {ex.Message}";
+            var errorMsg = $"Error opening link: {ex.Message}";
+            Debug.WriteLine($"[OpenLinkAsync] Exception for '{linkItem.Title}': {ex}");
+            StatusText.Text = errorMsg;
         }
     }
 
@@ -111,6 +156,7 @@ public sealed partial class MainWindow
     {
         if (string.IsNullOrEmpty(linkItem.Url))
         {
+            Debug.WriteLine($"[HandleLinkSelectionAsync] Link '{linkItem.Title}' has no URL");
             HideAllViewers();
             var linkNode = FindLinkNode(linkItem);
 
@@ -134,7 +180,16 @@ public sealed partial class MainWindow
 
         try
         {
-            if (linkItem.IsDirectory || Directory.Exists(linkItem.Url))
+            // Check if it's a zip file (treated as directory but is actually a file)
+            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                           File.Exists(linkItem.Url);
+
+            Debug.WriteLine($"[HandleLinkSelectionAsync] Link: '{linkItem.Title}', IsDirectory: {linkItem.IsDirectory}, IsZip: {isZipFile}, URL: {linkItem.Url}");
+
+            // Handle as directory/catalog if:
+            // 1. It's marked as directory AND is a real directory
+            // 2. It's a zip file (regardless of IsDirectory flag - we auto-detect and treat as catalog)
+            if ((linkItem.IsDirectory && Directory.Exists(linkItem.Url)) || isZipFile)
             {
                 HideAllViewers();
                 var linkNode = FindLinkNode(linkItem);
@@ -150,11 +205,18 @@ public sealed partial class MainWindow
                     await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
                 }
 
-                await _detailsViewService.AddOpenInExplorerButtonAsync(linkItem.Url);
+                // Only add "Open in Explorer" button for real directories, not zip files
+                if (!isZipFile)
+                {
+                    await _detailsViewService.AddOpenInExplorerButtonAsync(linkItem.Url);
+                }
+
                 DetailsViewerScroll.Visibility = Visibility.Visible;
                 _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
                 HeaderViewerScroll.Visibility = Visibility.Visible;
-                StatusText.Text = $"Viewing directory: {linkItem.Title}";
+                StatusText.Text = isZipFile
+                    ? $"Viewing zip archive: {linkItem.Title}"
+                    : $"Viewing directory: {linkItem.Title}";
             }
             else if (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out Uri? uri))
             {
@@ -162,6 +224,7 @@ public sealed partial class MainWindow
                 {
                     var file = await StorageFile.GetFileFromPathAsync(linkItem.Url);
                     await LoadFileAsync(file, linkItem.Description);
+                    Debug.WriteLine($"[HandleLinkSelectionAsync] Loaded file: {linkItem.Url}");
                 }
                 else
                 {
@@ -171,12 +234,15 @@ public sealed partial class MainWindow
                     _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
                     HeaderViewerScroll.Visibility = Visibility.Visible;
                     StatusText.Text = $"Loaded: {uri}";
+                    Debug.WriteLine($"[HandleLinkSelectionAsync] Loaded URL: {uri}");
                 }
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            var errorMsg = $"Error: {ex.Message}";
+            Debug.WriteLine($"[HandleLinkSelectionAsync] Exception for '{linkItem.Title}': {ex}");
+            StatusText.Text = errorMsg;
             HideAllViewers();
 
             var linkNode = FindLinkNode(linkItem);
@@ -238,9 +304,10 @@ public sealed partial class MainWindow
         try
         {
             // Check if it's a zip file
-            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
                            File.Exists(linkItem.Url);
 
+            Debug.WriteLine($"[CreateCatalogAsync] Creating catalog for '{linkItem.Title}', IsZip: {isZipFile}");
             StatusText.Text = isZipFile ? "Cataloging zip file..." : "Creating catalog...";
 
             var tempCreatingItem = new LinkItem
@@ -296,10 +363,13 @@ public sealed partial class MainWindow
 
             var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
             StatusText.Text = $"Created catalog with {count} entries";
+            Debug.WriteLine($"[CreateCatalogAsync] Successfully created catalog for '{linkItem.Title}' with {count} entries");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error creating catalog: {ex.Message}";
+            var errorMsg = $"Error creating catalog: {ex.Message}";
+            Debug.WriteLine($"[CreateCatalogAsync] Exception for '{linkItem.Title}': {ex}");
+            StatusText.Text = errorMsg;
         }
     }
 
@@ -310,9 +380,10 @@ public sealed partial class MainWindow
         try
         {
             // Check if it's a zip file
-            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
                            File.Exists(linkItem.Url);
 
+            Debug.WriteLine($"[RefreshCatalogAsync] Refreshing catalog for '{linkItem.Title}', IsZip: {isZipFile}");
             StatusText.Text = isZipFile ? "Refreshing zip catalog..." : "Refreshing catalog...";
 
             _categoryService!.RemoveCatalogEntries(linkNode);
@@ -370,10 +441,13 @@ public sealed partial class MainWindow
 
             var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
             StatusText.Text = $"Refreshed catalog with {count} entries";
+            Debug.WriteLine($"[RefreshCatalogAsync] Successfully refreshed catalog for '{linkItem.Title}' with {count} entries");
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error refreshing catalog: {ex.Message}";
+            var errorMsg = $"Error refreshing catalog: {ex.Message}";
+            Debug.WriteLine($"[RefreshCatalogAsync] Exception for '{linkItem.Title}': {ex}");
+            StatusText.Text = errorMsg;
         }
         finally
         {
@@ -404,8 +478,9 @@ public sealed partial class MainWindow
                 subdirNode.Children.Add(subEntryNode);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Debug.WriteLine($"[PopulateSubdirectoryAsync] Exception for '{subdirItem.Title}': {ex}");
             // Don't throw - allow parent operation to continue
         }
     }
@@ -420,15 +495,20 @@ public sealed partial class MainWindow
             var parts = zipEntry.Url.Split("::", 2);
             if (parts.Length != 2)
             {
+                Debug.WriteLine($"[OpenZipEntryAsync] Invalid zip entry URL format: {zipEntry.Url}");
                 return;
             }
 
             var zipPath = parts[0];
             var entryPath = parts[1];
 
+            Debug.WriteLine($"[OpenZipEntryAsync] Opening zip entry: {entryPath} from {zipPath}");
+
             if (!File.Exists(zipPath))
             {
-                StatusText.Text = "Zip file not found";
+                var errorMsg = "Zip file not found";
+                Debug.WriteLine($"[OpenZipEntryAsync] {errorMsg}: {zipPath}");
+                StatusText.Text = errorMsg;
                 return;
             }
 
@@ -456,12 +536,19 @@ public sealed partial class MainWindow
                     // Open the extracted file
                     await OpenFileAsync(extractedPath);
                     StatusText.Text = $"Opened file from zip: {zipEntry.Title}";
+                    Debug.WriteLine($"[OpenZipEntryAsync] Successfully extracted and opened: {entryPath}");
+                }
+                else
+                {
+                    Debug.WriteLine($"[OpenZipEntryAsync] Entry not found in archive: {entryPath}");
                 }
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error opening zip entry: {ex.Message}";
+            var errorMsg = $"Error opening zip entry: {ex.Message}";
+            Debug.WriteLine($"[OpenZipEntryAsync] Exception for '{zipEntry.Title}': {ex}");
+            StatusText.Text = errorMsg;
         }
     }
 }

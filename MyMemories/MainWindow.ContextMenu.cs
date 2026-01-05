@@ -102,18 +102,6 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void LinkMenu_AddSubCategory_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Parent != null)
-        {
-            var parentCategoryNode = _treeViewService!.GetParentCategoryNode(_contextMenuNode);
-            if (parentCategoryNode != null)
-            {
-                await CreateSubCategoryAsync(parentCategoryNode);
-            }
-        }
-    }
-
     private async void LinkMenu_Move_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is LinkItem link)

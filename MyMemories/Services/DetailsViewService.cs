@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI;
@@ -35,21 +36,21 @@ public class DetailsViewService
     public async Task ShowFileHeaderAsync(string fileName, string? description, StorageFile file, BitmapImage? bitmap = null)
     {
         _headerPanel?.Children.Clear();
-        
+
         if (_headerPanel == null) return;
 
         // File name and size
         var properties = await file.GetBasicPropertiesAsync();
         var fileSize = FileViewerService.FormatFileSize(properties.Size);
-        
+
         var titleText = fileName;
-        
+
         // Add image dimensions if it's an image
         if (bitmap != null)
         {
             titleText += $" ({bitmap.PixelWidth}x{bitmap.PixelHeight})";
         }
-        
+
         titleText += $" - {fileSize}";
 
         _headerPanel.Children.Add(new TextBlock
@@ -79,7 +80,7 @@ public class DetailsViewService
     public void ShowCategoryHeader(string categoryName, string? description, string icon)
     {
         _headerPanel?.Children.Clear();
-        
+
         if (_headerPanel == null) return;
 
         // Create horizontal layout with icon on left
@@ -134,7 +135,7 @@ public class DetailsViewService
     public void ShowLinkHeader(string linkTitle, string? description, string icon)
     {
         _headerPanel?.Children.Clear();
-        
+
         if (_headerPanel == null) return;
 
         // Create horizontal layout with icon on left
@@ -194,7 +195,7 @@ public class DetailsViewService
         AddCategoryTimestamps(category);
 
         AddStatistics(node);
-        
+
         if (node.Children.Count > 0)
         {
             AddLinksList(node);
@@ -211,8 +212,13 @@ public class DetailsViewService
         Button? createButton = null;
         Button? refreshButton = null;
 
-        // Add catalog buttons for directories at the top (only if we have a valid node)
-        if (node != null && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
+        // Check if it's a zip file
+        bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+                       File.Exists(linkItem.Url);
+
+        // Add catalog buttons for directories AND zip files at the top (only if we have a valid node)
+        // Modified condition: Show buttons for any zip file OR for directories
+        if (node != null && ((linkItem.IsDirectory && Directory.Exists(linkItem.Url)) || isZipFile))
         {
             var buttonPanel = new StackPanel
             {
@@ -282,9 +288,9 @@ public class DetailsViewService
             }
 
             _detailsPanel.Children.Add(buttonPanel);
-            
-            // Add Auto-Refresh Checkbox (only if catalog exists)
-            if (hasCatalog)
+
+            // Add Auto-Refresh Checkbox (only if catalog exists and NOT a zip file)
+            if (hasCatalog && !isZipFile)
             {
                 var autoRefreshCheckBox = new CheckBox
                 {
@@ -292,7 +298,7 @@ public class DetailsViewService
                     IsChecked = linkItem.AutoRefreshCatalog,
                     Margin = new Thickness(0, 0, 0, 16)
                 };
-                
+
                 autoRefreshCheckBox.Checked += async (s, e) =>
                 {
                     linkItem.AutoRefreshCatalog = true;
@@ -302,26 +308,26 @@ public class DetailsViewService
                         // We'll need to add a callback parameter for this
                     }
                 };
-                
+
                 autoRefreshCheckBox.Unchecked += (s, e) =>
                 {
                     linkItem.AutoRefreshCatalog = false;
                 };
-                
+
                 _detailsPanel.Children.Add(autoRefreshCheckBox);
             }
         }
 
         // Show catalog statistics if this folder has catalog entries
-        if (node != null && linkItem.IsDirectory && HasCatalogEntries(node))
+        if (node != null && (linkItem.IsDirectory || isZipFile) && HasCatalogEntries(node))
         {
-            AddCatalogStatistics(node);
+            AddCatalogStatistics(node, isZipFile);
         }
 
         // Always show the path/URL section with proper handling
         if (!string.IsNullOrWhiteSpace(linkItem.Url))
         {
-            var pathLabel = linkItem.IsDirectory ? "Directory Path" : "Path/URL";
+            var pathLabel = isZipFile ? "Zip File Path" : (linkItem.IsDirectory ? "Directory Path" : "Path/URL");
             AddSection(pathLabel, linkItem.Url, isSelectable: true);
         }
         else
@@ -333,7 +339,7 @@ public class DetailsViewService
         // Add timestamp information
         AddTimestamps(linkItem);
 
-        await AddFileSystemInfoAsync(linkItem);
+        await AddFileSystemInfoAsync(linkItem, isZipFile);
 
         return (createButton, refreshButton);
     }
@@ -341,7 +347,7 @@ public class DetailsViewService
     /// <summary>
     /// Adds catalog statistics including total file count and total file size.
     /// </summary>
-    private void AddCatalogStatistics(TreeViewNode node)
+    private void AddCatalogStatistics(TreeViewNode node, bool isZipFile = false)
     {
         var allCatalogEntries = node.Children
             .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
@@ -358,7 +364,7 @@ public class DetailsViewService
 
         _detailsPanel.Children.Add(new TextBlock
         {
-            Text = "Catalog Statistics",
+            Text = isZipFile ? "Zip Archive Contents" : "Catalog Statistics",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
@@ -368,7 +374,7 @@ public class DetailsViewService
 
         // Show file count (matching tree label)
         statsPanel.Children.Add(CreateStatLine($"📊 Total Files: {fileEntries.Count}"));
-        
+
         // Show directory count separately
         if (directoryEntries.Count > 0)
         {
@@ -383,7 +389,13 @@ public class DetailsViewService
         {
             try
             {
-                if (File.Exists(fileEntry!.Url))
+                // For zip entries, use the FileSize property directly
+                if (isZipFile && fileEntry!.FileSize.HasValue)
+                {
+                    totalSize += fileEntry.FileSize.Value;
+                    accessibleFiles++;
+                }
+                else if (File.Exists(fileEntry!.Url))
                 {
                     var fileInfo = new FileInfo(fileEntry.Url);
                     totalSize += (ulong)fileInfo.Length;
@@ -399,7 +411,7 @@ public class DetailsViewService
         if (accessibleFiles > 0)
         {
             statsPanel.Children.Add(CreateStatLine($"💾 Total Size: {FileViewerService.FormatFileSize(totalSize)}"));
-            
+
             if (accessibleFiles < fileEntries.Count)
             {
                 statsPanel.Children.Add(new TextBlock
@@ -503,7 +515,7 @@ public class DetailsViewService
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        
+
         timestampsPanel.Children.Add(CreateStatLine($"📅 Created: {linkItem.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
         timestampsPanel.Children.Add(CreateStatLine($"📝 Modified: {linkItem.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
 
@@ -521,9 +533,9 @@ public class DetailsViewService
         });
 
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        
+
         var (fileCount, dirCount, urlCount) = CountLinkTypes(node);
-        
+
         statsPanel.Children.Add(CreateStatLine($"📊 Total Links: {node.Children.Count}"));
         statsPanel.Children.Add(CreateStatLine($"📄 Files: {fileCount}"));
         statsPanel.Children.Add(CreateStatLine($"📁 Directories: {dirCount}"));
@@ -535,7 +547,7 @@ public class DetailsViewService
     private (int files, int dirs, int urls) CountLinkTypes(TreeViewNode node)
     {
         int fileCount = 0, dirCount = 0, urlCount = 0;
-        
+
         foreach (var child in node.Children)
         {
             if (child.Content is LinkItem link)
@@ -548,7 +560,7 @@ public class DetailsViewService
                     fileCount++;
             }
         }
-        
+
         return (fileCount, dirCount, urlCount);
     }
 
@@ -563,7 +575,7 @@ public class DetailsViewService
         });
 
         var linksListPanel = new StackPanel { Spacing = 8 };
-        
+
         foreach (var child in node.Children)
         {
             if (child.Content is LinkItem link)
@@ -571,7 +583,7 @@ public class DetailsViewService
                 linksListPanel.Children.Add(CreateLinkCard(link));
             }
         }
-        
+
         _detailsPanel.Children.Add(linksListPanel);
     }
 
@@ -610,11 +622,15 @@ public class DetailsViewService
         return linkCard;
     }
 
-    private async Task AddFileSystemInfoAsync(LinkItem linkItem)
+    private async Task AddFileSystemInfoAsync(LinkItem linkItem, bool isZipFile = false)
     {
         try
         {
-            if (linkItem.IsDirectory && Directory.Exists(linkItem.Url))
+            if (isZipFile && File.Exists(linkItem.Url))
+            {
+                AddZipFileInfo(linkItem.Url);
+            }
+            else if (linkItem.IsDirectory && Directory.Exists(linkItem.Url))
             {
                 await AddDirectoryInfoAsync(linkItem.Url);
             }
@@ -627,6 +643,67 @@ public class DetailsViewService
         {
             AddWarning($"⚠️ Unable to access file/directory information: {ex.Message}");
         }
+    }
+
+    private void AddZipFileInfo(string path)
+    {
+        var fileInfo = new FileInfo(path);
+
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Zip Archive Information",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        
+        // Count files and directories in the zip archive
+        try
+        {
+            using (var archive = ZipFile.OpenRead(path))
+            {
+                int fileCount = 0;
+                int dirCount = 0;
+
+                foreach (var entry in archive.Entries)
+                {
+                    if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
+                    {
+                        dirCount++;
+                    }
+                    else if (!string.IsNullOrEmpty(entry.Name))
+                    {
+                        fileCount++;
+                    }
+                }
+
+                infoPanel.Children.Add(CreateStatLine($"📄 Files in Archive: {fileCount}"));
+                if (dirCount > 0)
+                {
+                    infoPanel.Children.Add(CreateStatLine($"📁 Folders in Archive: {dirCount}"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            infoPanel.Children.Add(new TextBlock
+            {
+                Text = $"⚠️ Could not read archive contents: {ex.Message}",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Colors.Orange),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        infoPanel.Children.Add(CreateStatLine($"📦 Archive Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+        infoPanel.Children.Add(CreateStatLine($"📂 Extension: {fileInfo.Extension}"));
+        infoPanel.Children.Add(CreateStatLine($"📅 Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateStatLine($"📝 Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateStatLine($"👁️ Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+
+        _detailsPanel.Children.Add(infoPanel);
     }
 
     private async Task AddDirectoryInfoAsync(string path)
@@ -711,7 +788,7 @@ public class DetailsViewService
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        
+
         timestampsPanel.Children.Add(CreateStatLine($"📅 Created: {category.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
         timestampsPanel.Children.Add(CreateStatLine($"📝 Modified: {category.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
 
