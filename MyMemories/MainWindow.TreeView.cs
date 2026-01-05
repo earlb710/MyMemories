@@ -237,12 +237,16 @@ public sealed partial class MainWindow
     {
         try
         {
-            StatusText.Text = "Creating catalog...";
+            // Check if it's a zip file
+            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+                           File.Exists(linkItem.Url);
+
+            StatusText.Text = isZipFile ? "Cataloging zip file..." : "Creating catalog...";
 
             var tempCreatingItem = new LinkItem
             {
-                Title = "Creating catalog...",
-                Description = "Please wait while scanning directory",
+                Title = isZipFile ? "Cataloging zip..." : "Creating catalog...",
+                Description = "Please wait while scanning " + (isZipFile ? "zip archive" : "directory"),
                 IsDirectory = false,
                 IsCatalogEntry = false
             };
@@ -251,26 +255,35 @@ public sealed partial class MainWindow
             linkNode.Children.Add(tempNode);
             linkNode.IsExpanded = true;
 
-            var catalogEntries = await _categoryService!.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
-            linkNode.Children.Remove(tempNode);
-
-            linkItem.LastCatalogUpdate = DateTime.Now;
-
-            // Recursively add catalog entries with their subdirectories populated
-            foreach (var entry in catalogEntries)
+            if (isZipFile)
             {
-                var entryNode = new TreeViewNode { Content = entry };
+                // Catalog zip file
+                await CatalogZipFileAsync(linkItem, linkNode);
+                linkNode.Children.Remove(tempNode);
+            }
+            else
+            {
+                // Catalog normal directory
+                var catalogEntries = await _categoryService!.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+                linkNode.Children.Remove(tempNode);
 
-                // If it's a subdirectory, recursively populate its contents
-                if (entry.IsDirectory)
+                // Recursively add catalog entries with their subdirectories populated
+                foreach (var entry in catalogEntries)
                 {
-                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
-                }
+                    var entryNode = new TreeViewNode { Content = entry };
 
-                linkNode.Children.Add(entryNode);
+                    // If it's a subdirectory, recursively populate its contents
+                    if (entry.IsDirectory)
+                    {
+                        await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
+                    }
+
+                    linkNode.Children.Add(entryNode);
+                }
             }
 
-            _categoryService.UpdateCatalogFileCount(linkNode);
+            linkItem.LastCatalogUpdate = DateTime.Now;
+            _categoryService!.UpdateCatalogFileCount(linkNode);
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
             var rootNode = GetRootCategoryNode(refreshedNode);
@@ -281,7 +294,8 @@ public sealed partial class MainWindow
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),
                 async () => await RefreshCatalogAsync(linkItem, refreshedNode));
 
-            StatusText.Text = $"Created catalog with {catalogEntries.Count} entries";
+            var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
+            StatusText.Text = $"Created catalog with {count} entries";
         }
         catch (Exception ex)
         {
@@ -295,13 +309,17 @@ public sealed partial class MainWindow
 
         try
         {
-            StatusText.Text = "Refreshing catalog...";
+            // Check if it's a zip file
+            bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+                           File.Exists(linkItem.Url);
+
+            StatusText.Text = isZipFile ? "Refreshing zip catalog..." : "Refreshing catalog...";
 
             _categoryService!.RemoveCatalogEntries(linkNode);
 
             var tempRefreshingItem = new LinkItem
             {
-                Title = "Refreshing catalog...",
+                Title = isZipFile ? "Refreshing zip catalog..." : "Refreshing catalog...",
                 Description = "Please wait while the catalog is being updated",
                 IsDirectory = false,
                 IsCatalogEntry = false
@@ -311,25 +329,34 @@ public sealed partial class MainWindow
             linkNode.Children.Add(tempNode);
             linkNode.IsExpanded = true;
 
-            var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
-            linkNode.Children.Remove(tempNode);
-
-            linkItem.LastCatalogUpdate = DateTime.Now;
-
-            // Recursively add catalog entries with their subdirectories populated
-            foreach (var entry in catalogEntries)
+            if (isZipFile)
             {
-                var entryNode = new TreeViewNode { Content = entry };
+                // Refresh zip catalog
+                await CatalogZipFileAsync(linkItem, linkNode);
+                linkNode.Children.Remove(tempNode);
+            }
+            else
+            {
+                // Refresh normal directory catalog
+                var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+                linkNode.Children.Remove(tempNode);
 
-                // If it's a subdirectory, recursively populate its contents
-                if (entry.IsDirectory)
+                // Recursively add catalog entries with their subdirectories populated
+                foreach (var entry in catalogEntries)
                 {
-                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
-                }
+                    var entryNode = new TreeViewNode { Content = entry };
 
-                linkNode.Children.Add(entryNode);
+                    // If it's a subdirectory, recursively populate its contents
+                    if (entry.IsDirectory)
+                    {
+                        await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
+                    }
+
+                    linkNode.Children.Add(entryNode);
+                }
             }
 
+            linkItem.LastCatalogUpdate = DateTime.Now;
             _categoryService.UpdateCatalogFileCount(linkNode);
 
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
@@ -341,7 +368,8 @@ public sealed partial class MainWindow
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),
                 async () => await RefreshCatalogAsync(linkItem, refreshedNode));
 
-            StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
+            var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
+            StatusText.Text = $"Refreshed catalog with {count} entries";
         }
         catch (Exception ex)
         {
