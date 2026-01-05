@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
 
@@ -20,7 +20,12 @@ public class CategoryService
     public CategoryService(string dataFolder)
     {
         _dataFolder = dataFolder;
-        _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        _jsonOptions = new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull, // Changed from WhenWritingDefault
+            Converters = { new JsonStringEnumConverter() }
+        };
         
         // Ensure data folder exists
         Directory.CreateDirectory(_dataFolder);
@@ -45,7 +50,7 @@ public class CategoryService
             try
             {
                 var json = await File.ReadAllTextAsync(jsonFile);
-                var categoryData = JsonSerializer.Deserialize<CategoryData>(json);
+                var categoryData = JsonSerializer.Deserialize<CategoryData>(json, _jsonOptions);
 
                 if (categoryData != null)
                 {
@@ -110,13 +115,16 @@ public class CategoryService
         var categoryData = new CategoryData
         {
             Name = category.Name,
-            Description = category.Description,
-            Icon = category.Icon,
+            Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
+            Icon = category.Icon == "📁" ? null : category.Icon, // Omit default folder icon
             CreatedDate = category.CreatedDate,
             ModifiedDate = category.ModifiedDate,
-            Links = new List<LinkData>(),
-            SubCategories = new List<CategoryData>()
+            Links = null, // Will be set if there are links
+            SubCategories = null // Will be set if there are subcategories
         };
+
+        var links = new List<LinkData>();
+        var subCategories = new List<CategoryData>();
 
         // Process all children
         foreach (var child in categoryNode.Children)
@@ -128,56 +136,78 @@ public class CategoryService
                 {
                     Title = link.Title,
                     Url = link.Url,
-                    Description = link.Description,
-                    IsDirectory = link.IsDirectory,
+                    Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
+                    IsDirectory = link.IsDirectory ? true : null, // Only include if true
                     CategoryPath = link.CategoryPath,
                     CreatedDate = link.CreatedDate,
                     ModifiedDate = link.ModifiedDate,
-                    FolderType = link.FolderType,
-                    FileFilters = link.FileFilters,
-                    IsCatalogEntry = link.IsCatalogEntry,
+                    FolderType = link.IsDirectory && link.FolderType != FolderLinkType.LinkOnly ? link.FolderType : null,
+                    FileFilters = !string.IsNullOrWhiteSpace(link.FileFilters) ? link.FileFilters : null,
+                    IsCatalogEntry = link.IsCatalogEntry ? true : null, // Only include if true
                     LastCatalogUpdate = link.LastCatalogUpdate,
-                    CatalogEntries = new List<LinkData>() // Initialize catalog entries list
+                    CatalogEntries = null // Will be set if there are catalog entries
                 };
 
                 // Process catalog entries (children of this link) as nested items
-                foreach (var catalogChild in child.Children)
+                if (child.Children.Count > 0)
                 {
-                    if (catalogChild.Content is LinkItem catalogEntry)
+                    var catalogEntries = new List<LinkData>();
+                    
+                    foreach (var catalogChild in child.Children)
                     {
-                        // Convert full path to relative path (just the filename)
-                        string relativeUrl = catalogEntry.Url;
-                        if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url))
+                        if (catalogChild.Content is LinkItem catalogEntry)
                         {
-                            // Extract just the filename from the full path
-                            relativeUrl = Path.GetFileName(catalogEntry.Url);
-                        }
+                            // Convert full path to relative path (just the filename)
+                            string relativeUrl = catalogEntry.Url;
+                            if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url))
+                            {
+                                // Extract just the filename from the full path
+                                relativeUrl = Path.GetFileName(catalogEntry.Url);
+                            }
 
-                        linkData.CatalogEntries.Add(new LinkData
-                        {
-                            Title = catalogEntry.Title,
-                            Url = relativeUrl, // Store relative path (filename only)
-                            Description = catalogEntry.Description,
-                            IsDirectory = catalogEntry.IsDirectory,
-                            CategoryPath = catalogEntry.CategoryPath,
-                            CreatedDate = catalogEntry.CreatedDate,
-                            ModifiedDate = catalogEntry.ModifiedDate,
-                            FolderType = catalogEntry.FolderType,
-                            FileFilters = catalogEntry.FileFilters,
-                            IsCatalogEntry = catalogEntry.IsCatalogEntry,
-                            LastCatalogUpdate = catalogEntry.LastCatalogUpdate
-                        });
+                            catalogEntries.Add(new LinkData
+                            {
+                                Title = catalogEntry.Title,
+                                Url = relativeUrl, // Store relative path (filename only)
+                                Description = string.IsNullOrWhiteSpace(catalogEntry.Description) ? null : catalogEntry.Description,
+                                IsDirectory = null, // Catalog entries are always files, omit this
+                                CategoryPath = catalogEntry.CategoryPath,
+                                CreatedDate = catalogEntry.CreatedDate,
+                                ModifiedDate = catalogEntry.ModifiedDate,
+                                FolderType = null, // Not applicable to catalog entries
+                                FileFilters = null, // Not applicable to catalog entries
+                                IsCatalogEntry = null, // Implicit since it's in CatalogEntries array
+                                LastCatalogUpdate = null, // Not applicable to catalog entries
+                                CatalogEntries = null // Catalog entries don't have nested catalogs
+                            });
+                        }
+                    }
+                    
+                    if (catalogEntries.Count > 0)
+                    {
+                        linkData.CatalogEntries = catalogEntries;
                     }
                 }
 
-                categoryData.Links.Add(linkData);
+                links.Add(linkData);
             }
             else if (child.Content is CategoryItem)
             {
                 // Recursively add subcategory
                 var subCategoryData = ConvertNodeToCategoryData(child);
-                categoryData.SubCategories.Add(subCategoryData);
+                subCategories.Add(subCategoryData);
             }
+        }
+
+        // Only set collections if they have items
+        if (links.Count > 0)
+        {
+            categoryData.Links = links;
+        }
+        
+        if (subCategories.Count > 0)
+        {
+            categoryData.SubCategories = subCategories;
         }
 
         return categoryData;
@@ -193,71 +223,77 @@ public class CategoryService
             Content = new CategoryItem
             {
                 Name = categoryData.Name,
-                Description = categoryData.Description,
-                Icon = categoryData.Icon,
+                Description = categoryData.Description ?? string.Empty,
+                Icon = categoryData.Icon ?? "📁", // Default to folder icon if not specified
                 CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
                 ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now
             }
         };
 
         // Add subcategories first (they should appear before links)
-        foreach (var subCategoryData in categoryData.SubCategories)
+        if (categoryData.SubCategories != null)
         {
-            var subCategoryNode = CreateCategoryNode(subCategoryData);
-            categoryNode.Children.Add(subCategoryNode);
+            foreach (var subCategoryData in categoryData.SubCategories)
+            {
+                var subCategoryNode = CreateCategoryNode(subCategoryData);
+                categoryNode.Children.Add(subCategoryNode);
+            }
         }
 
         // Add links with their catalog entries
-        foreach (var linkData in categoryData.Links)
+        if (categoryData.Links != null)
         {
-            var linkItem = new LinkItem
+            foreach (var linkData in categoryData.Links)
             {
-                Title = linkData.Title,
-                Url = linkData.Url,
-                Description = linkData.Description,
-                IsDirectory = linkData.IsDirectory,
-                CategoryPath = linkData.CategoryPath,
-                CreatedDate = linkData.CreatedDate ?? DateTime.Now,
-                ModifiedDate = linkData.ModifiedDate ?? DateTime.Now,
-                FolderType = linkData.FolderType,
-                FileFilters = linkData.FileFilters ?? string.Empty,
-                IsCatalogEntry = linkData.IsCatalogEntry,
-                LastCatalogUpdate = linkData.LastCatalogUpdate
-            };
-
-            var linkNode = new TreeViewNode { Content = linkItem };
-
-            // Add catalog entries as children of the link node
-            if (linkData.CatalogEntries != null)
-            {
-                foreach (var catalogData in linkData.CatalogEntries)
+                var linkItem = new LinkItem
                 {
-                    // Reconstruct full path from parent URL + relative path
-                    var fullUrl = string.IsNullOrEmpty(linkData.Url) 
-                        ? catalogData.Url 
-                        : Path.Combine(linkData.Url, catalogData.Url);
+                    Title = linkData.Title ?? string.Empty,
+                    Url = linkData.Url ?? string.Empty,
+                    Description = linkData.Description ?? string.Empty,
+                    IsDirectory = linkData.IsDirectory ?? false, // Default to false if not specified
+                    CategoryPath = linkData.CategoryPath ?? string.Empty,
+                    CreatedDate = linkData.CreatedDate ?? DateTime.Now,
+                    ModifiedDate = linkData.ModifiedDate ?? DateTime.Now,
+                    FolderType = linkData.FolderType ?? FolderLinkType.LinkOnly,
+                    FileFilters = linkData.FileFilters ?? string.Empty,
+                    IsCatalogEntry = linkData.IsCatalogEntry ?? false, // Default to false if not specified
+                    LastCatalogUpdate = linkData.LastCatalogUpdate
+                };
 
-                    var catalogEntry = new LinkItem
+                var linkNode = new TreeViewNode { Content = linkItem };
+
+                // Add catalog entries as children of the link node
+                if (linkData.CatalogEntries != null)
+                {
+                    foreach (var catalogData in linkData.CatalogEntries)
                     {
-                        Title = catalogData.Title,
-                        Url = fullUrl, // Use full path for TreeView
-                        Description = catalogData.Description,
-                        IsDirectory = catalogData.IsDirectory,
-                        CategoryPath = catalogData.CategoryPath,
-                        CreatedDate = catalogData.CreatedDate ?? DateTime.Now,
-                        ModifiedDate = catalogData.ModifiedDate ?? DateTime.Now,
-                        FolderType = catalogData.FolderType,
-                        FileFilters = catalogData.FileFilters ?? string.Empty,
-                        IsCatalogEntry = true,
-                        LastCatalogUpdate = catalogData.LastCatalogUpdate
-                    };
+                        // Reconstruct full path from parent URL + relative path
+                        var fullUrl = string.IsNullOrEmpty(linkData.Url) 
+                            ? catalogData.Url 
+                            : Path.Combine(linkData.Url, catalogData.Url ?? string.Empty);
 
-                    var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
-                    linkNode.Children.Add(catalogEntryNode);
+                        var catalogEntry = new LinkItem
+                        {
+                            Title = catalogData.Title ?? string.Empty,
+                            Url = fullUrl, // Use full path for TreeView
+                            Description = catalogData.Description ?? string.Empty,
+                            IsDirectory = false, // Catalog entries are always files
+                            CategoryPath = catalogData.CategoryPath ?? string.Empty,
+                            CreatedDate = catalogData.CreatedDate ?? DateTime.Now,
+                            ModifiedDate = catalogData.ModifiedDate ?? DateTime.Now,
+                            FolderType = FolderLinkType.LinkOnly,
+                            FileFilters = string.Empty,
+                            IsCatalogEntry = true, // Always true for catalog entries
+                            LastCatalogUpdate = null
+                        };
+
+                        var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
+                        linkNode.Children.Add(catalogEntryNode);
+                    }
                 }
-            }
 
-            categoryNode.Children.Add(linkNode);
+                categoryNode.Children.Add(linkNode);
+            }
         }
 
         return categoryNode;
@@ -278,25 +314,20 @@ public class CategoryService
     /// </summary>
     public async Task<List<LinkItem>> CreateCatalogEntriesAsync(string directoryPath, string categoryPath)
     {
-        Debug.WriteLine($"[CategoryService] CreateCatalogEntriesAsync called for: {directoryPath}");
         var catalogEntries = new List<LinkItem>();
 
         if (!Directory.Exists(directoryPath))
         {
-            Debug.WriteLine($"[CategoryService] Directory does not exist: {directoryPath}");
             return catalogEntries;
         }
 
         try
         {
             var files = Directory.GetFiles(directoryPath);
-            Debug.WriteLine($"[CategoryService] Found {files.Length} files in directory");
 
             foreach (var filePath in files)
             {
                 var fileInfo = new FileInfo(filePath);
-                
-                Debug.WriteLine($"[CategoryService] Creating catalog entry: {fileInfo.Name} (full path: {filePath})");
                 
                 catalogEntries.Add(new LinkItem
                 {
@@ -311,12 +342,9 @@ public class CategoryService
                     IsCatalogEntry = true
                 });
             }
-            
-            Debug.WriteLine($"[CategoryService] Created {catalogEntries.Count} catalog entries");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[CategoryService] ERROR in CreateCatalogEntriesAsync: {ex.Message}");
             throw new InvalidOperationException($"Error creating catalog for {directoryPath}: {ex.Message}", ex);
         }
 

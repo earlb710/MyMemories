@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml.Controls;
 
 namespace MyMemories;
@@ -100,12 +101,21 @@ public class CategoryNode
 public class CategoryData
 {
     public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string Icon { get; set; } = "📁";
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Icon { get; set; }
+    
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
-    public List<LinkData> Links { get; set; } = new();
-    public List<CategoryData> SubCategories { get; set; } = new();
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<LinkData>? Links { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CategoryData>? SubCategories { get; set; }
 }
 
 /// <summary>
@@ -115,16 +125,31 @@ public class LinkData
 {
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public bool IsDirectory { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Description { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsDirectory { get; set; }
+    
     public string CategoryPath { get; set; } = string.Empty;
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
-    public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
-    public string FileFilters { get; set; } = string.Empty;
-    public bool IsCatalogEntry { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FolderLinkType? FolderType { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? FileFilters { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsCatalogEntry { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? LastCatalogUpdate { get; set; }
-    public List<LinkData> CatalogEntries { get; set; } = new(); // Nested catalog entries
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<LinkData>? CatalogEntries { get; set; }
 }
 
 /// <summary>

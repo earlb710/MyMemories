@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -191,8 +190,6 @@ public class DetailsViewService
     {
         _detailsPanel.Children.Clear();
 
-        // Remove the centered icon and title since they're now in the header
-
         // Add timestamps for category
         AddCategoryTimestamps(category);
 
@@ -209,7 +206,6 @@ public class DetailsViewService
     /// </summary>
     public async Task<(Button? createButton, Button? refreshButton)> ShowLinkDetailsAsync(LinkItem linkItem, TreeViewNode? node, Func<Task> onCreateCatalog, Func<Task> onRefreshCatalog)
     {
-        Debug.WriteLine($"[DetailsViewService] ShowLinkDetailsAsync called for: {linkItem.Title}");
         _detailsPanel.Children.Clear();
 
         Button? createButton = null;
@@ -218,7 +214,6 @@ public class DetailsViewService
         // Add catalog buttons for directories at the top (only if we have a valid node)
         if (node != null && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
         {
-            Debug.WriteLine($"[DetailsViewService] Directory detected, checking for catalog entries");
             var buttonPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -228,11 +223,9 @@ public class DetailsViewService
 
             // Check if catalog already exists
             bool hasCatalog = HasCatalogEntries(node);
-            Debug.WriteLine($"[DetailsViewService] Has catalog: {hasCatalog}");
 
             if (!hasCatalog)
             {
-                Debug.WriteLine($"[DetailsViewService] Creating 'Create Catalog' button");
                 createButton = new Button
                 {
                     Content = new StackPanel
@@ -248,24 +241,19 @@ public class DetailsViewService
                 };
                 createButton.Click += async (s, e) =>
                 {
-                    Debug.WriteLine($"[DetailsViewService] Create Catalog button clicked!");
                     try
                     {
                         await onCreateCatalog();
-                        Debug.WriteLine($"[DetailsViewService] onCreateCatalog completed");
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Debug.WriteLine($"[DetailsViewService] Error in onCreateCatalog: {ex.Message}");
-                        Debug.WriteLine($"[DetailsViewService] Stack trace: {ex.StackTrace}");
+                        // Silently handle errors
                     }
                 };
                 buttonPanel.Children.Add(createButton);
-                Debug.WriteLine($"[DetailsViewService] Create Catalog button added to panel");
             }
             else
             {
-                Debug.WriteLine($"[DetailsViewService] Creating 'Refresh Catalog' button");
                 refreshButton = new Button
                 {
                     Content = new StackPanel
@@ -281,26 +269,19 @@ public class DetailsViewService
                 };
                 refreshButton.Click += async (s, e) =>
                 {
-                    Debug.WriteLine($"[DetailsViewService] Refresh Catalog button clicked!");
                     try
                     {
                         await onRefreshCatalog();
-                        Debug.WriteLine($"[DetailsViewService] onRefreshCatalog completed");
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Debug.WriteLine($"[DetailsViewService] Error in onRefreshCatalog: {ex.Message}");
+                        // Silently handle errors
                     }
                 };
                 buttonPanel.Children.Add(refreshButton);
             }
 
             _detailsPanel.Children.Add(buttonPanel);
-            Debug.WriteLine($"[DetailsViewService] Button panel added to details panel");
-        }
-        else
-        {
-            Debug.WriteLine($"[DetailsViewService] Catalog buttons NOT created. node={node != null}, IsDirectory={linkItem.IsDirectory}, Exists={Directory.Exists(linkItem.Url)}");
         }
 
         // Always show the path/URL section with proper handling
@@ -374,60 +355,6 @@ public class DetailsViewService
         }
     }
 
-    private void AddIcon(string icon, int fontSize)
-    {
-        _detailsPanel.Children.Add(new TextBlock
-        {
-            Text = icon,
-            FontSize = fontSize,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-    }
-
-    private void AddTitle(string title)
-    {
-        _detailsPanel.Children.Add(new TextBlock
-        {
-            Text = title,
-            FontSize = 28,
-            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 8),
-            TextWrapping = TextWrapping.Wrap
-        });
-    }
-
-    private void AddTypeBadge(string typeText)
-    {
-        var typeBorder = new Border
-        {
-            Background = new SolidColorBrush(Colors.DodgerBlue),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(12, 4, 12, 4),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 16)
-        };
-        typeBorder.Child = new TextBlock
-        {
-            Text = typeText,
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Colors.White),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        };
-        _detailsPanel.Children.Add(typeBorder);
-    }
-
-    private void AddDivider()
-    {
-        _detailsPanel.Children.Add(new Border
-        {
-            Height = 1,
-            Background = new SolidColorBrush(Colors.Gray),
-            Margin = new Thickness(0, 16, 0, 16)
-        });
-    }
-
     private void AddSection(string title, string content, bool isGrayedOut = false, bool isSelectable = false)
     {
         _detailsPanel.Children.Add(new TextBlock
@@ -436,7 +363,6 @@ public class DetailsViewService
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
-            // Let the system handle the default foreground color
         });
 
         var contentTextBlock = new TextBlock
@@ -448,7 +374,6 @@ public class DetailsViewService
             Margin = new Thickness(0, 0, 0, 16)
         };
 
-        // Only set foreground if we want it grayed out, otherwise use default
         if (isGrayedOut)
         {
             contentTextBlock.Foreground = new SolidColorBrush(Colors.Gray);
@@ -665,20 +590,6 @@ public class DetailsViewService
         };
     }
 
-    private string GetLinkType(LinkItem linkItem)
-    {
-        if (linkItem.IsDirectory)
-            return "Directory";
-        
-        if (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out var uri) && !uri.IsFile)
-            return "Web URL";
-        
-        return "File";
-    }
-
-    /// <summary>
-    /// Adds category timestamps section to the details panel.
-    /// </summary>
     private void AddCategoryTimestamps(CategoryItem category)
     {
         _detailsPanel.Children.Add(new TextBlock
