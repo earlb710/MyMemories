@@ -161,15 +161,17 @@ public class CategoryService
                             string relativeUrl = catalogEntry.Url;
                             if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url))
                             {
-                                relativeUrl = Path.GetFileName(catalogEntry.Url);
+                                relativeUrl = catalogEntry.IsDirectory 
+                                    ? new DirectoryInfo(catalogEntry.Url).Name
+                                    : Path.GetFileName(catalogEntry.Url);
                             }
 
-                            catalogEntries.Add(new LinkData
+                            var catalogData = new LinkData
                             {
                                 Title = catalogEntry.Title,
                                 Url = relativeUrl,
                                 Description = string.IsNullOrWhiteSpace(catalogEntry.Description) ? null : catalogEntry.Description,
-                                IsDirectory = null,
+                                IsDirectory = catalogEntry.IsDirectory ? true : null,
                                 CategoryPath = catalogEntry.CategoryPath,
                                 CreatedDate = catalogEntry.CreatedDate,
                                 ModifiedDate = catalogEntry.ModifiedDate,
@@ -179,7 +181,46 @@ public class CategoryService
                                 LastCatalogUpdate = null,
                                 FileSize = catalogEntry.FileSize,
                                 CatalogEntries = null
-                            });
+                            };
+
+                            // Recursively process subdirectory catalog entries
+                            if (catalogEntry.IsDirectory && catalogChild.Children.Count > 0)
+                            {
+                                var subCatalogEntries = new List<LinkData>();
+                                
+                                foreach (var subCatalogChild in catalogChild.Children)
+                                {
+                                    if (subCatalogChild.Content is LinkItem subCatalogEntry)
+                                    {
+                                        string subRelativeUrl = subCatalogEntry.Url;
+                                        if (!string.IsNullOrEmpty(catalogEntry.Url) && subCatalogEntry.Url.StartsWith(catalogEntry.Url))
+                                        {
+                                            subRelativeUrl = subCatalogEntry.IsDirectory
+                                                ? new DirectoryInfo(subCatalogEntry.Url).Name
+                                                : Path.GetFileName(subCatalogEntry.Url);
+                                        }
+
+                                        subCatalogEntries.Add(new LinkData
+                                        {
+                                            Title = subCatalogEntry.Title,
+                                            Url = subRelativeUrl,
+                                            Description = string.IsNullOrWhiteSpace(subCatalogEntry.Description) ? null : subCatalogEntry.Description,
+                                            IsDirectory = subCatalogEntry.IsDirectory ? true : null,
+                                            CategoryPath = subCatalogEntry.CategoryPath,
+                                            CreatedDate = subCatalogEntry.CreatedDate,
+                                            ModifiedDate = subCatalogEntry.ModifiedDate,
+                                            FileSize = subCatalogEntry.FileSize
+                                        });
+                                    }
+                                }
+                                
+                                if (subCatalogEntries.Count > 0)
+                                {
+                                    catalogData.CatalogEntries = subCatalogEntries;
+                                }
+                            }
+
+                            catalogEntries.Add(catalogData);
                         }
                     }
                     
@@ -262,7 +303,8 @@ public class CategoryService
 
                 if (linkData.CatalogEntries != null)
                 {
-                    linkItem.CatalogFileCount = linkData.CatalogEntries.Count;
+                    // Count only files (not subdirectories) for the file count
+                    linkItem.CatalogFileCount = linkData.CatalogEntries.Count(entry => entry.IsDirectory != true);
                 }
 
                 var linkNode = new TreeViewNode { Content = linkItem };
@@ -281,7 +323,7 @@ public class CategoryService
                             Title = catalogData.Title ?? string.Empty,
                             Url = fullUrl,
                             Description = catalogData.Description ?? string.Empty,
-                            IsDirectory = false,
+                            IsDirectory = catalogData.IsDirectory ?? false,
                             CategoryPath = catalogData.CategoryPath ?? string.Empty,
                             CreatedDate = catalogData.CreatedDate ?? DateTime.Now,
                             ModifiedDate = catalogData.ModifiedDate ?? DateTime.Now,
@@ -293,6 +335,34 @@ public class CategoryService
                         };
 
                         var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
+                        
+                        // Recursively add sub-catalog entries (files within subdirectories)
+                        if (catalogData.CatalogEntries != null && catalogData.CatalogEntries.Count > 0)
+                        {
+                            foreach (var subCatalogData in catalogData.CatalogEntries)
+                            {
+                                var subFullUrl = Path.Combine(fullUrl, subCatalogData.Url ?? string.Empty);
+                                
+                                var subCatalogEntry = new LinkItem
+                                {
+                                    Title = subCatalogData.Title ?? string.Empty,
+                                    Url = subFullUrl,
+                                    Description = subCatalogData.Description ?? string.Empty,
+                                    IsDirectory = subCatalogData.IsDirectory ?? false,
+                                    CategoryPath = subCatalogData.CategoryPath ?? string.Empty,
+                                    CreatedDate = subCatalogData.CreatedDate ?? DateTime.Now,
+                                    ModifiedDate = subCatalogData.ModifiedDate ?? DateTime.Now,
+                                    FolderType = FolderLinkType.LinkOnly,
+                                    FileFilters = string.Empty,
+                                    IsCatalogEntry = true,
+                                    FileSize = subCatalogData.FileSize
+                                };
+                                
+                                var subCatalogEntryNode = new TreeViewNode { Content = subCatalogEntry };
+                                catalogEntryNode.Children.Add(subCatalogEntryNode);
+                            }
+                        }
+                        
                         linkNode.Children.Add(catalogEntryNode);
                     }
                 }
@@ -314,8 +384,8 @@ public class CategoryService
     }
 
     /// <summary>
-    /// Creates a catalog of all files in a directory and adds them as catalog entries to a folder link.
-    /// Returns LinkItems with full paths for TreeView usage.
+    /// Creates a catalog of all files and subdirectories in a directory recursively.
+    /// Returns LinkItems with full paths for TreeView usage, with subdirectory contents loaded.
     /// </summary>
     public async Task<List<LinkItem>> CreateCatalogEntriesAsync(string directoryPath, string categoryPath)
     {
@@ -328,8 +398,30 @@ public class CategoryService
 
         try
         {
-            var files = Directory.GetFiles(directoryPath);
+            // First, add all subdirectories as folder entries
+            var directories = Directory.GetDirectories(directoryPath);
+            foreach (var subDirPath in directories)
+            {
+                var dirInfo = new DirectoryInfo(subDirPath);
+                
+                var subDirEntry = new LinkItem
+                {
+                    Title = dirInfo.Name,
+                    Url = subDirPath,
+                    Description = $"Subfolder",
+                    IsDirectory = true,
+                    CategoryPath = categoryPath,
+                    CreatedDate = dirInfo.CreationTime,
+                    ModifiedDate = dirInfo.LastWriteTime,
+                    FolderType = FolderLinkType.LinkOnly,
+                    IsCatalogEntry = true
+                };
+                
+                catalogEntries.Add(subDirEntry);
+            }
 
+            // Then, add all files in the current directory
+            var files = Directory.GetFiles(directoryPath);
             foreach (var filePath in files)
             {
                 var fileInfo = new FileInfo(filePath);
@@ -355,6 +447,73 @@ public class CategoryService
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Error creating catalog for {directoryPath}: {ex.Message}", ex);
+        }
+
+        return catalogEntries;
+    }
+
+    /// <summary>
+    /// Recursively catalogs a subdirectory and returns its entries with children populated.
+    /// Used when expanding a catalog subdirectory for the first time.
+    /// </summary>
+    public async Task<List<LinkItem>> CreateSubdirectoryCatalogEntriesAsync(String directoryPath, string categoryPath)
+    {
+        var catalogEntries = new List<LinkItem>();
+
+        if (!Directory.Exists(directoryPath))
+        {
+            return catalogEntries;
+        }
+
+        try
+        {
+            // Add all files in this subdirectory
+            var files = Directory.GetFiles(directoryPath);
+            foreach (var filePath in files)
+            {
+                var fileInfo = new FileInfo(filePath);
+                
+                // Generate rich description based on file type
+                var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
+                
+                catalogEntries.Add(new LinkItem
+                {
+                    Title = fileInfo.Name,
+                    Url = filePath,
+                    Description = description,
+                    IsDirectory = false,
+                    CategoryPath = categoryPath,
+                    CreatedDate = fileInfo.CreationTime,
+                    ModifiedDate = fileInfo.LastWriteTime,
+                    FolderType = FolderLinkType.LinkOnly,
+                    IsCatalogEntry = true,
+                    FileSize = (ulong)fileInfo.Length
+                });
+            }
+
+            // Add subdirectories (without recursing into them)
+            var directories = Directory.GetDirectories(directoryPath);
+            foreach (var subDirPath in directories)
+            {
+                var dirInfo = new DirectoryInfo(subDirPath);
+                
+                catalogEntries.Add(new LinkItem
+                {
+                    Title = dirInfo.Name,
+                    Url = subDirPath,
+                    Description = $"Subfolder",
+                    IsDirectory = true,
+                    CategoryPath = categoryPath,
+                    CreatedDate = dirInfo.CreationTime,
+                    ModifiedDate = dirInfo.LastWriteTime,
+                    FolderType = FolderLinkType.LinkOnly,
+                    IsCatalogEntry = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Error creating catalog for subdirectory {directoryPath}: {ex.Message}", ex);
         }
 
         return catalogEntries;
@@ -402,21 +561,54 @@ public class CategoryService
 
         foreach (var entry in catalogEntries)
         {
-            node.Children.Remove(entry);
+                node.Children.Remove(entry);
         }
     }
 
     /// <summary>
     /// Updates the catalog file count for a link item based on its children.
+    /// Counts only direct file children (not subdirectories).
     /// </summary>
     public void UpdateCatalogFileCount(TreeViewNode linkNode)
     {
         if (linkNode.Content is LinkItem link && link.IsDirectory)
         {
-            var catalogCount = linkNode.Children.Count(child => 
-                child.Content is LinkItem catalogEntry && catalogEntry.IsCatalogEntry);
+            // Count only files that are direct children, exclude subdirectory entries
+            var fileCount = linkNode.Children.Count(child => 
+                child.Content is LinkItem catalogEntry && 
+                catalogEntry.IsCatalogEntry && 
+                !catalogEntry.IsDirectory);
             
-            link.CatalogFileCount = catalogCount;
+            link.CatalogFileCount = fileCount;
         }
+    }
+
+    /// <summary>
+    /// Recursively counts files in catalog entries, excluding subdirectories.
+    /// NOTE: This method is no longer used - kept for reference.
+    /// </summary>
+    private int CountFilesRecursively(TreeViewNode node)
+    {
+        int count = 0;
+        
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem catalogEntry && catalogEntry.IsCatalogEntry)
+            {
+                if (catalogEntry.IsDirectory)
+                {
+                    // Don't count subdirectories or their contents
+                    // (they may not be loaded yet)
+                    continue;
+                }
+                else
+                {
+                    // It's a file, count it
+                    count++;
+                }
+            }
+        }
+        
+        return count;
     }
 }
