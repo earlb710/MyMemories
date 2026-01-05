@@ -6,6 +6,7 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage;
 
 namespace MyMemories.Services;
@@ -16,10 +17,170 @@ namespace MyMemories.Services;
 public class DetailsViewService
 {
     private readonly StackPanel _detailsPanel;
+    private StackPanel? _headerPanel;
 
     public DetailsViewService(StackPanel detailsPanel)
     {
         _detailsPanel = detailsPanel;
+    }
+
+    public void SetHeaderPanel(StackPanel headerPanel)
+    {
+        _headerPanel = headerPanel;
+    }
+
+    /// <summary>
+    /// Shows file header information with name, description, and size.
+    /// </summary>
+    public async Task ShowFileHeaderAsync(string fileName, string? description, StorageFile file, BitmapImage? bitmap = null)
+    {
+        _headerPanel?.Children.Clear();
+        
+        if (_headerPanel == null) return;
+
+        // File name and size
+        var properties = await file.GetBasicPropertiesAsync();
+        var fileSize = FileViewerService.FormatFileSize(properties.Size);
+        
+        var titleText = fileName;
+        
+        // Add image dimensions if it's an image
+        if (bitmap != null)
+        {
+            titleText += $" ({bitmap.PixelWidth}x{bitmap.PixelHeight})";
+        }
+        
+        titleText += $" - {fileSize}";
+
+        _headerPanel.Children.Add(new TextBlock
+        {
+            Text = titleText,
+            FontSize = 16,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        // Description if provided
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            _headerPanel.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
+    }
+
+    /// <summary>
+    /// Shows category header in the header panel with icon on the left.
+    /// </summary>
+    public void ShowCategoryHeader(string categoryName, string? description, string icon)
+    {
+        _headerPanel?.Children.Clear();
+        
+        if (_headerPanel == null) return;
+
+        // Create horizontal layout with icon on left
+        var horizontalPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 16
+        };
+
+        // Add large icon on the left
+        var iconText = new TextBlock
+        {
+            Text = icon,
+            FontSize = 48,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        horizontalPanel.Children.Add(iconText);
+
+        // Add text content on the right
+        var textPanel = new StackPanel
+        {
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        textPanel.Children.Add(new TextBlock
+        {
+            Text = categoryName,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
+
+        horizontalPanel.Children.Add(textPanel);
+        _headerPanel.Children.Add(horizontalPanel);
+    }
+
+    /// <summary>
+    /// Shows link header in the header panel with icon on the left.
+    /// </summary>
+    public void ShowLinkHeader(string linkTitle, string? description, string icon)
+    {
+        _headerPanel?.Children.Clear();
+        
+        if (_headerPanel == null) return;
+
+        // Create horizontal layout with icon on left
+        var horizontalPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 16
+        };
+
+        // Add large icon on the left
+        var iconText = new TextBlock
+        {
+            Text = icon,
+            FontSize = 48,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        horizontalPanel.Children.Add(iconText);
+
+        // Add text content on the right
+        var textPanel = new StackPanel
+        {
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        textPanel.Children.Add(new TextBlock
+        {
+            Text = linkTitle,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = description,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
+
+        horizontalPanel.Children.Add(textPanel);
+        _headerPanel.Children.Add(horizontalPanel);
     }
 
     /// <summary>
@@ -29,15 +190,10 @@ public class DetailsViewService
     {
         _detailsPanel.Children.Clear();
 
-        AddIcon(category.Icon, 64);
-        AddTitle(category.Name);
-        AddDivider();
-        
-        AddSection("Description", 
-            string.IsNullOrWhiteSpace(category.Description) 
-                ? "(No description provided)" 
-                : category.Description,
-            isGrayedOut: string.IsNullOrWhiteSpace(category.Description));
+        // Remove the centered icon and title since they're now in the header
+
+        // Add timestamps for category
+        AddCategoryTimestamps(category);
 
         AddStatistics(node);
         
@@ -48,28 +204,101 @@ public class DetailsViewService
     }
 
     /// <summary>
-    /// Shows link details with file information.
+    /// Shows link details with file information and catalog buttons for directories.
     /// </summary>
-    public async Task ShowLinkDetailsAsync(LinkItem linkItem)
+    public async Task<(Button? createButton, Button? refreshButton)> ShowLinkDetailsAsync(LinkItem linkItem, TreeViewNode? node, Func<Task> onCreateCatalog, Func<Task> onRefreshCatalog)
     {
         _detailsPanel.Children.Clear();
 
-        var linkIcon = linkItem.IsDirectory ? "📁" : "🔗";
-        AddIcon(linkIcon, 64);
-        AddTitle(linkItem.Title);
-        
-        var typeText = GetLinkType(linkItem);
-        AddTypeBadge(typeText);
-        AddDivider();
+        Button? createButton = null;
+        Button? refreshButton = null;
 
-        AddSection(linkItem.IsDirectory ? "Directory Path" : "Path/URL", linkItem.Url, isSelectable: true);
-        AddSection("Description", 
-            string.IsNullOrWhiteSpace(linkItem.Description) 
-                ? "(No description provided)" 
-                : linkItem.Description,
-            isGrayedOut: string.IsNullOrWhiteSpace(linkItem.Description));
+        // Add catalog buttons for directories at the top (only if we have a valid node)
+        if (node != null && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
+        {
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+
+            // Check if catalog already exists
+            bool hasCatalog = HasCatalogEntries(node);
+
+            if (!hasCatalog)
+            {
+                createButton = new Button
+                {
+                    Content = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Children =
+                        {
+                            new FontIcon { Glyph = "\uE8B7" }, // AddToIcon
+                            new TextBlock { Text = "Create Catalog", VerticalAlignment = VerticalAlignment.Center }
+                        }
+                    }
+                };
+                createButton.Click += (s, e) => { _ = onCreateCatalog(); };
+                buttonPanel.Children.Add(createButton);
+            }
+            else
+            {
+                refreshButton = new Button
+                {
+                    Content = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Children =
+                        {
+                            new FontIcon { Glyph = "\uE72C" }, // SyncIcon
+                            new TextBlock { Text = "Refresh Catalog", VerticalAlignment = VerticalAlignment.Center }
+                        }
+                    }
+                };
+                refreshButton.Click += (s, e) => { _ = onRefreshCatalog(); };
+                buttonPanel.Children.Add(refreshButton);
+            }
+
+            _detailsPanel.Children.Add(buttonPanel);
+        }
+
+        // Always show the path/URL section with proper handling
+        if (!string.IsNullOrWhiteSpace(linkItem.Url))
+        {
+            var pathLabel = linkItem.IsDirectory ? "Directory Path" : "Path/URL";
+            AddSection(pathLabel, linkItem.Url, isSelectable: true);
+        }
+        else
+        {
+            // Show warning if no path specified
+            AddWarning("⚠️ No path or URL specified for this link");
+        }
+
+        // Add timestamp information
+        AddTimestamps(linkItem);
 
         await AddFileSystemInfoAsync(linkItem);
+
+        return (createButton, refreshButton);
+    }
+
+    /// <summary>
+    /// Helper method to check if node has catalog entries.
+    /// </summary>
+    private bool HasCatalogEntries(TreeViewNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link && link.IsCatalogEntry)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -170,17 +399,43 @@ public class DetailsViewService
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
+            // Let the system handle the default foreground color
         });
 
-        _detailsPanel.Children.Add(new TextBlock
+        var contentTextBlock = new TextBlock
         {
             Text = content,
             FontSize = 14,
             TextWrapping = TextWrapping.Wrap,
             IsTextSelectionEnabled = isSelectable,
-            Margin = new Thickness(0, 0, 0, 16),
-            Foreground = isGrayedOut ? new SolidColorBrush(Colors.Gray) : null
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
+        // Only set foreground if we want it grayed out, otherwise use default
+        if (isGrayedOut)
+        {
+            contentTextBlock.Foreground = new SolidColorBrush(Colors.Gray);
+        }
+
+        _detailsPanel.Children.Add(contentTextBlock);
+    }
+
+    private void AddTimestamps(LinkItem linkItem)
+    {
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Timestamps",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
         });
+
+        var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        
+        timestampsPanel.Children.Add(CreateStatLine($"📅 Created: {linkItem.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateStatLine($"📝 Modified: {linkItem.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
+
+        _detailsPanel.Children.Add(timestampsPanel);
     }
 
     private void AddStatistics(TreeViewNode node)
@@ -382,5 +637,26 @@ public class DetailsViewService
             return "Web URL";
         
         return "File";
+    }
+
+    /// <summary>
+    /// Adds category timestamps section to the details panel.
+    /// </summary>
+    private void AddCategoryTimestamps(CategoryItem category)
+    {
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Timestamps",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        
+        timestampsPanel.Children.Add(CreateStatLine($"📅 Created: {category.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateStatLine($"📝 Modified: {category.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
+
+        _detailsPanel.Children.Add(timestampsPanel);
     }
 }

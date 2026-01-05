@@ -58,6 +58,7 @@ public sealed partial class MainWindow : Window
             _categoryService = new CategoryService(_dataFolder);
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
             _detailsViewService = new DetailsViewService(DetailsPanel);
+            _detailsViewService.SetHeaderPanel(HeaderPanel);
             _treeViewService = new TreeViewService(LinksTreeView);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot);
 
@@ -285,16 +286,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task LoadFileAsync(StorageFile file)
+    private async Task LoadFileAsync(StorageFile file, string? description = null)
     {
         try
         {
-            CurrentFileText.Text = file.Name;
             StatusText.Text = $"Loading {file.Name}...";
 
             HideAllViewers();
 
             var result = await _fileViewerService!.LoadFileAsync(file);
+            
+            // Show header with file info
+            await _detailsViewService!.ShowFileHeaderAsync(file.Name, description, file, result.Bitmap);
+            HeaderViewerScroll.Visibility = Visibility.Visible;
+            
             ShowViewer(result.ViewerType);
 
             var properties = await file.GetBasicPropertiesAsync();
@@ -324,7 +329,9 @@ public sealed partial class MainWindow : Window
                 {
                     Name = result.Name,
                     Description = result.Description,
-                    Icon = result.Icon
+                    Icon = result.Icon,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now
                 }
             };
 
@@ -348,7 +355,9 @@ public sealed partial class MainWindow : Window
                 {
                     Name = result.Name,
                     Description = result.Description,
-                    Icon = result.Icon
+                    Icon = result.Icon,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now
                 }
             };
 
@@ -408,7 +417,9 @@ public sealed partial class MainWindow : Window
             {
                 Name = result.Name,
                 Description = result.Description,
-                Icon = result.Icon
+                Icon = result.Icon,
+                CreatedDate = category.CreatedDate, // Keep original created date
+                ModifiedDate = DateTime.Now // Update modified date
             };
 
             var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
@@ -426,6 +437,8 @@ public sealed partial class MainWindow : Window
             if (LinksTreeView.SelectedNode == newNode)
             {
                 _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
+                _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
+                HeaderViewerScroll.Visibility = Visibility.Visible;
             }
         }
     }
@@ -528,7 +541,11 @@ public sealed partial class MainWindow : Window
                     Url = result.Url,
                     Description = result.Description,
                     IsDirectory = result.IsDirectory,
-                    CategoryPath = categoryPath
+                    CategoryPath = categoryPath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    FolderType = result.FolderType,
+                    FileFilters = result.FileFilters
                 }
             };
 
@@ -555,10 +572,20 @@ public sealed partial class MainWindow : Window
             link.Description = editResult.Description;
             link.IsDirectory = editResult.IsDirectory;
             link.CategoryPath = _treeViewService!.GetCategoryPath(node.Parent);
+            link.ModifiedDate = DateTime.Now; // Update modified date
+            link.FolderType = editResult.FolderType;
+            link.FileFilters = editResult.FileFilters;
 
-            _treeViewService!.RefreshLinkNode(node, link);
+            // Refresh the link node and get the new node reference
+            var newNode = _treeViewService!.RefreshLinkNode(node, link);
 
-            var parentCategory = node.Parent;
+            // Update context menu node if it was the edited node
+            if (_contextMenuNode == node)
+            {
+                _contextMenuNode = newNode;
+            }
+
+            var parentCategory = newNode.Parent;
             if (parentCategory != null)
             {
                 var rootNode = GetRootCategoryNode(parentCategory);
@@ -567,9 +594,14 @@ public sealed partial class MainWindow : Window
 
             StatusText.Text = $"Updated link: {editResult.Title}";
 
-            if (LinksTreeView.SelectedNode == node)
+            if (LinksTreeView.SelectedNode == newNode)
             {
-                await _detailsViewService!.ShowLinkDetailsAsync(link);
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    link,
+                    newNode,
+                    async () => await CreateCatalogAsync(link, newNode),
+                    async () => await RefreshCatalogAsync(link, newNode)
+                );
             }
         }
     }
@@ -619,7 +651,12 @@ public sealed partial class MainWindow : Window
             // If the moved link was selected, update the details view
             if (LinksTreeView.SelectedNode == node)
             {
-                await _detailsViewService!.ShowLinkDetailsAsync(link);
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    link,
+                    node,
+                    async () => await CreateCatalogAsync(link, node),
+                    async () => await RefreshCatalogAsync(link, node)
+                );
             }
         }
     }
@@ -669,8 +706,11 @@ public sealed partial class MainWindow : Window
             HideAllViewers();
             _detailsViewService!.ShowCategoryDetails(category, node);
             DetailsViewerScroll.Visibility = Visibility.Visible;
+            
             var categoryPath = _treeViewService!.GetCategoryPath(node);
-            CurrentFileText.Text = $"Category: {categoryPath}";
+            _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);
+            HeaderViewerScroll.Visibility = Visibility.Visible;
+            
             StatusText.Text = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";
         }
         else if (node.Content is LinkItem linkItem)
@@ -749,8 +789,30 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrEmpty(linkItem.Url))
         {
             HideAllViewers();
-            await _detailsViewService!.ShowLinkDetailsAsync(linkItem);
+            
+            // Find the TreeViewNode for this link
+            var linkNode = FindLinkNode(linkItem);
+            
+            StatusText.Text = $"DEBUG: Empty URL, linkNode is {(linkNode == null ? "NULL" : "FOUND")}";
+            
+            if (linkNode != null)
+            {
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    linkItem,
+                    linkNode,
+                    async () => await CreateCatalogAsync(linkItem, linkNode),
+                    async () => await RefreshCatalogAsync(linkItem, linkNode)
+                );
+            }
+            else
+            {
+                // No node found - show details without catalog buttons
+                await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
+            }
+            
             DetailsViewerScroll.Visibility = Visibility.Visible;
+            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+            HeaderViewerScroll.Visibility = Visibility.Visible;
             return;
         }
 
@@ -759,10 +821,31 @@ public sealed partial class MainWindow : Window
             if (linkItem.IsDirectory || Directory.Exists(linkItem.Url))
             {
                 HideAllViewers();
-                await _detailsViewService!.ShowLinkDetailsAsync(linkItem);
+                
+                // Find the TreeViewNode for this link
+                var linkNode = FindLinkNode(linkItem);
+                
+                StatusText.Text = $"DEBUG: Directory link, linkNode is {(linkNode == null ? "NULL" : "FOUND")}";
+                
+                if (linkNode != null)
+                {
+                    await _detailsViewService!.ShowLinkDetailsAsync(
+                        linkItem, 
+                        linkNode,
+                        async () => await CreateCatalogAsync(linkItem, linkNode),
+                        async () => await RefreshCatalogAsync(linkItem, linkNode)
+                    );
+                }
+                else
+                {
+                    // No node found - show details without catalog buttons
+                    await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
+                }
+                
                 await _detailsViewService.AddOpenInExplorerButtonAsync(linkItem.Url);
                 DetailsViewerScroll.Visibility = Visibility.Visible;
-                CurrentFileText.Text = linkItem.Title;
+                _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                HeaderViewerScroll.Visibility = Visibility.Visible;
                 StatusText.Text = $"Viewing directory: {linkItem.Title}";
             }
             else if (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out Uri? uri))
@@ -770,14 +853,15 @@ public sealed partial class MainWindow : Window
                 if (uri.IsFile)
                 {
                     var file = await StorageFile.GetFileFromPathAsync(linkItem.Url);
-                    await LoadFileAsync(file);
+                    await LoadFileAsync(file, linkItem.Description);
                 }
                 else
                 {
                     HideAllViewers();
                     await _fileViewerService!.LoadUrlAsync(uri);
                     WebViewer.Visibility = Visibility.Visible;
-                    CurrentFileText.Text = linkItem.Title;
+                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                    HeaderViewerScroll.Visibility = Visibility.Visible;
                     StatusText.Text = $"Loaded: {uri}";
                 }
             }
@@ -786,8 +870,161 @@ public sealed partial class MainWindow : Window
         {
             StatusText.Text = $"Error: {ex.Message}";
             HideAllViewers();
-            await _detailsViewService!.ShowLinkDetailsAsync(linkItem);
+            
+            // Find the TreeViewNode for this link
+            var linkNode = FindLinkNode(linkItem);
+            
+            if (linkNode != null)
+            {
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    linkItem,
+                    linkNode,
+                    async () => await CreateCatalogAsync(linkItem, linkNode),
+                    async () => await RefreshCatalogAsync(linkItem, linkNode)
+                );
+            }
+            else
+            {
+                // No node found - show details without catalog buttons
+                await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
+            }
+            
             DetailsViewerScroll.Visibility = Visibility.Visible;
+            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+            HeaderViewerScroll.Visibility = Visibility.Visible;
+        }
+    }
+
+    private TreeViewNode? FindLinkNode(LinkItem linkItem)
+    {
+        // Use the currently selected node if it matches
+        if (LinksTreeView.SelectedNode?.Content is LinkItem selectedLink && 
+            selectedLink.Title == linkItem.Title && 
+            selectedLink.Url == linkItem.Url)
+        {
+            return LinksTreeView.SelectedNode;
+        }
+        
+        // Otherwise search the tree
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            var found = FindLinkNodeRecursive(rootNode, linkItem);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private TreeViewNode? FindLinkNodeRecursive(TreeViewNode node, LinkItem targetLink)
+    {
+        if (node.Content is LinkItem link && 
+            link.Title == targetLink.Title && 
+            link.Url == targetLink.Url &&
+            link.CategoryPath == targetLink.CategoryPath)
+        {
+            return node;
+        }
+
+        foreach (var child in node.Children)
+        {
+            var found = FindLinkNodeRecursive(child, targetLink);
+            if (found != null) return found;
+        }
+
+        return null;
+    }
+
+    private async Task CreateCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
+    {
+        try
+        {
+            StatusText.Text = "Creating catalog...";
+
+            // Create catalog entries
+            var catalogEntries = await _categoryService!.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+
+            // Update the folder link's LastCatalogUpdate timestamp
+            linkItem.LastCatalogUpdate = DateTime.Now;
+
+            // Add catalog entries to the tree
+            foreach (var entry in catalogEntries)
+            {
+                var entryNode = new TreeViewNode
+                {
+                    Content = entry
+                };
+                linkNode.Children.Add(entryNode);
+            }
+
+            // Refresh the link node to update the display (remove asterisk if it was there)
+            var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+
+            // Save the changes
+            var rootNode = GetRootCategoryNode(refreshedNode);
+            await _categoryService.SaveCategoryAsync(rootNode);
+
+            // Refresh the view
+            refreshedNode.IsExpanded = true;
+            await _detailsViewService!.ShowLinkDetailsAsync(
+                linkItem,
+                refreshedNode,
+                async () => await CreateCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode)
+            );
+
+            StatusText.Text = $"Created catalog with {catalogEntries.Count} entries";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error creating catalog: {ex.Message}";
+        }
+    }
+
+    private async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
+    {
+        try
+        {
+            StatusText.Text = "Refreshing catalog...";
+
+            // Remove existing catalog entries
+            _categoryService!.RemoveCatalogEntries(linkNode);
+
+            // Create new catalog entries
+            var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+
+            // Update the folder link's LastCatalogUpdate timestamp
+            linkItem.LastCatalogUpdate = DateTime.Now;
+
+            // Add new catalog entries to the tree
+            foreach (var entry in catalogEntries)
+            {
+                var entryNode = new TreeViewNode
+                {
+                    Content = entry
+                };
+                linkNode.Children.Add(entryNode);
+            }
+
+            // Refresh the link node to update the display (remove asterisk)
+            var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+
+            // Save the changes
+            var rootNode = GetRootCategoryNode(refreshedNode);
+            await _categoryService.SaveCategoryAsync(rootNode);
+
+            // Refresh the view
+            refreshedNode.IsExpanded = true;
+            await _detailsViewService!.ShowLinkDetailsAsync(
+                linkItem,
+                refreshedNode,
+                async () => await CreateCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode)
+            );
+
+            StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error refreshing catalog: {ex.Message}";
         }
     }
 
@@ -834,8 +1071,8 @@ public sealed partial class MainWindow : Window
 
         if (result?.CategoryNode != null)
         {
-            var categoryPath = _treeViewService!.GetCategoryPath(result.CategoryNode);
-            
+            var categoryPath = _treeViewService.GetCategoryPath(result.CategoryNode);
+
             var linkNode = new TreeViewNode
             {
                 Content = new LinkItem
@@ -844,7 +1081,11 @@ public sealed partial class MainWindow : Window
                     Url = result.Url,
                     Description = result.Description,
                     IsDirectory = result.IsDirectory,
-                    CategoryPath = categoryPath
+                    CategoryPath = categoryPath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    FolderType = result.FolderType,
+                    FileFilters = result.FileFilters
                 }
             };
 
@@ -910,6 +1151,20 @@ public sealed partial class MainWindow : Window
     {
         if (_contextMenuNode?.Content is LinkItem link)
         {
+            // Prevent editing catalog entries
+            if (link.IsCatalogEntry)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Cannot Edit Catalog Entry",
+                    Content = "Catalog entries are read-only and cannot be edited. Use 'Refresh Catalog' to update them.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+                return;
+            }
+
             await EditLinkAsync(link, _contextMenuNode);
         }
     }
@@ -918,6 +1173,20 @@ public sealed partial class MainWindow : Window
     {
         if (_contextMenuNode?.Content is LinkItem link)
         {
+            // Prevent removing catalog entries individually
+            if (link.IsCatalogEntry)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Cannot Remove Catalog Entry",
+                    Content = "Catalog entries cannot be removed individually. Use 'Refresh Catalog' to update them.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+                return;
+            }
+
             await DeleteLinkAsync(link, _contextMenuNode);
         }
     }
@@ -933,6 +1202,7 @@ public sealed partial class MainWindow : Window
         TextViewerScroll.Visibility = Visibility.Collapsed;
         DetailsViewerScroll.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
+        HeaderViewerScroll.Visibility = Visibility.Collapsed;
     }
 
     private void ShowWelcome()

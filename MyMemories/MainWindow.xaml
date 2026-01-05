@@ -9,35 +9,12 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Top Bar with File Selection -->
-        <Grid Grid.Row="0" Padding="16" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            
-            <TextBlock 
-                Grid.Column="0"
-                x:Name="CurrentFileText"
-                Text="No file selected"
-                VerticalAlignment="Center"
-                FontSize="14"
-                TextTrimming="CharacterEllipsis"/>
-            
-            <Button 
-                Grid.Column="1"
-                Content="Open File"
-                Click="OpenFileButton_Click"
-                Margin="8,0,0,0"/>
-        </Grid>
-
         <!-- Main Content Area with TreeView and Viewer -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250" MinWidth="150"/>
                 <ColumnDefinition Width="*"/>
@@ -159,8 +136,24 @@
 
             <!-- Content Viewer Area -->
             <Grid Grid.Column="1" x:Name="ContentGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header Panel for File/Category Info -->
+                <ScrollViewer 
+                    Grid.Row="0"
+                    x:Name="HeaderViewerScroll"
+                    Visibility="Collapsed"
+                    Padding="20,16,20,8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel x:Name="HeaderPanel" Spacing="4"/>
+                </ScrollViewer>
+
                 <!-- Image Viewer -->
                 <Image 
+                    Grid.Row="1"
                     x:Name="ImageViewer"
                     Visibility="Collapsed"
                     Stretch="Uniform"
@@ -169,11 +162,13 @@
 
                 <!-- WebView2 for HTML and PDF -->
                 <WebView2 
+                    Grid.Row="1"
                     x:Name="WebViewer"
                     Visibility="Collapsed"/>
 
                 <!-- Text Viewer -->
                 <ScrollViewer
+                    Grid.Row="1"
                     x:Name="TextViewerScroll"
                     Visibility="Collapsed">
                     <TextBox 
@@ -189,6 +184,7 @@
 
                 <!-- Node Details Viewer -->
                 <ScrollViewer
+                    Grid.Row="1"
                     x:Name="DetailsViewerScroll"
                     Visibility="Collapsed"
                     Padding="20">
@@ -197,6 +193,7 @@
 
                 <!-- Welcome Panel -->
                 <StackPanel 
+                    Grid.Row="1"
                     x:Name="WelcomePanel"
                     Visibility="Visible"
                     HorizontalAlignment="Center"
@@ -217,7 +214,7 @@
         </Grid>
 
         <!-- Status Bar -->
-        <Grid Grid.Row="2" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="1" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <TextBlock 
                 x:Name="StatusText"
                 Text="Ready"

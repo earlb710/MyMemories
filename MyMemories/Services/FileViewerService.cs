@@ -34,28 +34,28 @@ public class FileViewerService
         {
             if (IsImageFile(extension))
             {
-                await LoadImageAsync(file);
-                return new FileLoadResult(FileViewerType.Image, file.Name);
+                var bitmap = await LoadImageAsync(file);
+                return new FileLoadResult(FileViewerType.Image, file.Name, bitmap);
             }
             else if (extension is ".html" or ".htm")
             {
                 await LoadHtmlAsync(file);
-                return new FileLoadResult(FileViewerType.Web, file.Name);
+                return new FileLoadResult(FileViewerType.Web, file.Name, null);
             }
             else if (extension == ".pdf")
             {
                 await LoadPdfAsync(file);
-                return new FileLoadResult(FileViewerType.Web, file.Name);
+                return new FileLoadResult(FileViewerType.Web, file.Name, null);
             }
             else if (IsTextFile(extension))
             {
                 await LoadTextAsync(file);
-                return new FileLoadResult(FileViewerType.Text, file.Name);
+                return new FileLoadResult(FileViewerType.Text, file.Name, null);
             }
             else
             {
                 await LoadTextAsync(file);
-                return new FileLoadResult(FileViewerType.Text, file.Name);
+                return new FileLoadResult(FileViewerType.Text, file.Name, null);
             }
         }
         catch (Exception ex)
@@ -77,12 +77,13 @@ public class FileViewerService
         _webViewer.Source = uri;
     }
 
-    private async Task LoadImageAsync(StorageFile file)
+    private async Task<BitmapImage> LoadImageAsync(StorageFile file)
     {
         using var stream = await file.OpenReadAsync();
         var bitmap = new BitmapImage();
         await bitmap.SetSourceAsync(stream);
         _imageViewer.Source = bitmap;
+        return bitmap;
     }
 
     private async Task LoadHtmlAsync(StorageFile file)
@@ -137,7 +138,7 @@ public class FileViewerService
 /// <summary>
 /// Result of a file load operation.
 /// </summary>
-public record FileLoadResult(FileViewerType ViewerType, string FileName);
+public record FileLoadResult(FileViewerType ViewerType, string FileName, BitmapImage? Bitmap);
 
 /// <summary>
 /// Type of file viewer being used.

@@ -145,6 +145,7 @@ public class TreeViewService
         // Determine if this is a root node or child node
         bool isRootNode = oldNode.Parent == null;
         int nodeIndex;
+        TreeViewNode? parentNode = null;
         
         if (isRootNode)
         {
@@ -153,7 +154,7 @@ public class TreeViewService
         }
         else
         {
-            var parentNode = oldNode.Parent!;
+            parentNode = oldNode.Parent!;
             nodeIndex = parentNode.Children.IndexOf(oldNode);
             parentNode.Children.Remove(oldNode);
         }
@@ -178,18 +179,47 @@ public class TreeViewService
         }
         else
         {
-            oldNode.Parent!.Children.Insert(nodeIndex, newNode);
+            parentNode!.Children.Insert(nodeIndex, newNode);
         }
 
         return newNode;
     }
 
     /// <summary>
-    /// Refreshes a link node's content.
+    /// Refreshes a link node's content by recreating the node to force TreeView update.
     /// </summary>
-    public void RefreshLinkNode(TreeViewNode node, LinkItem updatedLink)
+    public TreeViewNode RefreshLinkNode(TreeViewNode oldNode, LinkItem updatedLink)
     {
-        node.Content = null;
-        node.Content = updatedLink;
+        if (oldNode.Parent == null)
+        {
+            // Link nodes should always have a parent
+            oldNode.Content = updatedLink;
+            return oldNode;
+        }
+
+        // Store the node's position
+        var parentNode = oldNode.Parent;
+        int nodeIndex = parentNode.Children.IndexOf(oldNode);
+        bool wasSelected = _treeView.SelectedNode == oldNode;
+
+        // Remove old node
+        parentNode.Children.Remove(oldNode);
+
+        // Create new node with updated content
+        var newNode = new TreeViewNode
+        {
+            Content = updatedLink
+        };
+
+        // Insert at same position
+        parentNode.Children.Insert(nodeIndex, newNode);
+
+        // Restore selection if needed
+        if (wasSelected)
+        {
+            _treeView.SelectedNode = newNode;
+        }
+
+        return newNode;
     }
 }
