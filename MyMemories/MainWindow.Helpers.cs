@@ -125,4 +125,22 @@ public partial class MainWindow
             node.Content = content;
         }
     }
+
+    /// <summary>
+    /// Finds a parent element of a specific type in the visual tree.
+    /// </summary>
+    private static T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    {
+        DependencyObject? parentObject = VisualTreeHelper.GetParent(child);
+
+        while (parentObject != null)
+        {
+            if (parentObject is T parent)
+                return parent;
+
+            parentObject = VisualTreeHelper.GetParent(parentObject);
+        }
+
+        return null;
+    }
 }

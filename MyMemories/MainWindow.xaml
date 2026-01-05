@@ -106,41 +106,56 @@
                     RightTapped="LinksTreeView_RightTapped"
                     DoubleTapped="LinksTreeView_DoubleTapped">
                     
-                    <!-- Item Template with Badge Icon for Changed Folders -->
-                    <TreeView.ItemTemplate>
-                        <DataTemplate x:DataType="local:LinkItem">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <!-- Icon Container with Overlay Badge -->
-                                <Grid Width="20" Height="20">
-                                    <!-- Primary Icon -->
-                                    <TextBlock 
-                                        Text="{x:Bind GetIcon()}" 
-                                        FontSize="16"
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"/>
-                                    
-                                    <!-- Badge Icon for Changed Folders (bottom-right corner) -->
-                                    <FontIcon 
-                                        Glyph="&#xE7BA;"
-                                        FontSize="10"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Bottom"
-                                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
-                                        Margin="0,0,-2,-2"
-                                        Visibility="{x:Bind HasChangedSinceCatalog, Mode=OneWay}">
-                                        <ToolTipService.ToolTip>
-                                            <ToolTip Content="Folder has changed since last catalog"/>
-                                        </ToolTipService.ToolTip>
-                                    </FontIcon>
-                                </Grid>
-                                
-                                <!-- Text Label -->
-                                <TextBlock 
-                                    Text="{x:Bind DisplayText, Mode=OneWay}" 
-                                    VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </TreeView.ItemTemplate>
+                    <!-- Item Template Selector -->
+                    <TreeView.ItemTemplateSelector>
+                        <local:TreeNodeTemplateSelector>
+                            <!-- Category Template -->
+                            <local:TreeNodeTemplateSelector.CategoryTemplate>
+                                <DataTemplate x:DataType="local:CategoryItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{x:Bind Icon}" FontSize="16"/>
+                                        <TextBlock Text="{x:Bind Name}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </local:TreeNodeTemplateSelector.CategoryTemplate>
+                            
+                            <!-- Link Template with Badge -->
+                            <local:TreeNodeTemplateSelector.LinkTemplate>
+                                <DataTemplate x:DataType="local:LinkItem">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <!-- Icon Container with Overlay Badge -->
+                                        <Grid Width="20" Height="20">
+                                            <!-- Primary Icon -->
+                                            <TextBlock 
+                                                Text="{x:Bind GetIconWithoutBadge()}" 
+                                                FontSize="16"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+                                            
+                                            <!-- Badge Icon for Changed Folders (bottom-right corner) -->
+                                            <FontIcon 
+                                                Glyph="&#xE7BA;"
+                                                FontSize="10"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Bottom"
+                                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                Margin="0,0,-2,-2"
+                                                Visibility="{Binding HasChanged, Mode=OneWay}">
+                                                <ToolTipService.ToolTip>
+                                                    <ToolTip Content="Folder has changed since last catalog"/>
+                                                </ToolTipService.ToolTip>
+                                            </FontIcon>
+                                        </Grid>
+                                        
+                                        <!-- Text Label -->
+                                        <TextBlock 
+                                            Text="{x:Bind DisplayText, Mode=OneWay}" 
+                                            VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </local:TreeNodeTemplateSelector.LinkTemplate>
+                        </local:TreeNodeTemplateSelector>
+                    </TreeView.ItemTemplateSelector>
                     
                     <!-- Context Menu for Category Nodes -->
                     <TreeView.Resources>

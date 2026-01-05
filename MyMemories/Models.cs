@@ -29,6 +29,7 @@ public class CategoryItem
 public class LinkItem : INotifyPropertyChanged
 {
     private int _catalogFileCount;
+    private DateTime? _lastCatalogUpdate;
     
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
@@ -40,7 +41,21 @@ public class LinkItem : INotifyPropertyChanged
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
-    public DateTime? LastCatalogUpdate { get; set; }
+    
+    public DateTime? LastCatalogUpdate
+    {
+        get => _lastCatalogUpdate;
+        set
+        {
+            if (_lastCatalogUpdate != value)
+            {
+                _lastCatalogUpdate = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasChanged));
+            }
+        }
+    }
+    
     public ulong? FileSize { get; set; }
     public bool AutoRefreshCatalog { get; set; } = false;
     
@@ -61,35 +76,7 @@ public class LinkItem : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Gets whether the folder has changed since last catalog update
-    /// </summary>
-    [JsonIgnore]
-    public Visibility HasChangedSinceCatalog
-    {
-        get
-        {
-            if (!IsDirectory || IsCatalogEntry || !LastCatalogUpdate.HasValue)
-                return Visibility.Collapsed;
-
-            if (!Directory.Exists(Url))
-                return Visibility.Collapsed;
-
-            try
-            {
-                var dirInfo = new DirectoryInfo(Url);
-                return dirInfo.LastWriteTime > LastCatalogUpdate.Value 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed;
-            }
-            catch
-            {
-                return Visibility.Collapsed;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Gets the display text for the tree node
+    /// Gets the display text for the tree node (without icon)
     /// </summary>
     [JsonIgnore]
     public string DisplayText
@@ -107,58 +94,65 @@ public class LinkItem : INotifyPropertyChanged
         }
     }
 
-    public override string ToString()
+    /// <summary>
+    /// Gets the visibility of the change badge
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasChanged
     {
-        var icon = GetIcon();
-        var changedIndicator = "";
-        
-        // Add asterisk for changed folders
-        if (IsDirectory && !IsCatalogEntry && LastCatalogUpdate.HasValue && Directory.Exists(Url))
+        get
         {
+            if (!IsDirectory || IsCatalogEntry || !LastCatalogUpdate.HasValue)
+                return Visibility.Collapsed;
+
+            if (!Directory.Exists(Url))
+                return Visibility.Collapsed;
+
             try
             {
                 var dirInfo = new DirectoryInfo(Url);
+                
+                // Method 1: Check if directory was modified after last catalog update
                 if (dirInfo.LastWriteTime > LastCatalogUpdate.Value)
                 {
-                    changedIndicator = " *";
+                    return Visibility.Visible;
                 }
+                
+                // Method 2: Compare actual file count with cataloged file count
+                // This catches deletions that don't update LastWriteTime
+                var currentFileCount = Directory.GetFiles(Url).Length;
+                if (currentFileCount != CatalogFileCount)
+                {
+                    return Visibility.Visible;
+                }
+                
+                return Visibility.Collapsed;
             }
-            catch { }
+            catch
+            {
+                return Visibility.Collapsed;
+            }
         }
-        
-        // Show file count for catalog folders
-        if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
-        {
-            var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
-            return $"{icon} {Title}{catalogInfo}{changedIndicator}";
-        }
-        
-        return $"{icon} {Title}{changedIndicator}";
     }
 
-    public string GetIcon()
+    /// <summary>
+    /// Manually refreshes the HasChanged property by checking the file system.
+    /// Call this method after operations that might change the folder state.
+    /// </summary>
+    public void RefreshChangeStatus()
     {
-        // For directories
+        OnPropertyChanged(nameof(HasChanged));
+    }
+
+    /// <summary>
+    /// Gets the icon without the warning badge (for XAML binding)
+    /// </summary>
+    public string GetIconWithoutBadge()
+    {
+        // For directories - always return normal folder icon
         if (IsDirectory)
         {
-            // Check if folder has changed since last catalog update
-            if (!IsCatalogEntry && LastCatalogUpdate.HasValue && Directory.Exists(Url))
-            {
-                try
-                {
-                    var dirInfo = new DirectoryInfo(Url);
-                    // Check if directory was modified after last catalog update
-                    if (dirInfo.LastWriteTime > LastCatalogUpdate.Value)
-                    {
-                        return "📂"; // Different folder icon for changed folders
-                    }
-                }
-                catch
-                {
-                    // If we can't access the directory, use normal folder icon
-                }
-            }
-            return "📁"; // Normal folder icon
+            return "📁";
         }
         
         // For web URLs (non-file URIs)
@@ -179,6 +173,25 @@ public class LinkItem : INotifyPropertyChanged
             ".txt" or ".md" => "📃",
             _ => "📄" // Default file icon
         };
+    }
+
+    public override string ToString()
+    {
+        var icon = GetIconWithoutBadge();
+        
+        // Show file count for catalog folders
+        if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
+        {
+            var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
+            return $"{icon} {Title}{catalogInfo}";
+        }
+        
+        return $"{icon} {Title}";
+    }
+
+    public string GetIcon()
+    {
+        return GetIconWithoutBadge();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -257,7 +270,7 @@ public class LinkData
     public ulong? FileSize { get; set; }
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? AutoRefreshCatalog { get; set; } // NEW PROPERTY
+    public bool? AutoRefreshCatalog { get; set; }
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }
