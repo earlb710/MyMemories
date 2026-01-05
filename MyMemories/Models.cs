@@ -36,12 +36,35 @@ public class LinkItem
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
     public DateTime? LastCatalogUpdate { get; set; }
+    public ulong? FileSize { get; set; } // File size in bytes
+    
+    // Internal property to store catalog count for display
+    [JsonIgnore]
+    public int CatalogFileCount { get; set; }
 
     public override string ToString()
     {
         var icon = GetIcon();
         
-        // Show asterisk if folder needs catalog update
+        // Show file count for catalog folders
+        if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
+        {
+            var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
+            
+            // Show asterisk if folder needs catalog update
+            if (LastCatalogUpdate.HasValue)
+            {
+                var daysSinceUpdate = (DateTime.Now - LastCatalogUpdate.Value).TotalDays;
+                if (daysSinceUpdate > 7) // Show asterisk if catalog is more than 7 days old
+                {
+                    return $"{icon} {Title}{catalogInfo} *";
+                }
+            }
+            
+            return $"{icon} {Title}{catalogInfo}";
+        }
+        
+        // Show asterisk if folder needs catalog update (but no catalog yet)
         if (IsDirectory && !IsCatalogEntry && LastCatalogUpdate.HasValue)
         {
             var daysSinceUpdate = (DateTime.Now - LastCatalogUpdate.Value).TotalDays;
@@ -56,31 +79,28 @@ public class LinkItem
 
     public string GetIcon()
     {
-        if (IsCatalogEntry)
-        {
-            // Catalog entries use file extension icons
-            var extension = Path.GetExtension(Url).ToLowerInvariant();
-            return extension switch
-            {
-                ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "🖼️",
-                ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "🎬",
-                ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "🎵",
-                ".pdf" => "📄",
-                ".doc" or ".docx" => "📝",
-                ".xls" or ".xlsx" => "📊",
-                ".zip" or ".rar" or ".7z" => "📦",
-                ".txt" => "📃",
-                _ => "📄"
-            };
-        }
-        
+        // For directories
         if (IsDirectory)
             return "📁";
         
+        // For web URLs (non-file URIs)
         if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)
             return "🌐";
         
-        return "📄";
+        // For files (both catalog entries and direct file links), use file extension
+        var extension = Path.GetExtension(Url).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "🖼️",
+            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "🎬",
+            ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "🎵",
+            ".pdf" => "📄",
+            ".doc" or ".docx" => "📝",
+            ".xls" or ".xlsx" => "📊",
+            ".zip" or ".rar" or ".7z" => "📦",
+            ".txt" or ".md" => "📃",
+            _ => "📄" // Default file icon
+        };
     }
 }
 
@@ -147,6 +167,9 @@ public class LinkData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? LastCatalogUpdate { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ulong? FileSize { get; set; }
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }

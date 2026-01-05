@@ -284,6 +284,12 @@ public class DetailsViewService
             _detailsPanel.Children.Add(buttonPanel);
         }
 
+        // Show catalog statistics if this folder has catalog entries
+        if (node != null && linkItem.IsDirectory && HasCatalogEntries(node))
+        {
+            AddCatalogStatistics(node);
+        }
+
         // Always show the path/URL section with proper handling
         if (!string.IsNullOrWhiteSpace(linkItem.Url))
         {
@@ -302,6 +308,72 @@ public class DetailsViewService
         await AddFileSystemInfoAsync(linkItem);
 
         return (createButton, refreshButton);
+    }
+
+    /// <summary>
+    /// Adds catalog statistics including total file count and total file size.
+    /// </summary>
+    private void AddCatalogStatistics(TreeViewNode node)
+    {
+        var catalogEntries = node.Children
+            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
+            .Select(child => child.Content as LinkItem)
+            .Where(link => link != null)
+            .ToList();
+
+        if (catalogEntries.Count == 0)
+            return;
+
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Catalog Statistics",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+
+        // Count total files
+        statsPanel.Children.Add(CreateStatLine($"📊 Total Files: {catalogEntries.Count}"));
+
+        // Calculate total size
+        ulong totalSize = 0;
+        int accessibleFiles = 0;
+
+        foreach (var catalogEntry in catalogEntries)
+        {
+            try
+            {
+                if (File.Exists(catalogEntry!.Url))
+                {
+                    var fileInfo = new FileInfo(catalogEntry.Url);
+                    totalSize += (ulong)fileInfo.Length;
+                    accessibleFiles++;
+                }
+            }
+            catch
+            {
+                // Skip files that can't be accessed
+            }
+        }
+
+        if (accessibleFiles > 0)
+        {
+            statsPanel.Children.Add(CreateStatLine($"💾 Total Size: {FileViewerService.FormatFileSize(totalSize)}"));
+            
+            if (accessibleFiles < catalogEntries.Count)
+            {
+                statsPanel.Children.Add(new TextBlock
+                {
+                    Text = $"⚠️ {catalogEntries.Count - accessibleFiles} file(s) could not be accessed",
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Colors.Orange)
+                });
+            }
+        }
+
+        _detailsPanel.Children.Add(statsPanel);
     }
 
     /// <summary>

@@ -942,10 +942,30 @@ public sealed partial class MainWindow : Window
             StatusText.Text = "Creating catalog...";
             Debug.WriteLine($"[MainWindow] Status updated to 'Creating catalog...'");
 
-            // Create catalog entries
+            // Add temporary "creating..." node
+            var tempCreatingItem = new LinkItem
+            {
+                Title = "Creating catalog...",
+                Description = "Please wait while scanning directory",
+                IsDirectory = false,
+                IsCatalogEntry = false
+            };
+            
+            var tempNode = new TreeViewNode
+            {
+                Content = tempCreatingItem
+            };
+            
+            linkNode.Children.Add(tempNode);
+            linkNode.IsExpanded = true;
+
+            // Create catalog entries (this is the time-consuming operation)
             Debug.WriteLine($"[MainWindow] Calling CreateCatalogEntriesAsync...");
             var catalogEntries = await _categoryService!.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
             Debug.WriteLine($"[MainWindow] Created {catalogEntries.Count} catalog entries");
+
+            // Remove the temporary "creating..." node
+            linkNode.Children.Remove(tempNode);
 
             // Update the folder link's LastCatalogUpdate timestamp
             linkItem.LastCatalogUpdate = DateTime.Now;
@@ -999,6 +1019,10 @@ public sealed partial class MainWindow : Window
     private async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
         Debug.WriteLine($"[MainWindow] RefreshCatalogAsync called for: {linkItem.Title}");
+        
+        // Store the expanded state
+        bool wasExpanded = linkNode.IsExpanded;
+        
         try
         {
             StatusText.Text = "Refreshing catalog...";
@@ -1006,8 +1030,28 @@ public sealed partial class MainWindow : Window
             // Remove existing catalog entries
             _categoryService!.RemoveCatalogEntries(linkNode);
 
-            // Create new catalog entries
+            // Add temporary "refreshing..." node
+            var tempRefreshingItem = new LinkItem
+            {
+                Title = "Refreshing catalog...",
+                Description = "Please wait while the catalog is being updated",
+                IsDirectory = false,
+                IsCatalogEntry = false
+            };
+            
+            var tempNode = new TreeViewNode
+            {
+                Content = tempRefreshingItem
+            };
+            
+            linkNode.Children.Add(tempNode);
+            linkNode.IsExpanded = true;
+
+            // Create new catalog entries (this is the time-consuming operation)
             var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+
+            // Remove the temporary "refreshing..." node
+            linkNode.Children.Remove(tempNode);
 
             // Update the folder link's LastCatalogUpdate timestamp
             linkItem.LastCatalogUpdate = DateTime.Now;
@@ -1022,15 +1066,20 @@ public sealed partial class MainWindow : Window
                 linkNode.Children.Add(entryNode);
             }
 
-            // Refresh the link node to update the display (remove asterisk)
+            // Update the catalog file count
+            _categoryService.UpdateCatalogFileCount(linkNode);
+
+            // Refresh the link node to update the display (remove asterisk and update count)
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
             // Save the changes
             var rootNode = GetRootCategoryNode(refreshedNode);
             await _categoryService.SaveCategoryAsync(rootNode);
 
+            // Restore expansion state
+            refreshedNode.IsExpanded = wasExpanded;
+            
             // Refresh the view
-            refreshedNode.IsExpanded = true;
             await _detailsViewService!.ShowLinkDetailsAsync(
                 linkItem,
                 refreshedNode,
