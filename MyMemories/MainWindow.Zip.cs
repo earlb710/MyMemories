@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml.Controls;
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MyMemories;
@@ -10,6 +11,7 @@ public sealed partial class MainWindow
 {
     /// <summary>
     /// Zips a folder and optionally links it to the parent category.
+    /// Respects catalog settings: only zips cataloged files if folder is a catalog folder.
     /// </summary>
     private async Task ZipFolderAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
@@ -93,12 +95,52 @@ public sealed partial class MainWindow
         {
             StatusText.Text = $"Creating zip file '{zipFileName}'...";
 
-            await Task.Run(() =>
-            {
-                ZipFile.CreateFromDirectory(linkItem.Url, zipFilePath, CompressionLevel.Optimal, false);
-            });
+            // Check if this is a catalog folder
+            bool isCatalogFolder = linkItem.FolderType == FolderLinkType.CatalogueFiles || 
+                                   linkItem.FolderType == FolderLinkType.FilteredCatalogue;
 
-            StatusText.Text = $"Successfully created '{zipFileName}'";
+            if (isCatalogFolder)
+            {
+                // Zip only the cataloged files (from TreeView children)
+                await Task.Run(() =>
+                {
+                    using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                    {
+                        // Get all catalog entries from the TreeView node
+                        var catalogEntries = linkNode.Children
+                            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
+                            .Select(child => (LinkItem)child.Content)
+                            .ToList();
+
+                        foreach (var catalogEntry in catalogEntries)
+                        {
+                            if (catalogEntry.IsDirectory)
+                            {
+                                // Add subdirectory and its cataloged contents
+                                AddDirectoryToCatalogZip(archive, catalogEntry, linkNode, linkItem.Url);
+                            }
+                            else if (File.Exists(catalogEntry.Url))
+                            {
+                                // Add individual file
+                                var relativePath = Path.GetRelativePath(linkItem.Url, catalogEntry.Url);
+                                archive.CreateEntryFromFile(catalogEntry.Url, relativePath, CompressionLevel.Optimal);
+                            }
+                        }
+                    }
+                });
+
+                StatusText.Text = $"Successfully created '{zipFileName}' (cataloged files only)";
+            }
+            else
+            {
+                // Zip entire folder contents (normal behavior)
+                await Task.Run(() =>
+                {
+                    ZipFile.CreateFromDirectory(linkItem.Url, zipFilePath, CompressionLevel.Optimal, false);
+                });
+
+                StatusText.Text = $"Successfully created '{zipFileName}'";
+            }
 
             // If user wants to link the zip to the parent category
             if (result.LinkToCategory && linkNode.Parent != null)
@@ -108,22 +150,27 @@ public sealed partial class MainWindow
                 {
                     var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNode);
 
-                    // Create a new link for the zip file
-                    var zipLinkNode = new TreeViewNode
+                    // Create a new link for the zip file AS A CATALOG FOLDER
+                    var zipLinkItem = new LinkItem
                     {
-                        Content = new LinkItem
-                        {
-                            Title = Path.GetFileNameWithoutExtension(zipFileName),
-                            Url = zipFilePath,
-                            Description = $"Zip archive of '{linkItem.Title}'",
-                            IsDirectory = false,
-                            CategoryPath = categoryPath,
-                            CreatedDate = DateTime.Now,
-                            ModifiedDate = DateTime.Now,
-                            FolderType = FolderLinkType.LinkOnly,
-                            FileSize = (ulong)new FileInfo(zipFilePath).Length
-                        }
+                        Title = Path.GetFileNameWithoutExtension(zipFileName),
+                        Url = zipFilePath,
+                        Description = isCatalogFolder 
+                            ? $"Zip archive of cataloged files from '{linkItem.Title}'"
+                            : $"Zip archive of '{linkItem.Title}'",
+                        IsDirectory = true, // Treat zip as a directory/catalog folder
+                        CategoryPath = categoryPath,
+                        CreatedDate = DateTime.Now,
+                        ModifiedDate = DateTime.Now,
+                        FolderType = FolderLinkType.CatalogueFiles, // Make it a catalog folder
+                        FileSize = (ulong)new FileInfo(zipFilePath).Length,
+                        LastCatalogUpdate = DateTime.Now
                     };
+
+                    var zipLinkNode = new TreeViewNode { Content = zipLinkItem };
+
+                    // Catalog the zip file contents immediately
+                    await CatalogZipFileAsync(zipLinkItem, zipLinkNode);
 
                     // Add the zip link to the parent category
                     parentCategoryNode.Children.Add(zipLinkNode);
@@ -140,7 +187,8 @@ public sealed partial class MainWindow
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}",
+                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
+                    + (isCatalogFolder ? "\n\nNote: Only cataloged files were included." : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
@@ -162,6 +210,161 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
+    /// Recursively adds a directory and its cataloged contents to a zip archive.
+    /// </summary>
+    private void AddDirectoryToCatalogZip(ZipArchive archive, LinkItem directoryEntry, TreeViewNode parentLinkNode, string rootPath)
+    {
+        // Find the TreeViewNode for this directory entry
+        var dirNode = parentLinkNode.Children
+            .FirstOrDefault(child => child.Content is LinkItem link && 
+                                     link.Url == directoryEntry.Url && 
+                                     link.IsDirectory);
+
+        if (dirNode == null || !Directory.Exists(directoryEntry.Url))
+        {
+            return;
+        }
+
+        // Get relative path for the directory
+        var relativeDirPath = Path.GetRelativePath(rootPath, directoryEntry.Url);
+
+        // Create directory entry in zip (for empty directories)
+        archive.CreateEntry(relativeDirPath + Path.DirectorySeparatorChar);
+
+        // Add all cataloged files from this directory
+        var catalogEntries = dirNode.Children
+            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
+            .Select(child => (LinkItem)child.Content)
+            .ToList();
+
+        foreach (var catalogEntry in catalogEntries)
+        {
+            if (catalogEntry.IsDirectory)
+            {
+                // Recursively add subdirectory
+                AddDirectoryToCatalogZip(archive, catalogEntry, dirNode, rootPath);
+            }
+            else if (File.Exists(catalogEntry.Url))
+            {
+                // Add file
+                var relativePath = Path.GetRelativePath(rootPath, catalogEntry.Url);
+                archive.CreateEntryFromFile(catalogEntry.Url, relativePath, CompressionLevel.Optimal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates a catalog of all files inside a zip archive.
+    /// </summary>
+    private async Task CatalogZipFileAsync(LinkItem zipLinkItem, TreeViewNode zipLinkNode)
+    {
+        if (!File.Exists(zipLinkItem.Url))
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                using (var archive = ZipFile.OpenRead(zipLinkItem.Url))
+                {
+                    // Group entries by their immediate parent directory
+                    var rootEntries = archive.Entries
+                        .Where(entry => !string.IsNullOrEmpty(entry.Name)) // Skip directory-only entries
+                        .Where(entry => !entry.FullName.Contains('/') || entry.FullName.Split('/').Length == 2) // Root level files or first-level subdirs
+                        .ToList();
+
+                    foreach (var entry in rootEntries)
+                    {
+                        var isDirectory = entry.FullName.EndsWith("/");
+                        var entryName = isDirectory 
+                            ? entry.FullName.TrimEnd('/').Split('/').Last()
+                            : entry.Name;
+
+                        var catalogEntry = new LinkItem
+                        {
+                            Title = entryName,
+                            Url = $"{zipLinkItem.Url}::{entry.FullName}", // Special format for zip entries
+                            Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)entry.Length)})",
+                            IsDirectory = isDirectory,
+                            CategoryPath = zipLinkItem.CategoryPath,
+                            CreatedDate = entry.LastWriteTime.DateTime,
+                            ModifiedDate = entry.LastWriteTime.DateTime,
+                            FolderType = FolderLinkType.LinkOnly,
+                            IsCatalogEntry = true,
+                            FileSize = isDirectory ? null : (ulong)entry.Length
+                        };
+
+                        var catalogNode = new TreeViewNode { Content = catalogEntry };
+
+                        // If it's a directory, catalog its contents recursively
+                        if (isDirectory)
+                        {
+                            CatalogZipDirectoryRecursive(archive, entry.FullName, catalogNode, zipLinkItem);
+                        }
+
+                        zipLinkNode.Children.Add(catalogNode);
+                    }
+                }
+            });
+
+            // Update file count
+            _categoryService!.UpdateCatalogFileCount(zipLinkNode);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error cataloging zip file: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Recursively catalogs subdirectories within a zip archive.
+    /// </summary>
+    private void CatalogZipDirectoryRecursive(ZipArchive archive, string directoryPath, TreeViewNode parentNode, LinkItem zipLinkItem)
+    {
+        var dirPath = directoryPath.TrimEnd('/') + "/";
+        var subEntries = archive.Entries
+            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .Where(entry => entry.FullName.StartsWith(dirPath) && entry.FullName != dirPath)
+            .Where(entry => entry.FullName.Substring(dirPath.Length).Split('/').Length <= 2) // Direct children only
+            .ToList();
+
+        foreach (var entry in subEntries)
+        {
+            var isDirectory = entry.FullName.EndsWith("/");
+            var relativePath = entry.FullName.Substring(dirPath.Length);
+            var entryName = isDirectory 
+                ? relativePath.TrimEnd('/').Split('/').Last()
+                : entry.Name;
+
+            var catalogEntry = new LinkItem
+            {
+                Title = entryName,
+                Url = $"{zipLinkItem.Url}::{entry.FullName}",
+                Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)entry.Length)})",
+                IsDirectory = isDirectory,
+                CategoryPath = zipLinkItem.CategoryPath,
+                CreatedDate = entry.LastWriteTime.DateTime,
+                ModifiedDate = entry.LastWriteTime.DateTime,
+                FolderType = FolderLinkType.LinkOnly,
+                IsCatalogEntry = true,
+                FileSize = isDirectory ? null : (ulong)entry.Length
+            };
+
+            var catalogNode = new TreeViewNode { Content = catalogEntry };
+
+            // Recursively catalog subdirectories
+            if (isDirectory)
+            {
+                CatalogZipDirectoryRecursive(archive, entry.FullName, catalogNode, zipLinkItem);
+            }
+
+            parentNode.Children.Add(catalogNode);
+        }
+    }
+
+    /// <summary>
     /// Formats file size in human-readable format.
     /// </summary>
     private string FormatFileSize(ulong bytes)
@@ -175,152 +378,5 @@ public sealed partial class MainWindow
             len /= 1024;
         }
         return $"{len:0.##} {sizes[order]}";
-    }
-
-    /// <summary>
-    /// Shows the zip folder dialog.
-    /// </summary>
-    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory)
-    {
-        // Create input fields
-        var zipFileNameTextBox = new TextBox
-        {
-            Text = folderTitle,
-            PlaceholderText = "Enter zip file name (without .zip extension)",
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var targetDirectoryTextBox = new TextBox
-        {
-            Text = defaultTargetDirectory,
-            PlaceholderText = "Enter target directory path",
-            IsReadOnly = true,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var browseButton = new Button
-        {
-            Content = "Browse...",
-            Margin = new Thickness(0, 0, 0, 8),
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-
-        var linkToCategoryCheckBox = new CheckBox
-        {
-            Content = "Link zip file to parent category",
-            IsChecked = true,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        var infoText = new TextBlock
-        {
-            Text = "This will create a zip archive of the folder and optionally add it as a link in the parent category.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-            FontSize = 12,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-
-        // Create stack panel for dialog content
-        var stackPanel = new StackPanel();
-        stackPanel.Children.Add(infoText);
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Zip File Name: *", 
-            Margin = new Thickness(0, 8, 0, 4),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        stackPanel.Children.Add(zipFileNameTextBox);
-        stackPanel.Children.Add(new TextBlock 
-        { 
-            Text = "Target Directory: *", 
-            Margin = new Thickness(0, 8, 0, 4),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-        });
-        stackPanel.Children.Add(targetDirectoryTextBox);
-        stackPanel.Children.Add(browseButton);
-        stackPanel.Children.Add(linkToCategoryCheckBox);
-
-        // Create and configure the dialog
-        var dialog = new ContentDialog
-        {
-            Title = "Create Zip Archive",
-            Content = stackPanel,
-            PrimaryButtonText = "Create Zip",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = _xamlRoot,
-            IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
-                                      !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text)
-        };
-
-        // Handle browse button click
-        browseButton.Click += async (s, args) =>
-        {
-            try
-            {
-                var folderPicker = new FolderPicker();
-                var hWnd = WindowNative.GetWindowHandle(_parentWindow);
-                InitializeWithWindow.Initialize(folderPicker, hWnd);
-
-                folderPicker.FileTypeFilter.Add("*");
-                
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null)
-                {
-                    targetDirectoryTextBox.Text = folder.Path;
-                    dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
-                                                     !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text);
-                }
-            }
-            catch (Exception)
-            {
-                // Error handled silently
-            }
-        };
-
-        // Validate form when text changes
-        zipFileNameTextBox.TextChanged += (s, args) =>
-        {
-            dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
-                                             !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text);
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            string zipFileName = zipFileNameTextBox.Text.Trim();
-            string targetDirectory = targetDirectoryTextBox.Text.Trim();
-            bool linkToCategory = linkToCategoryCheckBox.IsChecked == true;
-
-            if (string.IsNullOrWhiteSpace(zipFileName) || string.IsNullOrWhiteSpace(targetDirectory))
-            {
-                return null; // Validation failed
-            }
-
-            // Validate that target directory exists
-            if (!Directory.Exists(targetDirectory))
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Invalid Directory",
-                    Content = "The target directory does not exist. Please select a valid directory.",
-                    CloseButtonText = "OK",
-                    XamlRoot = _xamlRoot
-                };
-                await errorDialog.ShowAsync();
-                return null;
-            }
-
-            return new ZipFolderResult
-            {
-                ZipFileName = zipFileName,
-                TargetDirectory = targetDirectory,
-                LinkToCategory = linkToCategory
-            };
-        }
-
-        return null;
     }
 }

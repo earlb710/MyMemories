@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.System;
+using System.IO.Compression;
 
 namespace MyMemories;
 
@@ -34,7 +35,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void LinksTreeView_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    private async void LinksTreeView_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
         if (e.OriginalSource is not FrameworkElement element)
             return;
@@ -50,7 +51,22 @@ public sealed partial class MainWindow
         }
         else if (node.Content is LinkItem linkItem)
         {
-            await OpenLinkAsync(linkItem);
+            // Check if this is a zip entry (URL contains "::")
+            if (linkItem.Url.Contains("::"))
+            {
+                await OpenZipEntryAsync(linkItem);
+            }
+            else if (linkItem.IsDirectory)
+            {
+                // Expand/collapse directory
+                LinksTreeView.SelectedNode.IsExpanded = !LinksTreeView.SelectedNode.IsExpanded;
+            }
+            else
+            {
+                // Open regular file
+                await OpenFileAsync(linkItem.Url);
+            }
+
             e.Handled = true;
         }
     }
@@ -363,6 +379,61 @@ public sealed partial class MainWindow
         catch
         {
             // Don't throw - allow parent operation to continue
+        }
+    }
+
+    /// <summary>
+    /// Extracts and opens a file from within a zip archive.
+    /// </summary>
+    private async Task OpenZipEntryAsync(LinkItem zipEntry)
+    {
+        try
+        {
+            var parts = zipEntry.Url.Split("::", 2);
+            if (parts.Length != 2)
+            {
+                return;
+            }
+
+            var zipPath = parts[0];
+            var entryPath = parts[1];
+
+            if (!File.Exists(zipPath))
+            {
+                StatusText.Text = "Zip file not found";
+                return;
+            }
+
+            // Create temp directory for extraction
+            var tempDir = Path.Combine(Path.GetTempPath(), "MyMemories", Path.GetFileNameWithoutExtension(zipPath));
+            Directory.CreateDirectory(tempDir);
+
+            var extractedPath = Path.Combine(tempDir, entryPath.Replace('/', Path.DirectorySeparatorChar));
+
+            // Extract the specific file
+            using (var archive = ZipFile.OpenRead(zipPath))
+            {
+                var entry = archive.GetEntry(entryPath);
+                if (entry != null)
+                {
+                    // Ensure directory exists
+                    var extractedDir = Path.GetDirectoryName(extractedPath);
+                    if (!string.IsNullOrEmpty(extractedDir))
+                    {
+                        Directory.CreateDirectory(extractedDir);
+                    }
+
+                    entry.ExtractToFile(extractedPath, true);
+
+                    // Open the extracted file
+                    await OpenFileAsync(extractedPath);
+                    StatusText.Text = $"Opened file from zip: {zipEntry.Title}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error opening zip entry: {ex.Message}";
         }
     }
 }
