@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:MyMemories"
     mc:Ignorable="d"
     Title="My Memories - File Viewer">
 
@@ -104,6 +105,42 @@
                     SelectionChanged="LinksTreeView_SelectionChanged"
                     RightTapped="LinksTreeView_RightTapped"
                     DoubleTapped="LinksTreeView_DoubleTapped">
+                    
+                    <!-- Item Template with Badge Icon for Changed Folders -->
+                    <TreeView.ItemTemplate>
+                        <DataTemplate x:DataType="local:LinkItem">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <!-- Icon Container with Overlay Badge -->
+                                <Grid Width="20" Height="20">
+                                    <!-- Primary Icon -->
+                                    <TextBlock 
+                                        Text="{x:Bind GetIcon()}" 
+                                        FontSize="16"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"/>
+                                    
+                                    <!-- Badge Icon for Changed Folders (bottom-right corner) -->
+                                    <FontIcon 
+                                        Glyph="&#xE7BA;"
+                                        FontSize="10"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"
+                                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                        Margin="0,0,-2,-2"
+                                        Visibility="{x:Bind HasChangedSinceCatalog, Mode=OneWay}">
+                                        <ToolTipService.ToolTip>
+                                            <ToolTip Content="Folder has changed since last catalog"/>
+                                        </ToolTipService.ToolTip>
+                                    </FontIcon>
+                                </Grid>
+                                
+                                <!-- Text Label -->
+                                <TextBlock 
+                                    Text="{x:Bind DisplayText, Mode=OneWay}" 
+                                    VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </TreeView.ItemTemplate>
                     
                     <!-- Context Menu for Category Nodes -->
                     <TreeView.Resources>

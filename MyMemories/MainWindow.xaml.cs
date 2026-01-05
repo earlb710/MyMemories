@@ -54,7 +54,7 @@ public sealed partial class MainWindow : Window
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
             _detailsViewService = new DetailsViewService(DetailsPanel);
             _detailsViewService.SetHeaderPanel(HeaderPanel);
-            _treeViewService = new TreeViewService(LinksTreeView);
+            _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot);
 
             // Load categories

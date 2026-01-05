@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace MyMemories;
@@ -23,8 +26,10 @@ public class CategoryItem
 /// <summary>
 /// Represents a link item (file, directory, or URL) in the tree view.
 /// </summary>
-public class LinkItem
+public class LinkItem : INotifyPropertyChanged
 {
+    private int _catalogFileCount;
+    
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -37,11 +42,70 @@ public class LinkItem
     public bool IsCatalogEntry { get; set; }
     public DateTime? LastCatalogUpdate { get; set; }
     public ulong? FileSize { get; set; }
-    public bool AutoRefreshCatalog { get; set; } = false; // NEW PROPERTY
+    public bool AutoRefreshCatalog { get; set; } = false;
     
     // Internal property to store catalog count for display
     [JsonIgnore]
-    public int CatalogFileCount { get; set; }
+    public int CatalogFileCount
+    {
+        get => _catalogFileCount;
+        set
+        {
+            if (_catalogFileCount != value)
+            {
+                _catalogFileCount = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the folder has changed since last catalog update
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasChangedSinceCatalog
+    {
+        get
+        {
+            if (!IsDirectory || IsCatalogEntry || !LastCatalogUpdate.HasValue)
+                return Visibility.Collapsed;
+
+            if (!Directory.Exists(Url))
+                return Visibility.Collapsed;
+
+            try
+            {
+                var dirInfo = new DirectoryInfo(Url);
+                return dirInfo.LastWriteTime > LastCatalogUpdate.Value 
+                    ? Visibility.Visible 
+                    : Visibility.Collapsed;
+            }
+            catch
+            {
+                return Visibility.Collapsed;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the display text for the tree node
+    /// </summary>
+    [JsonIgnore]
+    public string DisplayText
+    {
+        get
+        {
+            // Show file count for catalog folders
+            if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
+            {
+                var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
+                return $"{Title}{catalogInfo}";
+            }
+            
+            return Title;
+        }
+    }
 
     public override string ToString()
     {
@@ -115,6 +179,13 @@ public class LinkItem
             ".txt" or ".md" => "📃",
             _ => "📄" // Default file icon
         };
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
 

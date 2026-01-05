@@ -1,18 +1,128 @@
+using System;
+using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace MyMemories;
 
-public sealed partial class MainWindow
+public partial class MainWindow
 {
-    private T? FindParent<T>(DependencyObject child) where T : DependencyObject
+    /// <summary>
+    /// Creates a visual element for a tree node with icon and optional badge.
+    /// </summary>
+    private FrameworkElement CreateNodeContent(object content)
     {
-        var parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(child);
-        return parent switch
+        var stackPanel = new StackPanel
         {
-            null => null,
-            T typedParent => typedParent,
-            _ => FindParent<T>(parent)
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
         };
+
+        // For LinkItem, show icon with potential badge
+        if (content is LinkItem linkItem)
+        {
+            // Create icon container with badge overlay
+            var iconGrid = new Grid
+            {
+                Width = 20,
+                Height = 20
+            };
+
+            // Primary icon (emoji)
+            var primaryIcon = new TextBlock
+            {
+                Text = linkItem.GetIcon(),
+                FontSize = 16,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            iconGrid.Children.Add(primaryIcon);
+
+            // Check if folder has changed and add badge
+            if (linkItem.IsDirectory && 
+                !linkItem.IsCatalogEntry && 
+                linkItem.LastCatalogUpdate.HasValue &&
+                Directory.Exists(linkItem.Url))
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(linkItem.Url);
+                    if (dirInfo.LastWriteTime > linkItem.LastCatalogUpdate.Value)
+                    {
+                        // Add warning badge icon
+                        var badgeIcon = new FontIcon
+                        {
+                            Glyph = "\uE7BA", // Warning icon
+                            FontSize = 10,
+                            HorizontalAlignment = HorizontalAlignment.Right,
+                            VerticalAlignment = VerticalAlignment.Bottom,
+                            Margin = new Thickness(0, 0, -2, -2)
+                        };
+                        
+                        // Set badge color to orange/red
+                        badgeIcon.Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
+                        
+                        // Add tooltip
+                        ToolTipService.SetToolTip(badgeIcon, "Folder has changed since last catalog");
+                        
+                        iconGrid.Children.Add(badgeIcon);
+                    }
+                }
+                catch
+                {
+                    // Ignore errors accessing directory
+                }
+            }
+
+            stackPanel.Children.Add(iconGrid);
+
+            // Add text with file count if applicable
+            var displayText = linkItem.Title;
+            if (linkItem.IsDirectory && !linkItem.IsCatalogEntry && linkItem.CatalogFileCount > 0)
+            {
+                displayText = $"{linkItem.Title} ({linkItem.CatalogFileCount} file{(linkItem.CatalogFileCount != 1 ? "s" : "")})";
+            }
+
+            var textBlock = new TextBlock
+            {
+                Text = displayText,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            stackPanel.Children.Add(textBlock);
+        }
+        // For CategoryItem, just show icon and name
+        else if (content is CategoryItem categoryItem)
+        {
+            var iconText = new TextBlock
+            {
+                Text = categoryItem.Icon,
+                FontSize = 16
+            };
+            stackPanel.Children.Add(iconText);
+
+            var textBlock = new TextBlock
+            {
+                Text = categoryItem.Name,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            stackPanel.Children.Add(textBlock);
+        }
+
+        return stackPanel;
+    }
+
+    /// <summary>
+    /// Refreshes the visual content of a tree node.
+    /// </summary>
+    public void RefreshNodeVisual(TreeViewNode node)
+    {
+        if (node.Content != null)
+        {
+            // Force update by recreating the visual
+            var content = node.Content;
+            node.Content = null;
+            node.Content = content;
+        }
     }
 }
