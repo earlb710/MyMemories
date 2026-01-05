@@ -39,7 +39,24 @@ public partial class MainWindow
             };
             iconGrid.Children.Add(primaryIcon);
 
-            // Check if folder has changed and add badge
+            // Add link badge for LinkOnly folders
+            if (linkItem.IsDirectory && !linkItem.IsCatalogEntry && linkItem.FolderType == FolderLinkType.LinkOnly)
+            {
+                var linkBadge = new FontIcon
+                {
+                    Glyph = "\uE71B", // Link icon
+                    FontSize = 8,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, -2, -2)
+                };
+                
+                linkBadge.Foreground = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
+                iconGrid.Children.Add(linkBadge);
+            }
+
+            // Check if folder has changed and add warning badge
             if (linkItem.IsDirectory && 
                 !linkItem.IsCatalogEntry && 
                 linkItem.LastCatalogUpdate.HasValue &&
@@ -54,18 +71,19 @@ public partial class MainWindow
                         var badgeIcon = new FontIcon
                         {
                             Glyph = "\uE7BA", // Warning icon
-                            FontSize = 10,
+                            FontSize = 11,
+                            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
                             HorizontalAlignment = HorizontalAlignment.Right,
                             VerticalAlignment = VerticalAlignment.Bottom,
-                            Margin = new Thickness(0, 0, -2, -2)
+                            Margin = new Thickness(0, 0, -1, -1)
                         };
-                        
-                        // Set badge color to orange/red
-                        badgeIcon.Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"];
-                        
+
+                        // Set badge color to bright red
+                        badgeIcon.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Red);
+
                         // Add tooltip
                         ToolTipService.SetToolTip(badgeIcon, "Folder has changed since last catalog");
-                        
+
                         iconGrid.Children.Add(badgeIcon);
                     }
                 }

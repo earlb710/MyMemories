@@ -21,11 +21,11 @@ public sealed partial class MainWindow
             HideAllViewers();
             _detailsViewService!.ShowCategoryDetails(category, node);
             DetailsViewerScroll.Visibility = Visibility.Visible;
-            
+
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);
             HeaderViewerScroll.Visibility = Visibility.Visible;
-            
+
             StatusText.Text = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";
         }
         else if (node.Content is LinkItem linkItem)
@@ -97,7 +97,7 @@ public sealed partial class MainWindow
         {
             HideAllViewers();
             var linkNode = FindLinkNode(linkItem);
-            
+
             if (linkNode != null)
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(linkItem, linkNode,
@@ -108,7 +108,7 @@ public sealed partial class MainWindow
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
             }
-            
+
             DetailsViewerScroll.Visibility = Visibility.Visible;
             _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
             HeaderViewerScroll.Visibility = Visibility.Visible;
@@ -122,7 +122,7 @@ public sealed partial class MainWindow
             {
                 HideAllViewers();
                 var linkNode = FindLinkNode(linkItem);
-                
+
                 if (linkNode != null)
                 {
                     await _detailsViewService!.ShowLinkDetailsAsync(linkItem, linkNode,
@@ -133,7 +133,7 @@ public sealed partial class MainWindow
                 {
                     await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
                 }
-                
+
                 await _detailsViewService.AddOpenInExplorerButtonAsync(linkItem.Url);
                 DetailsViewerScroll.Visibility = Visibility.Visible;
                 _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
@@ -162,7 +162,7 @@ public sealed partial class MainWindow
         {
             StatusText.Text = $"Error: {ex.Message}";
             HideAllViewers();
-            
+
             var linkNode = FindLinkNode(linkItem);
             if (linkNode != null)
             {
@@ -174,7 +174,7 @@ public sealed partial class MainWindow
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { });
             }
-            
+
             DetailsViewerScroll.Visibility = Visibility.Visible;
             _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
             HeaderViewerScroll.Visibility = Visibility.Visible;
@@ -183,13 +183,13 @@ public sealed partial class MainWindow
 
     private TreeViewNode? FindLinkNode(LinkItem linkItem)
     {
-        if (LinksTreeView.SelectedNode?.Content is LinkItem selectedLink && 
-            selectedLink.Title == linkItem.Title && 
+        if (LinksTreeView.SelectedNode?.Content is LinkItem selectedLink &&
+            selectedLink.Title == linkItem.Title &&
             selectedLink.Url == linkItem.Url)
         {
             return LinksTreeView.SelectedNode;
         }
-        
+
         foreach (var rootNode in LinksTreeView.RootNodes)
         {
             var found = FindLinkNodeRecursive(rootNode, linkItem);
@@ -200,8 +200,8 @@ public sealed partial class MainWindow
 
     private TreeViewNode? FindLinkNodeRecursive(TreeViewNode node, LinkItem targetLink)
     {
-        if (node.Content is LinkItem link && 
-            link.Title == targetLink.Title && 
+        if (node.Content is LinkItem link &&
+            link.Title == targetLink.Title &&
             link.Url == targetLink.Url &&
             link.CategoryPath == targetLink.CategoryPath)
         {
@@ -230,7 +230,7 @@ public sealed partial class MainWindow
                 IsDirectory = false,
                 IsCatalogEntry = false
             };
-            
+
             var tempNode = new TreeViewNode { Content = tempCreatingItem };
             linkNode.Children.Add(tempNode);
             linkNode.IsExpanded = true;
@@ -240,9 +240,17 @@ public sealed partial class MainWindow
 
             linkItem.LastCatalogUpdate = DateTime.Now;
 
+            // Recursively add catalog entries with their subdirectories populated
             foreach (var entry in catalogEntries)
             {
                 var entryNode = new TreeViewNode { Content = entry };
+
+                // If it's a subdirectory, recursively populate its contents
+                if (entry.IsDirectory)
+                {
+                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
+                }
+
                 linkNode.Children.Add(entryNode);
             }
 
@@ -268,7 +276,7 @@ public sealed partial class MainWindow
     private async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
         bool wasExpanded = linkNode.IsExpanded;
-        
+
         try
         {
             StatusText.Text = "Refreshing catalog...";
@@ -282,7 +290,7 @@ public sealed partial class MainWindow
                 IsDirectory = false,
                 IsCatalogEntry = false
             };
-            
+
             var tempNode = new TreeViewNode { Content = tempRefreshingItem };
             linkNode.Children.Add(tempNode);
             linkNode.IsExpanded = true;
@@ -292,20 +300,30 @@ public sealed partial class MainWindow
 
             linkItem.LastCatalogUpdate = DateTime.Now;
 
+            // Recursively add catalog entries with their subdirectories populated
             foreach (var entry in catalogEntries)
             {
                 var entryNode = new TreeViewNode { Content = entry };
+
+                // If it's a subdirectory, recursively populate its contents
+                if (entry.IsDirectory)
+                {
+                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
+                }
+
                 linkNode.Children.Add(entryNode);
             }
 
             _categoryService.UpdateCatalogFileCount(linkNode);
-            
-            // FIX: Capture the NEW node reference returned by RefreshLinkNode
+
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
-            // FIX: Use the NEW refreshed node to find root and save
             var rootNode = GetRootCategoryNode(refreshedNode);
             await _categoryService.SaveCategoryAsync(rootNode);
+
+            await _detailsViewService!.ShowLinkDetailsAsync(linkItem, refreshedNode,
+                async () => await CreateCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode));
 
             StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
         }
@@ -315,9 +333,37 @@ public sealed partial class MainWindow
         }
         finally
         {
-            // Note: wasExpanded is tracked on the OLD node reference
-            // The refreshed node will maintain its expansion state
             linkNode.IsExpanded = wasExpanded;
+        }
+    }
+
+    /// <summary>
+    /// Recursively populates a subdirectory with all its files and nested subdirectories.
+    /// </summary>
+    private async Task PopulateSubdirectoryAsync(TreeViewNode subdirNode, LinkItem subdirItem, string categoryPath)
+    {
+        try
+        {
+            // Get all contents of this subdirectory
+            var subCatalogEntries = await _categoryService!.CreateSubdirectoryCatalogEntriesAsync(subdirItem.Url, categoryPath);
+
+            foreach (var subEntry in subCatalogEntries)
+            {
+                var subEntryNode = new TreeViewNode { Content = subEntry };
+
+                // If this is also a subdirectory, recursively populate it too
+                if (subEntry.IsDirectory)
+                {
+                    await PopulateSubdirectoryAsync(subEntryNode, subEntry, categoryPath);
+                }
+
+                subdirNode.Children.Add(subEntryNode);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PopulateSubdirectory] Error: {ex.Message}");
+            // Don't throw - allow parent operation to continue
         }
     }
 }

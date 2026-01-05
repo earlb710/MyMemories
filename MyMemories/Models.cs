@@ -155,12 +155,19 @@ public class LinkItem : INotifyPropertyChanged
     /// </summary>
     public string GetIconWithoutBadge()
     {
-        // For directories - return appropriate icon based on folder type
+        // For directories
         if (IsDirectory)
         {
+            // IMPORTANT: Catalog subdirectories should always use normal folder icon
+            if (IsCatalogEntry)
+            {
+                return "📁"; // Normal folder icon for catalog subdirectories
+            }
+            
+            // For non-catalog directories, use FolderType to determine icon
             return FolderType switch
             {
-                FolderLinkType.LinkOnly => "🔗",           // Link icon for link-only folders
+                FolderLinkType.LinkOnly => "📁",           // Normal folder with link badge overlay
                 FolderLinkType.CatalogueFiles => "📂",     // Open folder for cataloged folders
                 FolderLinkType.FilteredCatalogue => "🗂️",  // Card index/filtered folder icon
                 _ => "📁"                                   // Default folder icon (fallback)

@@ -453,7 +453,7 @@ public class CategoryService
 
     /// <summary>
     /// Creates a catalog of all files and subdirectories in a directory recursively.
-    /// Returns LinkItems with full paths for TreeView usage, with subdirectory contents loaded.
+    /// Returns LinkItems with full paths for TreeView usage, with ALL subdirectory contents pre-loaded recursively.
     /// </summary>
     public async Task<List<LinkItem>> CreateCatalogEntriesAsync(string directoryPath, string categoryPath)
     {
@@ -466,7 +466,7 @@ public class CategoryService
 
         try
         {
-            // First, add all subdirectories as folder entries
+            // First, add all subdirectories as folder entries WITH their contents recursively
             var directories = Directory.GetDirectories(directoryPath);
             foreach (var subDirPath in directories)
             {
@@ -649,101 +649,5 @@ public class CategoryService
             
             link.CatalogFileCount = fileCount;
         }
-    }
-
-    /// <summary>
-    /// Recursively counts files in catalog entries, excluding subdirectories.
-    /// NOTE: This method is no longer used - kept for reference.
-    /// </summary>
-    private int CountFilesRecursively(TreeViewNode node)
-    {
-        int count = 0;
-        
-        foreach (var child in node.Children)
-        {
-            if (child.Content is LinkItem catalogEntry && catalogEntry.IsCatalogEntry)
-            {
-                if (catalogEntry.IsDirectory)
-                {
-                    // Don't count subdirectories or their contents
-                    // (they may not be loaded yet)
-                    continue;
-                }
-                else
-                {
-                    // It's a file, count it
-                    count++;
-                }
-            }
-        }
-        
-        return count;
-    }
-
-    private TreeViewNode GetRootCategoryNode(TreeViewNode node)
-    {
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Starting from node: {node.Content?.GetType().Name}");
-        
-        var current = node;
-        int safetyCounter = 0;
-        const int maxDepth = 100; // Prevent infinite loops
-        
-        // Navigate up until we find a root category node (one without a parent)
-        while (current.Parent != null && safetyCounter < maxDepth)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Moving to parent: {current.Parent.Content?.GetType().Name}");
-            current = current.Parent;
-            safetyCounter++;
-        }
-        
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Reached top after {safetyCounter} levels");
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Top node content: {current.Content?.GetType().Name}");
-        
-        // If we still have a parent after max depth, something is wrong
-        if (safetyCounter >= maxDepth)
-        {
-            throw new InvalidOperationException($"Node hierarchy too deep (>{maxDepth} levels). Possible circular reference.");
-        }
-        
-        // At this point, current should be a root node
-        // Verify it's actually a CategoryItem
-        if (current.Content is CategoryItem category)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found root category: {category.Name}");
-            return current;
-        }
-        
-        // If the root is a LinkItem, search all root nodes to find its category
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Root is not CategoryItem, searching TreeView roots...");
-        
-        foreach (var rootNode in LinksTreeView.RootNodes)
-        {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Checking root: {(rootNode.Content as CategoryItem)?.Name ?? "not a category"}");
-            
-            if (rootNode.Content is CategoryItem && NodeContainsDescendant(rootNode, node))
-            {
-                var catName = (rootNode.Content as CategoryItem)?.Name;
-                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found containing category: {catName}");
-                return rootNode;
-            }
-        }
-        
-        // If we somehow ended up with a non-category root, throw an error
-        var contentType = current.Content?.GetType().Name ?? "null";
-        throw new InvalidOperationException($"Could not find root category node. Found: {contentType}");
-    }
-
-    private bool NodeContainsDescendant(TreeViewNode ancestor, TreeViewNode target)
-    {
-        if (ancestor == target)
-            return true;
-            
-        foreach (var child in ancestor.Children)
-        {
-            if (NodeContainsDescendant(child, target))
-                return true;
-        }
-        
-        return false;
     }
 }

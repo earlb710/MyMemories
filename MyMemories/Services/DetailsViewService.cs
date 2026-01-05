@@ -343,14 +343,18 @@ public class DetailsViewService
     /// </summary>
     private void AddCatalogStatistics(TreeViewNode node)
     {
-        var catalogEntries = node.Children
+        var allCatalogEntries = node.Children
             .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
             .Select(child => child.Content as LinkItem)
             .Where(link => link != null)
             .ToList();
 
-        if (catalogEntries.Count == 0)
+        if (allCatalogEntries.Count == 0)
             return;
+
+        // Count only FILES (exclude subdirectories) to match the tree label
+        var fileEntries = allCatalogEntries.Where(link => !link!.IsDirectory).ToList();
+        var directoryEntries = allCatalogEntries.Where(link => link!.IsDirectory).ToList();
 
         _detailsPanel.Children.Add(new TextBlock
         {
@@ -362,20 +366,26 @@ public class DetailsViewService
 
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
 
-        // Count total files
-        statsPanel.Children.Add(CreateStatLine($"📊 Total Files: {catalogEntries.Count}"));
+        // Show file count (matching tree label)
+        statsPanel.Children.Add(CreateStatLine($"📊 Total Files: {fileEntries.Count}"));
+        
+        // Show directory count separately
+        if (directoryEntries.Count > 0)
+        {
+            statsPanel.Children.Add(CreateStatLine($"📁 Subdirectories: {directoryEntries.Count}"));
+        }
 
-        // Calculate total size
+        // Calculate total size (only for files)
         ulong totalSize = 0;
         int accessibleFiles = 0;
 
-        foreach (var catalogEntry in catalogEntries)
+        foreach (var fileEntry in fileEntries)
         {
             try
             {
-                if (File.Exists(catalogEntry!.Url))
+                if (File.Exists(fileEntry!.Url))
                 {
-                    var fileInfo = new FileInfo(catalogEntry.Url);
+                    var fileInfo = new FileInfo(fileEntry.Url);
                     totalSize += (ulong)fileInfo.Length;
                     accessibleFiles++;
                 }
@@ -390,11 +400,11 @@ public class DetailsViewService
         {
             statsPanel.Children.Add(CreateStatLine($"💾 Total Size: {FileViewerService.FormatFileSize(totalSize)}"));
             
-            if (accessibleFiles < catalogEntries.Count)
+            if (accessibleFiles < fileEntries.Count)
             {
                 statsPanel.Children.Add(new TextBlock
                 {
-                    Text = $"⚠️ {catalogEntries.Count - accessibleFiles} file(s) could not be accessed",
+                    Text = $"⚠️ {fileEntries.Count - accessibleFiles} file(s) could not be accessed",
                     FontSize = 12,
                     Foreground = new SolidColorBrush(Colors.Orange)
                 });
