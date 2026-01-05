@@ -360,9 +360,8 @@ public sealed partial class MainWindow
                 subdirNode.Children.Add(subEntryNode);
             }
         }
-        catch (Exception ex)
+        catch
         {
-            System.Diagnostics.Debug.WriteLine($"[PopulateSubdirectory] Error: {ex.Message}");
             // Don't throw - allow parent operation to continue
         }
     }

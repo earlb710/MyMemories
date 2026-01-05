@@ -176,18 +176,13 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task RefreshCatalogSilentlyAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
-        System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Starting refresh for: {linkItem.Title}");
-        
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Removing old catalog entries");
             // Remove existing catalog entries
             _categoryService!.RemoveCatalogEntries(linkNode);
 
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Creating new catalog entries");
             // Create new catalog entries
             var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Created {catalogEntries.Count} entries");
 
             // Update the folder link's LastCatalogUpdate timestamp
             linkItem.LastCatalogUpdate = DateTime.Now;
@@ -195,47 +190,35 @@ public sealed partial class MainWindow : Window
             // Add new catalog entries to the tree
             foreach (var entry in catalogEntries)
             {
-                var entryNode = new TreeViewNode
+                var entryNode = new TreeViewNode { Content = entry };
+                
+                // If it's a subdirectory, recursively populate its contents
+                if (entry.IsDirectory)
                 {
-                    Content = entry
-                };
+                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
+                }
+                
                 linkNode.Children.Add(entryNode);
             }
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Added entries to tree");
 
             // Update the catalog file count
             _categoryService.UpdateCatalogFileCount(linkNode);
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Updated file count to: {linkItem.CatalogFileCount}");
 
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Refreshing link node");
             // Refresh the link node to update the display and get the NEW node reference
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Node refreshed, parent: {refreshedNode.Parent?.Content?.GetType().Name ?? "null"}");
 
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Getting root category node");
             // Save the changes using the NEW refreshed node (not the old linkNode)
             var rootNode = GetRootCategoryNode(refreshedNode);
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Found root: {(rootNode.Content as CategoryItem)?.Name ?? "unknown"}");
-            
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Saving category");
             await _categoryService.SaveCategoryAsync(rootNode);
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Successfully saved");
         }
-        catch (Exception ex)
+        catch
         {
             // Log but silently fail - don't interrupt startup
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] ===== ERROR =====");
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Exception Type: {ex.GetType().Name}");
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] Message: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] StackTrace: {ex.StackTrace}");
-            System.Diagnostics.Debug.WriteLine($"[RefreshCatalogSilently] ================");
         }
     }
 
     private TreeViewNode GetRootCategoryNode(TreeViewNode node)
     {
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Starting from node: {node.Content?.GetType().Name}");
-        
         var current = node;
         int safetyCounter = 0;
         const int maxDepth = 100; // Prevent infinite loops
@@ -243,13 +226,9 @@ public sealed partial class MainWindow : Window
         // Navigate up until we find a root category node (one without a parent)
         while (current.Parent != null && safetyCounter < maxDepth)
         {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Moving to parent: {current.Parent.Content?.GetType().Name}");
             current = current.Parent;
             safetyCounter++;
         }
-        
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Reached top after {safetyCounter} levels");
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Top node content: {current.Content?.GetType().Name}");
         
         // If we still have a parent after max depth, something is wrong
         if (safetyCounter >= maxDepth)
@@ -259,23 +238,16 @@ public sealed partial class MainWindow : Window
         
         // At this point, current should be a root node
         // Verify it's actually a CategoryItem
-        if (current.Content is CategoryItem category)
+        if (current.Content is CategoryItem)
         {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found root category: {category.Name}");
             return current;
         }
         
         // If the root is a LinkItem, search all root nodes to find its category
-        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Root is not CategoryItem, searching TreeView roots...");
-        
         foreach (var rootNode in LinksTreeView.RootNodes)
         {
-            System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Checking root: {(rootNode.Content as CategoryItem)?.Name ?? "not a category"}");
-            
             if (rootNode.Content is CategoryItem && NodeContainsDescendant(rootNode, node))
             {
-                var catName = (rootNode.Content as CategoryItem)?.Name;
-                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found containing category: {catName}");
                 return rootNode;
             }
         }
