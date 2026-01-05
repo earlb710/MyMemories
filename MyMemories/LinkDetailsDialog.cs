@@ -1071,4 +1071,151 @@ public class LinkDetailsDialog
 
         return null;
     }
+
+    /// <summary>
+    /// Shows the zip folder dialog.
+    /// </summary>
+    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory)
+    {
+        // Create input fields
+        var zipFileNameTextBox = new TextBox
+        {
+            Text = folderTitle,
+            PlaceholderText = "Enter zip file name (without .zip extension)",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var targetDirectoryTextBox = new TextBox
+        {
+            Text = defaultTargetDirectory,
+            PlaceholderText = "Enter target directory path",
+            IsReadOnly = true,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var browseButton = new Button
+        {
+            Content = "Browse...",
+            Margin = new Thickness(0, 0, 0, 8),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+
+        var linkToCategoryCheckBox = new CheckBox
+        {
+            Content = "Link zip file to parent category",
+            IsChecked = true,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var infoText = new TextBlock
+        {
+            Text = "This will create a zip archive of the folder and optionally add it as a link in the parent category.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        // Create stack panel for dialog content
+        var stackPanel = new StackPanel();
+        stackPanel.Children.Add(infoText);
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Zip File Name: *", 
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        stackPanel.Children.Add(zipFileNameTextBox);
+        stackPanel.Children.Add(new TextBlock 
+        { 
+            Text = "Target Directory: *", 
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        stackPanel.Children.Add(targetDirectoryTextBox);
+        stackPanel.Children.Add(browseButton);
+        stackPanel.Children.Add(linkToCategoryCheckBox);
+
+        // Create and configure the dialog
+        var dialog = new ContentDialog
+        {
+            Title = "Create Zip Archive",
+            Content = stackPanel,
+            PrimaryButtonText = "Create Zip",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = _xamlRoot,
+            IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
+                                      !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text)
+        };
+
+        // Handle browse button click
+        browseButton.Click += async (s, args) =>
+        {
+            try
+            {
+                var folderPicker = new FolderPicker();
+                var hWnd = WindowNative.GetWindowHandle(_parentWindow);
+                InitializeWithWindow.Initialize(folderPicker, hWnd);
+
+                folderPicker.FileTypeFilter.Add("*");
+                
+                var folder = await folderPicker.PickSingleFolderAsync();
+                if (folder != null)
+                {
+                    targetDirectoryTextBox.Text = folder.Path;
+                    dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
+                                                     !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text);
+                }
+            }
+            catch (Exception)
+            {
+                // Error handled silently
+            }
+        };
+
+        // Validate form when text changes
+        zipFileNameTextBox.TextChanged += (s, args) =>
+        {
+            dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
+                                             !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text);
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            string zipFileName = zipFileNameTextBox.Text.Trim();
+            string targetDirectory = targetDirectoryTextBox.Text.Trim();
+            bool linkToCategory = linkToCategoryCheckBox.IsChecked == true;
+
+            if (string.IsNullOrWhiteSpace(zipFileName) || string.IsNullOrWhiteSpace(targetDirectory))
+            {
+                return null; // Validation failed
+            }
+
+            // Validate that target directory exists
+            if (!Directory.Exists(targetDirectory))
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Invalid Directory",
+                    Content = "The target directory does not exist. Please select a valid directory.",
+                    CloseButtonText = "OK",
+                    XamlRoot = _xamlRoot
+                };
+                await errorDialog.ShowAsync();
+                return null;
+            }
+
+            return new ZipFolderResult
+            {
+                ZipFileName = zipFileName,
+                TargetDirectory = targetDirectory,
+                LinkToCategory = linkToCategory
+            };
+        }
+
+        return null;
+    }
 }

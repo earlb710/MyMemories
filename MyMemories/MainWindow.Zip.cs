@@ -1,201 +1,180 @@
-using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using System;
+using System.IO;
+using System.IO.Compression;
 using System.Threading.Tasks;
 
 namespace MyMemories;
 
 public sealed partial class MainWindow
 {
-    private void LinksTreeView_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    /// <summary>
+    /// Zips a folder and optionally links it to the parent category.
+    /// </summary>
+    private async Task ZipFolderAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
-        if (e.OriginalSource is not FrameworkElement element)
-            return;
-
-        var treeViewItem = FindParent<TreeViewItem>(element);
-        if (treeViewItem?.Content is not TreeViewNode node)
-            return;
-
-        _contextMenuNode = node;
-
-        var menu = node.Content switch
+        if (!Directory.Exists(linkItem.Url))
         {
-            CategoryItem => LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout,
-            LinkItem => LinksTreeView.Resources["LinkContextMenu"] as MenuFlyout,
-            _ => null
-        };
-
-        menu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
-        e.Handled = true;
-    }
-
-    private async void CategoryMenu_AddLink_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode == null) return;
-
-        var categoriesWithSubs = _treeViewService!.GetCategoryWithSubcategories(_contextMenuNode);
-
-        var selectedCategoryNode = new CategoryNode
-        {
-            Name = _treeViewService.GetCategoryPath(_contextMenuNode),
-            Node = _contextMenuNode
-        };
-
-        var result = await _linkDialog!.ShowAddAsync(categoriesWithSubs, selectedCategoryNode);
-
-        if (result?.CategoryNode != null)
-        {
-            var categoryPath = _treeViewService.GetCategoryPath(result.CategoryNode);
-
-            var linkNode = new TreeViewNode
+            var errorDialog = new ContentDialog
             {
-                Content = new LinkItem
-                {
-                    Title = result.Title,
-                    Url = result.Url,
-                    Description = result.Description,
-                    IsDirectory = result.IsDirectory,
-                    CategoryPath = categoryPath,
-                    CreatedDate = DateTime.Now,
-                    ModifiedDate = DateTime.Now,
-                    FolderType = result.FolderType,
-                    FileFilters = result.FileFilters
-                }
+                Title = "Folder Not Found",
+                Content = $"The folder '{linkItem.Url}' does not exist or is not accessible.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        // Get parent directory for default target location
+        var folderInfo = new DirectoryInfo(linkItem.Url);
+        var parentDirectory = folderInfo.Parent?.FullName ?? folderInfo.Root.FullName;
+
+        // Show zip configuration dialog
+        var result = await _linkDialog!.ShowZipFolderDialogAsync(
+            linkItem.Title,
+            parentDirectory
+        );
+
+        if (result == null)
+        {
+            return; // User cancelled
+        }
+
+        // Build full zip file path
+        var zipFileName = result.ZipFileName;
+        if (!zipFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            zipFileName += ".zip";
+        }
+
+        var zipFilePath = Path.Combine(result.TargetDirectory, zipFileName);
+
+        // Check if zip file already exists
+        if (File.Exists(zipFilePath))
+        {
+            var confirmDialog = new ContentDialog
+            {
+                Title = "File Already Exists",
+                Content = $"The file '{zipFileName}' already exists in the target directory. Do you want to overwrite it?",
+                PrimaryButtonText = "Overwrite",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
             };
 
-            result.CategoryNode.Children.Add(linkNode);
-            result.CategoryNode.IsExpanded = true;
-
-            var rootNode = GetRootCategoryNode(result.CategoryNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-            StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
-
-            if (LinksTreeView.SelectedNode == result.CategoryNode)
+            var confirmResult = await confirmDialog.ShowAsync();
+            if (confirmResult != ContentDialogResult.Primary)
             {
-                _detailsViewService!.ShowCategoryDetails((CategoryItem)result.CategoryNode.Content, result.CategoryNode);
+                return; // User cancelled overwrite
             }
-        }
-    }
 
-    private async void CategoryMenu_AddSubCategory_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is CategoryItem)
-        {
-            await CreateSubCategoryAsync(_contextMenuNode);
-        }
-    }
-
-    private async void CategoryMenu_Edit_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is CategoryItem category)
-        {
-            await EditCategoryAsync(category, _contextMenuNode);
-        }
-    }
-
-    private async void CategoryMenu_Remove_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is CategoryItem category)
-        {
-            await DeleteCategoryAsync(category, _contextMenuNode);
-        }
-    }
-
-    private async void LinkMenu_AddSubCategory_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Parent != null)
-        {
-            var parentCategoryNode = _treeViewService!.GetParentCategoryNode(_contextMenuNode);
-            if (parentCategoryNode != null)
+            // Delete existing file
+            try
             {
-                await CreateSubCategoryAsync(parentCategoryNode);
+                File.Delete(zipFilePath);
             }
-        }
-    }
-
-    private async void LinkMenu_Move_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is LinkItem link)
-        {
-            await MoveLinkAsync(link, _contextMenuNode);
-        }
-    }
-
-    private async void LinkMenu_Edit_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is LinkItem link)
-        {
-            if (link.IsCatalogEntry)
+            catch (Exception ex)
             {
                 var errorDialog = new ContentDialog
                 {
-                    Title = "Cannot Edit Catalog Entry",
-                    Content = "Catalog entries are read-only and cannot be edited. Use 'Refresh Catalog' to update them.",
+                    Title = "Error Deleting File",
+                    Content = $"Could not delete existing file: {ex.Message}",
                     CloseButtonText = "OK",
                     XamlRoot = Content.XamlRoot
                 };
                 await errorDialog.ShowAsync();
                 return;
             }
+        }
 
-            await EditLinkAsync(link, _contextMenuNode);
+        // Create zip file
+        try
+        {
+            StatusText.Text = $"Creating zip file '{zipFileName}'...";
+
+            await Task.Run(() =>
+            {
+                ZipFile.CreateFromDirectory(linkItem.Url, zipFilePath, CompressionLevel.Optimal, false);
+            });
+
+            StatusText.Text = $"Successfully created '{zipFileName}'";
+
+            // If user wants to link the zip to the parent category
+            if (result.LinkToCategory && linkNode.Parent != null)
+            {
+                var parentCategoryNode = _treeViewService!.GetParentCategoryNode(linkNode);
+                if (parentCategoryNode != null)
+                {
+                    var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNode);
+
+                    // Create a new link for the zip file
+                    var zipLinkNode = new TreeViewNode
+                    {
+                        Content = new LinkItem
+                        {
+                            Title = Path.GetFileNameWithoutExtension(zipFileName),
+                            Url = zipFilePath,
+                            Description = $"Zip archive of '{linkItem.Title}'",
+                            IsDirectory = false,
+                            CategoryPath = categoryPath,
+                            CreatedDate = DateTime.Now,
+                            ModifiedDate = DateTime.Now,
+                            FolderType = FolderLinkType.LinkOnly,
+                            FileSize = (ulong)new FileInfo(zipFilePath).Length
+                        }
+                    };
+
+                    // Add the zip link to the parent category
+                    parentCategoryNode.Children.Add(zipLinkNode);
+
+                    // Save the updated category
+                    var rootNode = GetRootCategoryNode(parentCategoryNode);
+                    await _categoryService!.SaveCategoryAsync(rootNode);
+
+                    StatusText.Text = $"Created '{zipFileName}' and linked to '{categoryPath}'";
+                }
+            }
+
+            // Show success dialog
+            var successDialog = new ContentDialog
+            {
+                Title = "Zip Created Successfully",
+                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await successDialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error creating zip file: {ex.Message}";
+
+            var errorDialog = new ContentDialog
+            {
+                Title = "Error Creating Zip File",
+                Content = $"An error occurred while creating the zip file:\n\n{ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
         }
     }
 
-    private async void LinkMenu_ZipFolder_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Formats file size in human-readable format.
+    /// </summary>
+    private string FormatFileSize(ulong bytes)
     {
-        if (_contextMenuNode?.Content is LinkItem link)
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
         {
-            if (!link.IsDirectory)
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Cannot Zip File",
-                    Content = "Only folders can be zipped. This is a file link.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-                return;
-            }
-
-            if (link.IsCatalogEntry)
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Cannot Zip Catalog Entry",
-                    Content = "Catalog entries cannot be zipped directly. Please zip the parent folder instead.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-                return;
-            }
-
-            await ZipFolderAsync(link, _contextMenuNode);
+            order++;
+            len /= 1024;
         }
-    }
-
-    private async void LinkMenu_Remove_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is LinkItem link)
-        {
-            if (link.IsCatalogEntry)
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Cannot Remove Catalog Entry",
-                    Content = "Catalog entries cannot be removed individually. Use 'Refresh Catalog' to update them.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-                return;
-            }
-
-            await DeleteLinkAsync(link, _contextMenuNode);
-        }
+        return $"{len:0.##} {sizes[order]}";
     }
 
     /// <summary>
@@ -280,7 +259,7 @@ public sealed partial class MainWindow
         {
             try
             {
-                var folderPicker = new Windows.Storage.Pickers.FolderPicker();
+                var folderPicker = new FolderPicker();
                 var hWnd = WindowNative.GetWindowHandle(_parentWindow);
                 InitializeWithWindow.Initialize(folderPicker, hWnd);
 

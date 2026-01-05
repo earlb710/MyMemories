@@ -349,3 +349,13 @@ public class CategoryEditResult
     public string Description { get; set; } = string.Empty;
     public string Icon { get; set; } = "📁";
 }
+
+/// <summary>
+/// Result from the Zip Folder dialog.
+/// </summary>
+public class ZipFolderResult
+{
+    public string ZipFileName { get; set; } = string.Empty;
+    public string TargetDirectory { get; set; } = string.Empty;
+    public bool LinkToCategory { get; set; }
+}
