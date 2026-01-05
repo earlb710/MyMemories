@@ -36,7 +36,7 @@ public class LinkItem
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
     public DateTime? LastCatalogUpdate { get; set; }
-    public ulong? FileSize { get; set; } // File size in bytes
+    public ulong? FileSize { get; set; }
     
     // Internal property to store catalog count for display
     [JsonIgnore]
@@ -50,28 +50,7 @@ public class LinkItem
         if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
         {
             var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
-            
-            // Show asterisk if folder needs catalog update
-            if (LastCatalogUpdate.HasValue)
-            {
-                var daysSinceUpdate = (DateTime.Now - LastCatalogUpdate.Value).TotalDays;
-                if (daysSinceUpdate > 7) // Show asterisk if catalog is more than 7 days old
-                {
-                    return $"{icon} {Title}{catalogInfo} *";
-                }
-            }
-            
             return $"{icon} {Title}{catalogInfo}";
-        }
-        
-        // Show asterisk if folder needs catalog update (but no catalog yet)
-        if (IsDirectory && !IsCatalogEntry && LastCatalogUpdate.HasValue)
-        {
-            var daysSinceUpdate = (DateTime.Now - LastCatalogUpdate.Value).TotalDays;
-            if (daysSinceUpdate > 7) // Show asterisk if catalog is more than 7 days old
-            {
-                return $"{icon} {Title} *";
-            }
         }
         
         return $"{icon} {Title}";
@@ -81,7 +60,26 @@ public class LinkItem
     {
         // For directories
         if (IsDirectory)
-            return "📁";
+        {
+            // Check if folder has changed since last catalog update
+            if (!IsCatalogEntry && LastCatalogUpdate.HasValue && Directory.Exists(Url))
+            {
+                try
+                {
+                    var dirInfo = new DirectoryInfo(Url);
+                    // Check if directory was modified after last catalog update
+                    if (dirInfo.LastWriteTime > LastCatalogUpdate.Value)
+                    {
+                        return "📂"; // Different folder icon for changed folders
+                    }
+                }
+                catch
+                {
+                    // If we can't access the directory, use normal folder icon
+                }
+            }
+            return "📁"; // Normal folder icon
+        }
         
         // For web URLs (non-file URIs)
         if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)

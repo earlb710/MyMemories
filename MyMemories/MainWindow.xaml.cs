@@ -794,8 +794,6 @@ public sealed partial class MainWindow : Window
             // Find the TreeViewNode for this link
             var linkNode = FindLinkNode(linkItem);
             
-            StatusText.Text = $"DEBUG: Empty URL, linkNode is {(linkNode == null ? "NULL" : "FOUND")}";
-            
             if (linkNode != null)
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(
@@ -814,6 +812,7 @@ public sealed partial class MainWindow : Window
             DetailsViewerScroll.Visibility = Visibility.Visible;
             _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
             HeaderViewerScroll.Visibility = Visibility.Visible;
+            StatusText.Text = "No URL specified for this link";
             return;
         }
 
@@ -825,8 +824,6 @@ public sealed partial class MainWindow : Window
                 
                 // Find the TreeViewNode for this link
                 var linkNode = FindLinkNode(linkItem);
-                
-                StatusText.Text = $"DEBUG: Directory link, linkNode is {(linkNode == null ? "NULL" : "FOUND")}";
                 
                 if (linkNode != null)
                 {

@@ -1,4 +1,4 @@
-<Window
+﻿<Window
     x:Class="MyMemories.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -16,12 +16,13 @@
         <!-- Main Content Area with TreeView and Viewer -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250" MinWidth="150"/>
+                <ColumnDefinition Width="250" MinWidth="150" MaxWidth="600"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left Panel: TreeView with Search and Add Buttons -->
-            <Grid Grid.Column="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+            <Grid Grid.Column="0" BorderBrush="LightGray" BorderThickness="0,0,1,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -39,9 +40,7 @@
                         Grid.Column="0"
                         x:Name="SearchComboBox"
                         IsEditable="True"
-                        PlaceholderText="Search categories and links..."
                         HorizontalAlignment="Stretch"
-                        TextSubmitted="SearchComboBox_TextSubmitted"
                         KeyDown="SearchComboBox_KeyDown"
                         Margin="0,0,4,0"/>
                     
@@ -52,9 +51,8 @@
                         Width="32"
                         Height="32"
                         Padding="0"
-                        ToolTipService.ToolTip="Search">
-                        <FontIcon Glyph="&#xE721;" FontSize="16"/>
-                    </Button>
+                        ToolTip="Search"
+                        Content="🔍"/>
                 </Grid>
 
                 <!-- Icon Button Panel -->
@@ -69,9 +67,9 @@
                         Click="CreateCategoryButton_Click"
                         HorizontalAlignment="Stretch"
                         Margin="0,0,4,0"
-                        ToolTipService.ToolTip="Create Category">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE8F4;" FontSize="16"/>
+                        ToolTip="Create Category">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📁" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBlock Text="Category" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -81,9 +79,9 @@
                         Click="AddBookmarkButton_Click"
                         HorizontalAlignment="Stretch"
                         Margin="4,0,0,0"
-                        ToolTipService.ToolTip="Add Link">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE71B;" FontSize="16"/>
+                        ToolTip="Add Link">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔗" VerticalAlignment="Center" Margin="0,0,4,0"/>
                             <TextBlock Text="Link" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -95,47 +93,47 @@
                     x:Name="LinksTreeView"
                     Margin="8,0,8,8"
                     SelectionChanged="LinksTreeView_SelectionChanged"
-                    RightTapped="LinksTreeView_RightTapped"
-                    DoubleTapped="LinksTreeView_DoubleTapped">
+                    MouseRightButtonUp="LinksTreeView_RightTapped"
+                    MouseDoubleClick="LinksTreeView_DoubleTapped">
                     
                     <!-- Context Menu for Category Nodes -->
                     <TreeView.Resources>
-                        <MenuFlyout x:Key="CategoryContextMenu">
-                            <MenuFlyoutItem Text="Add Link" Icon="Add" Click="CategoryMenu_AddLink_Click"/>
-                            <MenuFlyoutItem Text="Add Sub Category" Click="CategoryMenu_AddSubCategory_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8F4;"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Edit Category" Icon="Edit" Click="CategoryMenu_Edit_Click"/>
-                            <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Remove Category" Icon="Delete" Click="CategoryMenu_Remove_Click"/>
-                        </MenuFlyout>
+                        <ContextMenu x:Key="CategoryContextMenu">
+                            <MenuItem Header="Add Link" Click="CategoryMenu_AddLink_Click"/>
+                            <MenuItem Header="Add Sub Category" Click="CategoryMenu_AddSubCategory_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Edit Category" Click="CategoryMenu_Edit_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Remove Category" Click="CategoryMenu_Remove_Click"/>
+                        </ContextMenu>
                         
                         <!-- Context Menu for Link Nodes -->
-                        <MenuFlyout x:Key="LinkContextMenu">
-                            <MenuFlyoutItem Text="Add Sub Category" Click="LinkMenu_AddSubCategory_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8F4;"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Move Link" Click="LinkMenu_Move_Click">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8DE;"/>
-                                </MenuFlyoutItem.Icon>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
-                            <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
-                        </MenuFlyout>
+                        <ContextMenu x:Key="LinkContextMenu">
+                            <MenuItem Header="Add Sub Category" Click="LinkMenu_AddSubCategory_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Move Link" Click="LinkMenu_Move_Click"/>
+                            <MenuItem Header="Edit Link" Click="LinkMenu_Edit_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Remove Link" Click="LinkMenu_Remove_Click"/>
+                        </ContextMenu>
                     </TreeView.Resources>
                 </TreeView>
             </Grid>
 
+            <!-- GridSplitter for resizing -->
+            <GridSplitter 
+                Grid.Column="1"
+                x:Name="TreeViewSplitter"
+                Width="6"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="Transparent"
+                ResizeDirection="Columns"
+                ResizeBehavior="PreviousAndNext"
+                Cursor="SizeWE"/>
+
             <!-- Content Viewer Area -->
-            <Grid Grid.Column="1" x:Name="ContentGrid">
+            <Grid Grid.Column="2" x:Name="ContentGrid">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -147,8 +145,8 @@
                     x:Name="HeaderViewerScroll"
                     Visibility="Collapsed"
                     Padding="20,16,20,8"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-                    <StackPanel x:Name="HeaderPanel" Spacing="4"/>
+                    Background="WhiteSmoke">
+                    <StackPanel x:Name="HeaderPanel"/>
                 </ScrollViewer>
 
                 <!-- Image Viewer -->
@@ -161,7 +159,7 @@
                     VerticalAlignment="Center"/>
 
                 <!-- WebView2 for HTML and PDF -->
-                <WebView2 
+                <WebBrowser 
                     Grid.Row="1"
                     x:Name="WebViewer"
                     Visibility="Collapsed"/>
@@ -188,7 +186,7 @@
                     x:Name="DetailsViewerScroll"
                     Visibility="Collapsed"
                     Padding="20">
-                    <StackPanel x:Name="DetailsPanel" Spacing="12"/>
+                    <StackPanel x:Name="DetailsPanel"/>
                 </ScrollViewer>
 
                 <!-- Welcome Panel -->
@@ -197,29 +195,29 @@
                     x:Name="WelcomePanel"
                     Visibility="Visible"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Spacing="16">
+                    VerticalAlignment="Center">
                     <TextBlock 
                         Text="Welcome to My Memories"
                         FontSize="24"
                         FontWeight="SemiBold"
-                        HorizontalAlignment="Center"/>
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,16"/>
                     <TextBlock 
                         Text="Click 'Open File' to view images, HTML, PDF, or text files"
                         FontSize="14"
                         HorizontalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        Foreground="Gray"/>
                 </StackPanel>
             </Grid>
         </Grid>
 
         <!-- Status Bar -->
-        <Grid Grid.Row="1" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="1" Padding="8,4" Background="WhiteSmoke">
             <TextBlock 
                 x:Name="StatusText"
                 Text="Ready"
                 FontSize="12"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                Foreground="Gray"/>
         </Grid>
     </Grid>
 </Window>
