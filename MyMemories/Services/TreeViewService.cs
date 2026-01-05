@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.UI.Xaml.Controls;
 
@@ -190,12 +191,21 @@ public class TreeViewService
     /// </summary>
     public TreeViewNode RefreshLinkNode(TreeViewNode oldNode, LinkItem updatedLink)
     {
+        Debug.WriteLine($"[TreeViewService] RefreshLinkNode called for: {updatedLink.Title}");
+        Debug.WriteLine($"[TreeViewService] Old node has {oldNode.Children.Count} children");
+        
         if (oldNode.Parent == null)
         {
+            Debug.WriteLine($"[TreeViewService] WARNING: Link node has no parent, just updating content");
             // Link nodes should always have a parent
             oldNode.Content = updatedLink;
             return oldNode;
         }
+
+        // Store the node's children and expansion state
+        var children = oldNode.Children.ToList();
+        bool wasExpanded = oldNode.IsExpanded;
+        Debug.WriteLine($"[TreeViewService] Storing {children.Count} children, wasExpanded={wasExpanded}");
 
         // Store the node's position
         var parentNode = oldNode.Parent;
@@ -208,8 +218,17 @@ public class TreeViewService
         // Create new node with updated content
         var newNode = new TreeViewNode
         {
-            Content = updatedLink
+            Content = updatedLink,
+            IsExpanded = wasExpanded
         };
+
+        // Restore children to the new node
+        Debug.WriteLine($"[TreeViewService] Restoring {children.Count} children to new node");
+        foreach (var child in children)
+        {
+            newNode.Children.Add(child);
+        }
+        Debug.WriteLine($"[TreeViewService] New node now has {newNode.Children.Count} children");
 
         // Insert at same position
         parentNode.Children.Insert(nodeIndex, newNode);
@@ -220,6 +239,7 @@ public class TreeViewService
             _treeView.SelectedNode = newNode;
         }
 
+        Debug.WriteLine($"[TreeViewService] RefreshLinkNode completed");
         return newNode;
     }
 }

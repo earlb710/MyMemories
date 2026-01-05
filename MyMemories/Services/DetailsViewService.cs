@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -208,6 +209,7 @@ public class DetailsViewService
     /// </summary>
     public async Task<(Button? createButton, Button? refreshButton)> ShowLinkDetailsAsync(LinkItem linkItem, TreeViewNode? node, Func<Task> onCreateCatalog, Func<Task> onRefreshCatalog)
     {
+        Debug.WriteLine($"[DetailsViewService] ShowLinkDetailsAsync called for: {linkItem.Title}");
         _detailsPanel.Children.Clear();
 
         Button? createButton = null;
@@ -216,6 +218,7 @@ public class DetailsViewService
         // Add catalog buttons for directories at the top (only if we have a valid node)
         if (node != null && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
         {
+            Debug.WriteLine($"[DetailsViewService] Directory detected, checking for catalog entries");
             var buttonPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -225,9 +228,11 @@ public class DetailsViewService
 
             // Check if catalog already exists
             bool hasCatalog = HasCatalogEntries(node);
+            Debug.WriteLine($"[DetailsViewService] Has catalog: {hasCatalog}");
 
             if (!hasCatalog)
             {
+                Debug.WriteLine($"[DetailsViewService] Creating 'Create Catalog' button");
                 createButton = new Button
                 {
                     Content = new StackPanel
@@ -241,11 +246,26 @@ public class DetailsViewService
                         }
                     }
                 };
-                createButton.Click += (s, e) => { _ = onCreateCatalog(); };
+                createButton.Click += async (s, e) =>
+                {
+                    Debug.WriteLine($"[DetailsViewService] Create Catalog button clicked!");
+                    try
+                    {
+                        await onCreateCatalog();
+                        Debug.WriteLine($"[DetailsViewService] onCreateCatalog completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[DetailsViewService] Error in onCreateCatalog: {ex.Message}");
+                        Debug.WriteLine($"[DetailsViewService] Stack trace: {ex.StackTrace}");
+                    }
+                };
                 buttonPanel.Children.Add(createButton);
+                Debug.WriteLine($"[DetailsViewService] Create Catalog button added to panel");
             }
             else
             {
+                Debug.WriteLine($"[DetailsViewService] Creating 'Refresh Catalog' button");
                 refreshButton = new Button
                 {
                     Content = new StackPanel
@@ -259,11 +279,28 @@ public class DetailsViewService
                         }
                     }
                 };
-                refreshButton.Click += (s, e) => { _ = onRefreshCatalog(); };
+                refreshButton.Click += async (s, e) =>
+                {
+                    Debug.WriteLine($"[DetailsViewService] Refresh Catalog button clicked!");
+                    try
+                    {
+                        await onRefreshCatalog();
+                        Debug.WriteLine($"[DetailsViewService] onRefreshCatalog completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[DetailsViewService] Error in onRefreshCatalog: {ex.Message}");
+                    }
+                };
                 buttonPanel.Children.Add(refreshButton);
             }
 
             _detailsPanel.Children.Add(buttonPanel);
+            Debug.WriteLine($"[DetailsViewService] Button panel added to details panel");
+        }
+        else
+        {
+            Debug.WriteLine($"[DetailsViewService] Catalog buttons NOT created. node={node != null}, IsDirectory={linkItem.IsDirectory}, Exists={Directory.Exists(linkItem.Url)}");
         }
 
         // Always show the path/URL section with proper handling

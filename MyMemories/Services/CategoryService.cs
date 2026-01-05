@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -122,8 +123,8 @@ public class CategoryService
         {
             if (child.Content is LinkItem link)
             {
-                // Add link
-                categoryData.Links.Add(new LinkData
+                // Create link data with potential catalog entries as children
+                var linkData = new LinkData
                 {
                     Title = link.Title,
                     Url = link.Url,
@@ -135,18 +136,27 @@ public class CategoryService
                     FolderType = link.FolderType,
                     FileFilters = link.FileFilters,
                     IsCatalogEntry = link.IsCatalogEntry,
-                    LastCatalogUpdate = link.LastCatalogUpdate // NEW
-                });
+                    LastCatalogUpdate = link.LastCatalogUpdate,
+                    CatalogEntries = new List<LinkData>() // Initialize catalog entries list
+                };
 
-                // Process catalog entries (children of this link)
+                // Process catalog entries (children of this link) as nested items
                 foreach (var catalogChild in child.Children)
                 {
                     if (catalogChild.Content is LinkItem catalogEntry)
                     {
-                        categoryData.Links.Add(new LinkData
+                        // Convert full path to relative path (just the filename)
+                        string relativeUrl = catalogEntry.Url;
+                        if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url))
+                        {
+                            // Extract just the filename from the full path
+                            relativeUrl = Path.GetFileName(catalogEntry.Url);
+                        }
+
+                        linkData.CatalogEntries.Add(new LinkData
                         {
                             Title = catalogEntry.Title,
-                            Url = catalogEntry.Url,
+                            Url = relativeUrl, // Store relative path (filename only)
                             Description = catalogEntry.Description,
                             IsDirectory = catalogEntry.IsDirectory,
                             CategoryPath = catalogEntry.CategoryPath,
@@ -159,6 +169,8 @@ public class CategoryService
                         });
                     }
                 }
+
+                categoryData.Links.Add(linkData);
             }
             else if (child.Content is CategoryItem)
             {
@@ -195,10 +207,7 @@ public class CategoryService
             categoryNode.Children.Add(subCategoryNode);
         }
 
-        // Track link nodes that have catalog entries
-        var linksWithCatalogs = new Dictionary<string, TreeViewNode>();
-
-        // Then add links
+        // Add links with their catalog entries
         foreach (var linkData in categoryData.Links)
         {
             var linkItem = new LinkItem
@@ -213,53 +222,42 @@ public class CategoryService
                 FolderType = linkData.FolderType,
                 FileFilters = linkData.FileFilters ?? string.Empty,
                 IsCatalogEntry = linkData.IsCatalogEntry,
-                LastCatalogUpdate = linkData.LastCatalogUpdate // NEW
+                LastCatalogUpdate = linkData.LastCatalogUpdate
             };
 
-            if (linkItem.IsCatalogEntry)
-            {
-                // This is a catalog entry - find its parent link node
-                // Parent links are identified by matching directory path
-                var parentUrl = linkData.CategoryPath; // This might need adjustment based on your data structure
-                
-                // Try to find the parent link node in our temporary tracking dictionary
-                // For now, we'll use a simple approach: catalog entries follow their parent link
-                // So we look at the last non-catalog link added
-                TreeViewNode? parentLinkNode = null;
-                foreach (var kvp in linksWithCatalogs.Reverse())
-                {
-                    if (kvp.Value.Content is LinkItem parentLink && 
-                        parentLink.IsDirectory && 
-                        !parentLink.IsCatalogEntry)
-                    {
-                        // Check if this catalog entry belongs to this parent
-                        // (catalog entries should have parent folder's path in their URL)
-                        if (linkItem.Url.StartsWith(parentLink.Url + Path.DirectorySeparatorChar))
-                        {
-                            parentLinkNode = kvp.Value;
-                            break;
-                        }
-                    }
-                }
-
-                if (parentLinkNode != null)
-                {
-                    // Add as child of the parent link
-                    var catalogEntryNode = new TreeViewNode { Content = linkItem };
-                    parentLinkNode.Children.Add(catalogEntryNode);
-                    continue; // Skip adding to category node
-                }
-            }
-
-            // Regular link - add to category
             var linkNode = new TreeViewNode { Content = linkItem };
-            categoryNode.Children.Add(linkNode);
-            
-            // Track this link node if it's a directory (potential parent of catalog entries)
-            if (linkItem.IsDirectory && !linkItem.IsCatalogEntry)
+
+            // Add catalog entries as children of the link node
+            if (linkData.CatalogEntries != null)
             {
-                linksWithCatalogs[linkItem.Url] = linkNode;
+                foreach (var catalogData in linkData.CatalogEntries)
+                {
+                    // Reconstruct full path from parent URL + relative path
+                    var fullUrl = string.IsNullOrEmpty(linkData.Url) 
+                        ? catalogData.Url 
+                        : Path.Combine(linkData.Url, catalogData.Url);
+
+                    var catalogEntry = new LinkItem
+                    {
+                        Title = catalogData.Title,
+                        Url = fullUrl, // Use full path for TreeView
+                        Description = catalogData.Description,
+                        IsDirectory = catalogData.IsDirectory,
+                        CategoryPath = catalogData.CategoryPath,
+                        CreatedDate = catalogData.CreatedDate ?? DateTime.Now,
+                        ModifiedDate = catalogData.ModifiedDate ?? DateTime.Now,
+                        FolderType = catalogData.FolderType,
+                        FileFilters = catalogData.FileFilters ?? string.Empty,
+                        IsCatalogEntry = true,
+                        LastCatalogUpdate = catalogData.LastCatalogUpdate
+                    };
+
+                    var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
+                    linkNode.Children.Add(catalogEntryNode);
+                }
             }
+
+            categoryNode.Children.Add(linkNode);
         }
 
         return categoryNode;
@@ -276,40 +274,49 @@ public class CategoryService
 
     /// <summary>
     /// Creates a catalog of all files in a directory and adds them as catalog entries to a folder link.
+    /// Returns LinkItems with full paths for TreeView usage.
     /// </summary>
     public async Task<List<LinkItem>> CreateCatalogEntriesAsync(string directoryPath, string categoryPath)
     {
+        Debug.WriteLine($"[CategoryService] CreateCatalogEntriesAsync called for: {directoryPath}");
         var catalogEntries = new List<LinkItem>();
 
         if (!Directory.Exists(directoryPath))
         {
+            Debug.WriteLine($"[CategoryService] Directory does not exist: {directoryPath}");
             return catalogEntries;
         }
 
         try
         {
             var files = Directory.GetFiles(directoryPath);
+            Debug.WriteLine($"[CategoryService] Found {files.Length} files in directory");
 
             foreach (var filePath in files)
             {
                 var fileInfo = new FileInfo(filePath);
                 
+                Debug.WriteLine($"[CategoryService] Creating catalog entry: {fileInfo.Name} (full path: {filePath})");
+                
                 catalogEntries.Add(new LinkItem
                 {
                     Title = fileInfo.Name,
-                    Url = filePath,
+                    Url = filePath, // Full path for TreeView usage
                     Description = $"Size: {FormatFileSize((ulong)fileInfo.Length)}",
                     IsDirectory = false,
                     CategoryPath = categoryPath,
                     CreatedDate = fileInfo.CreationTime,
                     ModifiedDate = fileInfo.LastWriteTime,
                     FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true // Mark as catalog entry
+                    IsCatalogEntry = true
                 });
             }
+            
+            Debug.WriteLine($"[CategoryService] Created {catalogEntries.Count} catalog entries");
         }
         catch (Exception ex)
         {
+            Debug.WriteLine($"[CategoryService] ERROR in CreateCatalogEntriesAsync: {ex.Message}");
             throw new InvalidOperationException($"Error creating catalog for {directoryPath}: {ex.Message}", ex);
         }
 

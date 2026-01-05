@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Input;
 using MyMemories.Services;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -935,17 +936,23 @@ public sealed partial class MainWindow : Window
 
     private async Task CreateCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
+        Debug.WriteLine($"[MainWindow] CreateCatalogAsync called for: {linkItem.Title}, Path: {linkItem.Url}");
         try
         {
             StatusText.Text = "Creating catalog...";
+            Debug.WriteLine($"[MainWindow] Status updated to 'Creating catalog...'");
 
             // Create catalog entries
+            Debug.WriteLine($"[MainWindow] Calling CreateCatalogEntriesAsync...");
             var catalogEntries = await _categoryService!.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+            Debug.WriteLine($"[MainWindow] Created {catalogEntries.Count} catalog entries");
 
             // Update the folder link's LastCatalogUpdate timestamp
             linkItem.LastCatalogUpdate = DateTime.Now;
+            Debug.WriteLine($"[MainWindow] Updated LastCatalogUpdate timestamp");
 
             // Add catalog entries to the tree
+            Debug.WriteLine($"[MainWindow] Adding {catalogEntries.Count} entries to tree...");
             foreach (var entry in catalogEntries)
             {
                 var entryNode = new TreeViewNode
@@ -953,34 +960,45 @@ public sealed partial class MainWindow : Window
                     Content = entry
                 };
                 linkNode.Children.Add(entryNode);
+                Debug.WriteLine($"[MainWindow] Added catalog entry: {entry.Title}");
             }
 
             // Refresh the link node to update the display (remove asterisk if it was there)
+            Debug.WriteLine($"[MainWindow] Refreshing link node...");
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+            Debug.WriteLine($"[MainWindow] Link node refreshed");
 
             // Save the changes
+            Debug.WriteLine($"[MainWindow] Saving category...");
             var rootNode = GetRootCategoryNode(refreshedNode);
             await _categoryService.SaveCategoryAsync(rootNode);
+            Debug.WriteLine($"[MainWindow] Category saved");
 
             // Refresh the view
             refreshedNode.IsExpanded = true;
+            Debug.WriteLine($"[MainWindow] Expanding node and refreshing view...");
             await _detailsViewService!.ShowLinkDetailsAsync(
                 linkItem,
                 refreshedNode,
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),
                 async () => await RefreshCatalogAsync(linkItem, refreshedNode)
             );
+            Debug.WriteLine($"[MainWindow] View refreshed");
 
             StatusText.Text = $"Created catalog with {catalogEntries.Count} entries";
+            Debug.WriteLine($"[MainWindow] CreateCatalogAsync completed successfully");
         }
         catch (Exception ex)
         {
+            Debug.WriteLine($"[MainWindow] ERROR in CreateCatalogAsync: {ex.Message}");
+            Debug.WriteLine($"[MainWindow] Stack trace: {ex.StackTrace}");
             StatusText.Text = $"Error creating catalog: {ex.Message}";
         }
     }
 
     private async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
+        Debug.WriteLine($"[MainWindow] RefreshCatalogAsync called for: {linkItem.Title}");
         try
         {
             StatusText.Text = "Refreshing catalog...";
@@ -1021,9 +1039,11 @@ public sealed partial class MainWindow : Window
             );
 
             StatusText.Text = $"Refreshed catalog with {catalogEntries.Count} entries";
+            Debug.WriteLine($"[MainWindow] RefreshCatalogAsync completed successfully with {catalogEntries.Count} entries");
         }
         catch (Exception ex)
         {
+            Debug.WriteLine($"[MainWindow] ERROR in RefreshCatalogAsync: {ex.Message}");
             StatusText.Text = $"Error refreshing catalog: {ex.Message}";
         }
     }
