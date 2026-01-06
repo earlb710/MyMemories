@@ -129,7 +129,7 @@ public sealed partial class MainWindow
 
         // Check if node is a root category by checking if it's in RootNodes collection
         bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
-        
+
         System.Diagnostics.Debug.WriteLine($"EditCategoryAsync: category='{category.Name}', node.Parent={node.Parent}, node in RootNodes={isRootCategory}");
 
         // Ensure _linkDialog has the latest _configService reference
@@ -185,83 +185,84 @@ public sealed partial class MainWindow
                                 PlaceholderText = "Enter global password"
                             }
                         }
-                    },
-                    PrimaryButtonText = "OK",
-                    CloseButtonText = "Cancel",
-                    DefaultButton = ContentDialogButton.Primary,
-                    XamlRoot = Content.XamlRoot
-                };
+                        },
+                        PrimaryButtonText = "OK",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = Content.XamlRoot
+                    };
 
-                var dialogResult = await globalPasswordDialog.ShowAsync();
-                
-                if (dialogResult == ContentDialogResult.Primary)
-                {
-                    var passwordBox = (globalPasswordDialog.Content as StackPanel)
-                        ?.Children.OfType<PasswordBox>()
-                        .FirstOrDefault();
-                    
-                    if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
+                    var dialogResult = await globalPasswordDialog.ShowAsync();
+
+                    if (dialogResult == ContentDialogResult.Primary)
                     {
-                        // Verify the password is correct
-                        var enteredPasswordHash = PasswordUtilities.HashPassword(passwordBox.Password);
-                        if (enteredPasswordHash == _configService.GlobalPasswordHash)
+                        var passwordBox = (globalPasswordDialog.Content as StackPanel)
+                            ?.Children.OfType<PasswordBox>()
+                            .FirstOrDefault();
+
+                        if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
                         {
-                            // Cache the global password
-                            _categoryService!.CacheGlobalPassword(passwordBox.Password);
+                            // Verify the password is correct
+                            var enteredPasswordHash = PasswordUtilities.HashPassword(passwordBox.Password);
+                            if (enteredPasswordHash == _configService.GlobalPasswordHash)
+                            {
+                                // Cache the global password
+                                _categoryService!.CacheGlobalPassword(passwordBox.Password);
+                            }
+                            else
+                            {
+                                await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
+                                    "Incorrect Password",
+                                    "The global password you entered is incorrect.");
+                                return;
+                            }
                         }
                         else
                         {
                             await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
-                                "Incorrect Password",
-                                "The global password you entered is incorrect.");
+                                "Password Required",
+                                "You must enter the global password to save this category.");
                             return;
                         }
                     }
                     else
                     {
-                        await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
-                            "Password Required",
-                            "You must enter the global password to save this category.");
+                        // User cancelled
                         return;
                     }
                 }
-                else
-                {
-                    // User cancelled
-                    return;
-                }
             }
-        }
 
-        var updatedCategory = new CategoryItem
-        {
-            Name = result.Name,
-            Description = result.Description,
-            Icon = result.Icon,
-            CreatedDate = category.CreatedDate,
-            ModifiedDate = DateTime.Now,
-            PasswordProtection = result.PasswordProtection,
-            OwnPasswordHash = result.OwnPassword != null 
-                ? PasswordUtilities.HashPassword(result.OwnPassword) 
-                : category.OwnPasswordHash
-        };
+            var updatedCategory = new CategoryItem
+            {
+                Name = result.Name,
+                Description = result.Description,
+                Icon = result.Icon,
+                CreatedDate = category.CreatedDate,
+                ModifiedDate = DateTime.Now,
+                PasswordProtection = result.PasswordProtection,
+                OwnPasswordHash = result.OwnPassword != null
+                    ? PasswordUtilities.HashPassword(result.OwnPassword)
+                    : category.OwnPasswordHash
+            };
 
-        var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
+            var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
 
-        if (_lastUsedCategory == node)
-        {
-            _lastUsedCategory = newNode;
-        }
+            if (_lastUsedCategory == node)
+            {
+                _lastUsedCategory = newNode;
+            }
 
-        var rootNode = GetRootCategoryNode(newNode);
-        await _categoryService!.SaveCategoryAsync(rootNode);
-        StatusText.Text = $"Updated category: {result.Name}";
+            var rootNode = GetRootCategoryNode(newNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+            StatusText.Text = $"Updated category: {result.Name}";
 
-        if (LinksTreeView.SelectedNode == newNode)
-        {
-            _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
-            _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
-            HeaderViewerScroll.Visibility = Visibility.Visible;
+            if (LinksTreeView.SelectedNode == newNode)
+            {
+                _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
+                _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
+                HeaderViewerScroll.Visibility = Visibility.Visible;
+            }
         }
     }
 
