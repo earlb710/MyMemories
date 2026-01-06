@@ -29,6 +29,22 @@ public sealed partial class MainWindow
 
         if (result != null)
         {
+            // Cache passwords before saving
+            if (result.PasswordProtection == PasswordProtectionType.OwnPassword && result.OwnPassword != null)
+            {
+                _categoryService!.CacheCategoryPassword(result.Name, result.OwnPassword);
+            }
+            else if (result.PasswordProtection == PasswordProtectionType.GlobalPassword)
+            {
+                // Global password should already be cached from startup or Security Setup
+                // If not cached yet, prompt for it now
+                if (_configService != null && _configService.HasGlobalPassword())
+                {
+                    // Try to use it - if it fails, it will throw an error with helpful message
+                    // The error will be caught and displayed to the user
+                }
+            }
+            
             var categoryNode = new TreeViewNode
             {
                 Content = new CategoryItem
@@ -111,6 +127,11 @@ public sealed partial class MainWindow
     {
         string oldCategoryName = category.Name;
 
+        // Check if node is a root category by checking if it's in RootNodes collection
+        bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
+        
+        System.Diagnostics.Debug.WriteLine($"EditCategoryAsync: category='{category.Name}', node.Parent={node.Parent}, node in RootNodes={isRootCategory}");
+
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
@@ -122,47 +143,125 @@ public sealed partial class MainWindow
             currentName: category.Name,
             currentDescription: category.Description,
             currentIcon: category.Icon,
-            isRootCategory: node.Parent == null,
+            isRootCategory: isRootCategory,
             currentPasswordProtection: category.PasswordProtection,
             currentPasswordHash: category.OwnPasswordHash);
 
         if (result != null)
         {
-            if (node.Parent == null && oldCategoryName != result.Name)
+            if (isRootCategory && oldCategoryName != result.Name)
             {
                 await _categoryService!.DeleteCategoryAsync(oldCategoryName);
             }
 
-            var updatedCategory = new CategoryItem
+            // Cache passwords before saving
+            if (result.PasswordProtection == PasswordProtectionType.OwnPassword && result.OwnPassword != null)
             {
-                Name = result.Name,
-                Description = result.Description,
-                Icon = result.Icon,
-                CreatedDate = category.CreatedDate,
-                ModifiedDate = DateTime.Now,
-                PasswordProtection = result.PasswordProtection,
-                OwnPasswordHash = result.OwnPassword != null 
-                    ? PasswordUtilities.HashPassword(result.OwnPassword) 
-                    : category.OwnPasswordHash // Keep existing password if not changed
-            };
-
-            var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
-
-            if (_lastUsedCategory == node)
-            {
-                _lastUsedCategory = newNode;
+                _categoryService!.CacheCategoryPassword(result.Name, result.OwnPassword);
             }
-
-            var rootNode = GetRootCategoryNode(newNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-            StatusText.Text = $"Updated category: {result.Name}";
-
-            if (LinksTreeView.SelectedNode == newNode)
+            else if (result.PasswordProtection == PasswordProtectionType.GlobalPassword)
             {
-                _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
-                _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
-                HeaderViewerScroll.Visibility = Visibility.Visible;
+                // Check if global password is already cached
+                // We need to verify by attempting to use it, or prompt for it
+                if (_configService != null && _configService.HasGlobalPassword())
+                {
+                    // Prompt user for global password to cache it
+                    var globalPasswordDialog = new ContentDialog
+                    {
+                        Title = "Global Password Required",
+                        Content = new StackPanel
+                        {
+                            Spacing = 8,
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    Text = "This category uses the global password. Please enter it to continue:",
+                                    TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap
+                            },
+                            new PasswordBox
+                            {
+                                Name = "GlobalPasswordInput",
+                                PlaceholderText = "Enter global password"
+                            }
+                        }
+                    },
+                    PrimaryButtonText = "OK",
+                    CloseButtonText = "Cancel",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = Content.XamlRoot
+                };
+
+                var dialogResult = await globalPasswordDialog.ShowAsync();
+                
+                if (dialogResult == ContentDialogResult.Primary)
+                {
+                    var passwordBox = (globalPasswordDialog.Content as StackPanel)
+                        ?.Children.OfType<PasswordBox>()
+                        .FirstOrDefault();
+                    
+                    if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
+                    {
+                        // Verify the password is correct
+                        var enteredPasswordHash = PasswordUtilities.HashPassword(passwordBox.Password);
+                        if (enteredPasswordHash == _configService.GlobalPasswordHash)
+                        {
+                            // Cache the global password
+                            _categoryService!.CacheGlobalPassword(passwordBox.Password);
+                        }
+                        else
+                        {
+                            await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
+                                "Incorrect Password",
+                                "The global password you entered is incorrect.");
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
+                            "Password Required",
+                            "You must enter the global password to save this category.");
+                        return;
+                    }
+                }
+                else
+                {
+                    // User cancelled
+                    return;
+                }
             }
+        }
+
+        var updatedCategory = new CategoryItem
+        {
+            Name = result.Name,
+            Description = result.Description,
+            Icon = result.Icon,
+            CreatedDate = category.CreatedDate,
+            ModifiedDate = DateTime.Now,
+            PasswordProtection = result.PasswordProtection,
+            OwnPasswordHash = result.OwnPassword != null 
+                ? PasswordUtilities.HashPassword(result.OwnPassword) 
+                : category.OwnPasswordHash
+        };
+
+        var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
+
+        if (_lastUsedCategory == node)
+        {
+            _lastUsedCategory = newNode;
+        }
+
+        var rootNode = GetRootCategoryNode(newNode);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+        StatusText.Text = $"Updated category: {result.Name}";
+
+        if (LinksTreeView.SelectedNode == newNode)
+        {
+            _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
+            _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
+            HeaderViewerScroll.Visibility = Visibility.Visible;
         }
     }
 

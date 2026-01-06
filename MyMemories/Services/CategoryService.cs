@@ -19,6 +19,9 @@ public class CategoryService
     private readonly string _dataFolder;
     private readonly JsonSerializerOptions _jsonOptions;
     private ConfigurationService? _configService;
+    
+    // Cache for storing actual passwords (not hashes) for encryption/decryption
+    private readonly Dictionary<string, string> _passwordCache = new();
 
     public CategoryService(string dataFolder, ConfigurationService? configService = null)
     {
@@ -41,6 +44,32 @@ public class CategoryService
     public void SetConfigurationService(ConfigurationService configService)
     {
         _configService = configService;
+    }
+
+    /// <summary>
+    /// Caches the global password for encryption/decryption operations.
+    /// Must be called after user authenticates or sets a global password.
+    /// </summary>
+    public void CacheGlobalPassword(string password)
+    {
+        _passwordCache["__GLOBAL__"] = password;
+    }
+
+    /// <summary>
+    /// Caches a category's own password for encryption/decryption operations.
+    /// Must be called when user sets or enters a category password.
+    /// </summary>
+    public void CacheCategoryPassword(string categoryName, string password)
+    {
+        _passwordCache[categoryName] = password;
+    }
+
+    /// <summary>
+    /// Clears all cached passwords (call on app exit or logout).
+    /// </summary>
+    public void ClearPasswordCache()
+    {
+        _passwordCache.Clear();
     }
 
     /// <summary>
@@ -167,25 +196,16 @@ public class CategoryService
     /// </summary>
     private string? GetCategoryPassword(string categoryName)
     {
-        if (_configService == null)
-            return null;
-
-        var categoryPath = categoryName; // For root categories, name = path
-
-        // Check if category has its own password
-        if (_configService.CategoryPasswords.TryGetValue(categoryPath, out var passwordHash))
+        // First try category-specific password
+        if (_passwordCache.TryGetValue(categoryName, out var categoryPassword))
         {
-            // For decryption, we need the actual password, not the hash
-            // This is a limitation - we'll need to store the password temporarily
-            // or use a different approach
-            return null; // TODO: Handle this better
+            return categoryPassword;
         }
 
-        // Check if category uses global password
-        if (_configService.HasGlobalPassword())
+        // Then try global password
+        if (_passwordCache.TryGetValue("__GLOBAL__", out var globalPassword))
         {
-            // Same issue - we have the hash but need the password
-            return null; // TODO: Handle this better
+            return globalPassword;
         }
 
         return null;
@@ -286,16 +306,24 @@ public class CategoryService
     {
         if (category.PasswordProtection == PasswordProtectionType.OwnPassword)
         {
-            // Use the category's own password
-            // Note: This requires storing the actual password, not just the hash
-            // For now, return null and handle this case
-            return category.OwnPasswordHash; // This is actually the password, not hash
+            // Use the category's own password from cache
+            if (_passwordCache.TryGetValue(category.Name, out var ownPassword))
+            {
+                return ownPassword;
+            }
+            
+            // Fallback: if OwnPasswordHash is actually the password (legacy behavior)
+            return category.OwnPasswordHash;
         }
         else if (category.PasswordProtection == PasswordProtectionType.GlobalPassword)
         {
-            // Use global password
-            // Same issue - we need the actual password
-            return null; // TODO: Implement password caching
+            // Use cached global password
+            if (_passwordCache.TryGetValue("__GLOBAL__", out var globalPassword))
+            {
+                return globalPassword;
+            }
+            
+            return null;
         }
 
         return null;

@@ -200,10 +200,14 @@ public class CategoryDialogBuilder
 
         if (isRootCategory)
         {
+            // Debug output
+            System.Diagnostics.Debug.WriteLine($"BuildCategoryDialogUI: isRootCategory={isRootCategory}, creating password controls");
+            
             passwordProtectionComboBox = new ComboBox
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 12),
+                MinWidth = 200
             };
 
             passwordProtectionComboBox.Items.Add(new ComboBoxItem 
@@ -279,6 +283,10 @@ public class CategoryDialogBuilder
                 if (confirmPasswordBox != null) confirmPasswordBox.Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed;
             };
         }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"BuildCategoryDialogUI: isRootCategory={isRootCategory}, NOT creating password controls");
+        }
 
         var stackPanel = new StackPanel();
         
@@ -292,30 +300,41 @@ public class CategoryDialogBuilder
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryDescriptionTextBox);
 
-        // Password Protection (only for root categories) - MOVED BEFORE ICON PICKER
+        // Password Protection (only for root categories) - BEFORE ICON PICKER
         if (isRootCategory && passwordProtectionComboBox != null)
         {
-            stackPanel.Children.Add(DialogHelpers.CreateLabel("Password Protection:", 
-                new Thickness(0, 8, 0, 4)));
+            System.Diagnostics.Debug.WriteLine("Adding password controls to stackPanel");
+            
+            var passwordSectionLabel = DialogHelpers.CreateLabel("Password Protection:", 
+                new Thickness(0, 16, 0, 4));
+            stackPanel.Children.Add(passwordSectionLabel);
             stackPanel.Children.Add(passwordProtectionComboBox);
 
             if (passwordLabel != null) stackPanel.Children.Add(passwordLabel);
             if (ownPasswordBox != null) stackPanel.Children.Add(ownPasswordBox);
             if (confirmPasswordLabel != null) stackPanel.Children.Add(confirmPasswordLabel);
             if (confirmPasswordBox != null) stackPanel.Children.Add(confirmPasswordBox);
+            
+            System.Diagnostics.Debug.WriteLine($"Password controls added. StackPanel child count: {stackPanel.Children.Count}");
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"NOT adding password controls. isRootCategory={isRootCategory}, comboBox null={passwordProtectionComboBox == null}");
         }
         
-        // Icon Picker - MOVED TO THE END
+        // Icon Picker - AT THE END
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Icon:", 
-            new Thickness(0, 8, 0, 4)));
+            new Thickness(0, 16, 0, 4)));
         
         var iconScrollViewer = new ScrollViewer
         {
-            MaxHeight = 200,  // Reduced from 300 to 200
+            MaxHeight = 180,
             Margin = new Thickness(0, 0, 0, 8)
         };
         iconScrollViewer.Content = iconGridView;
         stackPanel.Children.Add(iconScrollViewer);
+        
+        System.Diagnostics.Debug.WriteLine($"Final stackPanel child count: {stackPanel.Children.Count}");
 
         var controls = new CategoryDialogControls
         {
@@ -334,7 +353,6 @@ public class CategoryDialogBuilder
     {
         var iconGridView = new GridView
         {
-            MaxHeight = 300,
             SelectionMode = ListViewSelectionMode.Single,
             Margin = new Thickness(0, 0, 0, 8)
         };

@@ -707,13 +707,19 @@ public sealed partial class MainWindow
         if (result == ContentDialogResult.Primary && _configService != null)
         {
             bool globalPasswordChanged = false;
+            string? newGlobalPassword = null;
             
             // Save global password
             if (!string.IsNullOrEmpty(newGlobalPasswordBox.Password))
             {
                 if (newGlobalPasswordBox.Password == confirmGlobalPasswordBox.Password)
                 {
-                    _configService.GlobalPasswordHash = PasswordUtilities.HashPassword(newGlobalPasswordBox.Password);
+                    newGlobalPassword = newGlobalPasswordBox.Password; // Store the plain text password
+                    _configService.GlobalPasswordHash = PasswordUtilities.HashPassword(newGlobalPassword);
+                    
+                    // Cache the global password in CategoryService for encryption
+                    _categoryService?.CacheGlobalPassword(newGlobalPassword);
+                    
                     await _configService.SaveConfigurationAsync();
                     await _configService.LogErrorAsync("Global password set/changed");
                     globalPasswordChanged = true;
@@ -736,7 +742,12 @@ public sealed partial class MainWindow
                         var categoryPath = (string)passwordBox.Tag;
                         var categoryName = rootCategories.First(c => c.Path == categoryPath).Category.Name;
                         
-                        _configService.SetCategoryPassword(categoryPath, PasswordUtilities.HashPassword(passwordBox.Password));
+                        var plainPassword = passwordBox.Password;
+                        
+                        // Cache the category password in CategoryService for encryption
+                        _categoryService?.CacheCategoryPassword(categoryPath, plainPassword);
+                        
+                        _configService.SetCategoryPassword(categoryPath, PasswordUtilities.HashPassword(plainPassword));
                         await _configService.LogCategoryChangeAsync(categoryName, "Password set/changed");
                     }
                 }
