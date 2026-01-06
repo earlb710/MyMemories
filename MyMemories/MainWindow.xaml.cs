@@ -1,13 +1,15 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
+using MyMemories.Utilities; // Add this line
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq; // Add this line
 using System.Threading.Tasks;
 using WinRT.Interop;
 using Microsoft.UI.Windowing;
-using Microsoft.UI; // Add this for Win32Interop
+using Microsoft.UI;
 
 namespace MyMemories;
 
@@ -81,19 +83,24 @@ public sealed partial class MainWindow : Window
             // Initialize WebView2
             await WebViewer.EnsureCoreWebView2Async();
 
-            // Initialize configuration service
+            // Initialize configuration service FIRST
             _configService = new ConfigurationService();
             await _configService.LoadConfigurationAsync();
 
-            // Initialize services
-            _categoryService = new CategoryService(_dataFolder);
+            // Initialize CategoryService WITH ConfigurationService
+            _categoryService = new CategoryService(_dataFolder, _configService);
+            
+            // Initialize other services
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
             _detailsViewService = new DetailsViewService(DetailsPanel);
             _detailsViewService.SetHeaderPanel(HeaderPanel);
             _treeViewService = new TreeViewService(LinksTreeView, this);
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
 
-            // Load categories
+            // Check if any categories use global password and prompt BEFORE loading
+            await PromptForGlobalPasswordIfNeededAsync();
+
+            // NOW load categories (password is cached if needed)
             await LoadAllCategoriesAsync();
 
             StatusText.Text = "Ready";
@@ -101,6 +108,114 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = $"Initialization error: {ex.Message}";
+            
+            // Log the error if logging is enabled
+            if (_configService?.IsLoggingEnabled() ?? false)
+            {
+                await _configService.LogErrorAsync("Initialization failed", ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if any encrypted category files exist and prompts for the global password.
+    /// </summary>
+    private async Task PromptForGlobalPasswordIfNeededAsync()
+    {
+        if (_configService == null || !_configService.HasGlobalPassword())
+            return;
+
+        // Check if any .zip.json files exist (encrypted categories)
+        var encryptedFiles = Directory.GetFiles(_dataFolder, "*.zip.json");
+        if (encryptedFiles.Length == 0)
+            return;
+
+        // Prompt for global password
+        var passwordDialog = new ContentDialog
+        {
+            Title = "Global Password Required",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "One or more categories are protected with the global password. Please enter it:",
+                        TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 8)
+                    },
+                    new PasswordBox
+                    {
+                        Name = "GlobalPasswordInput",
+                        PlaceholderText = "Enter global password"
+                    }
+                }
+            },
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        while (true)
+        {
+            var result = await passwordDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                var passwordBox = (passwordDialog.Content as StackPanel)
+                    ?.Children.OfType<PasswordBox>()
+                    .FirstOrDefault();
+
+                if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
+                {
+                    // Verify the password
+                    var enteredPasswordHash = MyMemories.Utilities.PasswordUtilities.HashPassword(passwordBox.Password);
+                    if (enteredPasswordHash == _configService.GlobalPasswordHash)
+                    {
+                        // Cache the global password
+                        _categoryService!.CacheGlobalPassword(passwordBox.Password);
+                        StatusText.Text = "Global password verified";
+                        return;
+                    }
+                    else
+                    {
+                        // Wrong password - show error and prompt again
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Incorrect Password",
+                            Content = "The global password you entered is incorrect. Please try again.",
+                            CloseButtonText = "OK",
+                            XamlRoot = Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                        
+                        // Reset password box for retry
+                        passwordBox.Password = string.Empty;
+                        continue;
+                    }
+                }
+                else
+                {
+                    // Empty password - show error and prompt again
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Password Required",
+                        Content = "You must enter the global password to access protected categories.",
+                        CloseButtonText = "OK",
+                        XamlRoot = Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                    continue;
+                }
+            }
+            else
+            {
+                // User cancelled - app will continue but encrypted categories won't load
+                StatusText.Text = "Warning: Global password not provided - encrypted categories skipped";
+                return;
+            }
         }
     }
 

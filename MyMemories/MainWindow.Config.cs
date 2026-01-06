@@ -715,6 +715,47 @@ public sealed partial class MainWindow
                 if (newGlobalPasswordBox.Password == confirmGlobalPasswordBox.Password)
                 {
                     newGlobalPassword = newGlobalPasswordBox.Password; // Store the plain text password
+                    
+                    // Check if global password is being changed (not just set for the first time)
+                    bool isPasswordChange = hasGlobalPassword;
+                    
+                    // Count categories using global password
+                    int globalPasswordCategoryCount = 0;
+                    if (isPasswordChange)
+                    {
+                        foreach (var rootNode in LinksTreeView.RootNodes)
+                        {
+                            if (rootNode.Content is CategoryItem cat && 
+                                cat.PasswordProtection == PasswordProtectionType.GlobalPassword)
+                            {
+                                globalPasswordCategoryCount++;
+                            }
+                        }
+                    }
+                    
+                    // If changing password and categories exist, warn and confirm
+                    if (isPasswordChange && globalPasswordCategoryCount > 0)
+                    {
+                        var confirmReEncryptDialog = new ContentDialog
+                        {
+                            Title = "Re-encrypt Categories?",
+                            Content = $"Changing the global password will re-encrypt {globalPasswordCategoryCount} " +
+                                     $"categor{(globalPasswordCategoryCount == 1 ? "y" : "ies")} that use the global password.\n\n" +
+                                     "All categories will be saved with the new password encryption.\n\n" +
+                                     "Do you want to continue?",
+                            PrimaryButtonText = "Yes, Re-encrypt",
+                            CloseButtonText = "Cancel",
+                            DefaultButton = ContentDialogButton.Close,
+                            XamlRoot = Content.XamlRoot
+                        };
+                        
+                        if (await confirmReEncryptDialog.ShowAsync() != ContentDialogResult.Primary)
+                        {
+                            // User cancelled the password change
+                            return;
+                        }
+                    }
+                    
                     _configService.GlobalPasswordHash = PasswordUtilities.HashPassword(newGlobalPassword);
                     
                     // Cache the global password in CategoryService for encryption
@@ -723,6 +764,52 @@ public sealed partial class MainWindow
                     await _configService.SaveConfigurationAsync();
                     await _configService.LogErrorAsync("Global password set/changed");
                     globalPasswordChanged = true;
+                    
+                    // Re-save all categories that use global password
+                    if (isPasswordChange && globalPasswordCategoryCount > 0)
+                    {
+                        StatusText.Text = "Re-encrypting categories with new password...";
+                        
+                        int successCount = 0;
+                        int errorCount = 0;
+                        
+                        foreach (var rootNode in LinksTreeView.RootNodes)
+                        {
+                            if (rootNode.Content is CategoryItem cat && 
+                                cat.PasswordProtection == PasswordProtectionType.GlobalPassword)
+                            {
+                                try
+                                {
+                                    await _categoryService!.SaveCategoryAsync(rootNode);
+                                    successCount++;
+                                }
+                                catch (Exception ex)
+                                {
+                                    errorCount++;
+                                    System.Diagnostics.Debug.WriteLine($"Error re-encrypting category {cat.Name}: {ex.Message}");
+                                    
+                                    if (_configService.IsLoggingEnabled())
+                                    {
+                                        await _configService.LogErrorAsync($"Failed to re-encrypt category {cat.Name}", ex);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (errorCount > 0)
+                        {
+                            var errorDialog = new ContentDialog
+                            {
+                                Title = "Re-encryption Completed with Errors",
+                                Content = $"Re-encrypted {successCount} categor{(successCount == 1 ? "y" : "ies")} successfully.\n\n" +
+                                         $"{errorCount} categor{(errorCount == 1 ? "y" : "ies")} failed to re-encrypt. " +
+                                         "Check the error log for details.",
+                                CloseButtonText = "OK",
+                                XamlRoot = Content.XamlRoot
+                            };
+                            await errorDialog.ShowAsync();
+                        }
+                    }
                 }
                 else
                 {

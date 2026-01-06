@@ -107,7 +107,8 @@ public class CategoryService
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Error loading {Path.GetFileName(jsonFile)}: {ex.Message}", ex);
+                // Log but continue with other categories
+                System.Diagnostics.Debug.WriteLine($"Error loading {Path.GetFileName(jsonFile)}: {ex.Message}");
             }
         }
 
@@ -130,7 +131,9 @@ public class CategoryService
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Error loading encrypted {Path.GetFileName(encryptedFile)}: {ex.Message}", ex);
+                // Log but continue with other categories
+                System.Diagnostics.Debug.WriteLine($"Error loading encrypted {Path.GetFileName(encryptedFile)}: {ex.Message}");
+                // Don't throw - just skip this encrypted category if password is wrong
             }
         }
 
@@ -149,45 +152,46 @@ public class CategoryService
         var password = GetCategoryPassword(fileName);
         if (password == null)
         {
-            throw new InvalidOperationException($"Cannot decrypt {fileName}: No password available. Please check security settings.");
+            System.Diagnostics.Debug.WriteLine($"Cannot decrypt {fileName}: No password available");
+            return null; // Return null instead of throwing - will be handled gracefully
         }
-
-        // Create a temporary directory for extraction
-        var tempDir = Path.Combine(Path.GetTempPath(), $"MyMemories_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
 
         try
         {
-            // Extract the zip file using SharpZipLib (supports password-protected zips)
-            using (var fileStream = File.OpenRead(encryptedFilePath))
-            using (var zipInputStream = new ICSharpCode.SharpZipLib.Zip.ZipInputStream(fileStream))
+            System.Diagnostics.Debug.WriteLine($"Attempting to decrypt {fileName}...");
+            
+            // Use ZipFile.OpenRead instead of ZipInputStream for better AES support
+            using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(encryptedFilePath);
+            zipFile.Password = password; // Set password for the archive
+            
+            if (zipFile.Count == 0)
             {
-                zipInputStream.Password = password;
-
-                var entry = zipInputStream.GetNextEntry();
-                if (entry == null)
-                {
-                    throw new InvalidOperationException($"No entries found in encrypted file: {encryptedFilePath}");
-                }
-
-                // Read the JSON content
-                using var memoryStream = new MemoryStream();
-                await zipInputStream.CopyToAsync(memoryStream);
-                var jsonBytes = memoryStream.ToArray();
-                return Encoding.UTF8.GetString(jsonBytes);
+                throw new InvalidOperationException($"No entries found in encrypted file: {encryptedFilePath}");
             }
+
+            // Get the first entry
+            var entry = zipFile[0];
+            
+            // Read the JSON content
+            using var entryStream = zipFile.GetInputStream(entry);
+            using var memoryStream = new MemoryStream();
+            await entryStream.CopyToAsync(memoryStream);
+            
+            var jsonBytes = memoryStream.ToArray();
+            var json = Encoding.UTF8.GetString(jsonBytes);
+            
+            System.Diagnostics.Debug.WriteLine($"Successfully decrypted {fileName}");
+            return json;
         }
-        finally
+        catch (ICSharpCode.SharpZipLib.Zip.ZipException ex)
         {
-            // Clean up temp directory
-            try
-            {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, true);
-                }
-            }
-            catch { }
+            System.Diagnostics.Debug.WriteLine($"ZipException decrypting {fileName}: {ex.Message}");
+            throw new InvalidOperationException($"Cannot decrypt {fileName}: {ex.Message}. Please verify the password is correct.", ex);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error decrypting {fileName}: {ex.Message}");
+            throw new InvalidOperationException($"Cannot decrypt {fileName}: {ex.Message}", ex);
         }
     }
 
@@ -306,14 +310,14 @@ public class CategoryService
     {
         if (category.PasswordProtection == PasswordProtectionType.OwnPassword)
         {
-            // Use the category's own password from cache
+            // Try to get the cached password first
             if (_passwordCache.TryGetValue(category.Name, out var ownPassword))
             {
                 return ownPassword;
             }
             
-            // Fallback: if OwnPasswordHash is actually the password (legacy behavior)
-            return category.OwnPasswordHash;
+            // If not in cache, we can't encrypt - this should never happen if passwords are cached properly
+            return null;
         }
         else if (category.PasswordProtection == PasswordProtectionType.GlobalPassword)
         {

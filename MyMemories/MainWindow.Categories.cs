@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Dialogs; // Add this line
 using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
