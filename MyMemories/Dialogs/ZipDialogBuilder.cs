@@ -1,10 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Services;
 using System;
 using System.IO;
 using System.Threading.Tasks;
-using Windows.Storage.Pickers;
-using WinRT.Interop;
 
 namespace MyMemories.Dialogs;
 
@@ -15,11 +14,13 @@ public class ZipDialogBuilder
 {
     private readonly Window _parentWindow;
     private readonly XamlRoot _xamlRoot;
+    private readonly FolderPickerService _folderPickerService;
 
     public ZipDialogBuilder(Window parentWindow, XamlRoot xamlRoot)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
+        _folderPickerService = new FolderPickerService(parentWindow);
     }
 
     public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory)
@@ -73,8 +74,8 @@ public class ZipDialogBuilder
             HorizontalAlignment = HorizontalAlignment.Left
         };
 
-        browseButton.Click += async (s, args) => 
-            await BrowseForTargetDirectory(targetDirectoryTextBox);
+        browseButton.Click += (s, args) => 
+            BrowseForTargetDirectory(targetDirectoryTextBox);
 
         var linkToCategoryCheckBox = new CheckBox
         {
@@ -104,22 +105,19 @@ public class ZipDialogBuilder
         return (stackPanel, zipFileNameTextBox, targetDirectoryTextBox);
     }
 
-    private async Task BrowseForTargetDirectory(TextBox targetDirectoryTextBox)
+    private void BrowseForTargetDirectory(TextBox targetDirectoryTextBox)
     {
-        try
+        var currentPath = targetDirectoryTextBox.Text.Trim();
+        var startingDirectory = !string.IsNullOrEmpty(currentPath) && Directory.Exists(currentPath) 
+            ? currentPath 
+            : null;
+
+        var selectedPath = _folderPickerService.BrowseForFolder(startingDirectory, "Select Target Directory");
+        
+        if (!string.IsNullOrEmpty(selectedPath))
         {
-            var folderPicker = new FolderPicker();
-            var hWnd = WindowNative.GetWindowHandle(_parentWindow);
-            InitializeWithWindow.Initialize(folderPicker, hWnd);
-            folderPicker.FileTypeFilter.Add("*");
-            
-            var folder = await folderPicker.PickSingleFolderAsync();
-            if (folder != null)
-            {
-                targetDirectoryTextBox.Text = folder.Path;
-            }
+            targetDirectoryTextBox.Text = selectedPath;
         }
-        catch { }
     }
 
     private async Task<ZipFolderResult?> CreateZipResult(

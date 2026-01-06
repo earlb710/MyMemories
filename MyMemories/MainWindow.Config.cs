@@ -7,80 +7,233 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Windows.Storage;
-using Windows.Storage.Pickers;
 using Windows.System;
-using WinRT.Interop;
 
 namespace MyMemories;
 
 public sealed partial class MainWindow
 {
-    // COM interface for IFileOpenDialog
-    [ComImport]
-    [Guid("42f85136-db7e-439c-85f1-e4075d135fc8")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IFileOpenDialog
+    private FolderPickerService? _folderPickerService;
+
+    /// <summary>
+    /// Validates configuration directories on startup and offers to create missing ones.
+    /// </summary>
+    /// <returns>True if validation passed or user fixed issues; False if critical errors remain.</returns>
+    private async Task<bool> ValidateConfigurationDirectoriesAsync()
     {
-        [PreserveSig] int Show(IntPtr parent);
-        void SetFileTypes(uint cFileTypes, IntPtr rgFilterSpec);
-        void SetFileTypeIndex(uint iFileType);
-        void GetFileTypeIndex(out uint piFileType);
-        void Advise(IntPtr pfde, out uint pdwCookie);
-        void Unadvise(uint dwCookie);
-        void SetOptions(uint fos);
-        void GetOptions(out uint pfos);
-        void SetDefaultFolder(IShellItem psi);
-        void SetFolder(IShellItem psi);
-        void GetFolder(out IShellItem ppsi);
-        void GetCurrentSelection(out IShellItem ppsi);
-        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
-        void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
-        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
-        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
-        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
-        void GetResult(out IShellItem ppsi);
-        void AddPlace(IShellItem psi, int alignment);
-        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
-        void Close(int hr);
-        void SetClientGuid(ref Guid guid);
-        void ClearClientData();
-        void SetFilter(IntPtr pFilter);
+        if (_configService == null)
+            return false;
+
+        var issues = new List<(string Type, string Path, string Issue)>();
+        var workingDir = _configService.WorkingDirectory;
+        var logDir = _configService.LogDirectory;
+
+        // Validate working directory
+        var workingValidation = PathValidationUtilities.ValidateDirectoryPath(workingDir, allowEmpty: false);
+        if (!workingValidation.IsValid)
+        {
+            issues.Add(("Working Directory", workingDir, workingValidation.ErrorMessage ?? "Invalid path"));
+        }
+        else if (!Directory.Exists(workingDir))
+        {
+            issues.Add(("Working Directory", workingDir, "Directory does not exist"));
+        }
+
+        // Validate log directory if set
+        if (!string.IsNullOrEmpty(logDir))
+        {
+            var logValidation = PathValidationUtilities.ValidateDirectoryPath(logDir, allowEmpty: true);
+            if (!logValidation.IsValid)
+            {
+                issues.Add(("Log Directory", logDir, logValidation.ErrorMessage ?? "Invalid path"));
+            }
+            else if (!Directory.Exists(logDir))
+            {
+                issues.Add(("Log Directory", logDir, "Directory does not exist"));
+            }
+        }
+
+        // Check for write access if directories exist
+        if (Directory.Exists(workingDir))
+        {
+            if (!await TestDirectoryWriteAccessAsync(workingDir))
+            {
+                issues.Add(("Working Directory", workingDir, "No write access"));
+            }
+        }
+
+        if (!string.IsNullOrEmpty(logDir) && Directory.Exists(logDir))
+        {
+            if (!await TestDirectoryWriteAccessAsync(logDir))
+            {
+                issues.Add(("Log Directory", logDir, "No write access"));
+            }
+        }
+
+        // If no issues, return success
+        if (!issues.Any())
+            return true;
+
+        // Build issue message
+        var issueMessage = "Configuration validation found the following issues:\n\n";
+        var canAutoFix = true;
+
+        foreach (var issue in issues)
+        {
+            issueMessage += $"• {issue.Type}: {issue.Issue}\n  Path: {issue.Path}\n\n";
+            
+            // Can't auto-fix invalid paths or permission issues
+            if (issue.Issue.Contains("Invalid") || issue.Issue.Contains("write access"))
+            {
+                canAutoFix = false;
+            }
+        }
+
+        if (canAutoFix)
+        {
+            issueMessage += "Would you like to create the missing directories?";
+
+            var fixDialog = new ContentDialog
+            {
+                Title = "Configuration Issues Detected",
+                Content = new ScrollViewer
+                {
+                    Content = new TextBlock
+                    {
+                        Text = issueMessage,
+                        TextWrapping = TextWrapping.Wrap
+                    },
+                    MaxHeight = 400
+                },
+                PrimaryButtonText = "Create Directories",
+                SecondaryButtonText = "Open Settings",
+                CloseButtonText = "Continue Anyway",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await fixDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                // Try to create missing directories
+                var failedDirs = new List<string>();
+
+                foreach (var issue in issues.Where(i => i.Issue == "Directory does not exist"))
+                {
+                    if (!await PathValidationUtilities.EnsureDirectoryExistsAsync(issue.Path))
+                    {
+                        failedDirs.Add($"{issue.Type}: {issue.Path}");
+                    }
+                    else
+                    {
+                        StatusText.Text = $"Created {issue.Type.ToLower()}: {issue.Path}";
+                        
+                        // Log the directory creation
+                        if (_configService.IsLoggingEnabled())
+                        {
+                            await _configService.LogErrorAsync($"Created missing {issue.Type.ToLower()} during startup validation");
+                        }
+                    }
+                }
+
+                if (failedDirs.Any())
+                {
+                    await ShowErrorDialogAsync(
+                        "Failed to Create Directories",
+                        $"Could not create the following directories:\n\n{string.Join("\n", failedDirs)}\n\n" +
+                        "Please check permissions or manually create these directories."
+                    );
+                    return false;
+                }
+
+                return true; // Successfully created directories
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                // Open settings dialog
+                await ShowDirectorySetupDialogAsync();
+                
+                // Revalidate after settings change
+                return await ValidateConfigurationDirectoriesAsync();
+            }
+            else
+            {
+                // Continue anyway - log warning
+                StatusText.Text = "⚠️ Warning: Configuration issues detected but ignored";
+                
+                if (_configService.IsLoggingEnabled())
+                {
+                    await _configService.LogErrorAsync("Configuration validation issues ignored by user");
+                }
+                
+                return true; // Allow app to continue
+            }
+        }
+        else
+        {
+            // Can't auto-fix - show error and offer settings
+            issueMessage += "\nThese issues require manual correction.\n\n" +
+                           "Please update your configuration in Settings.";
+
+            var errorDialog = new ContentDialog
+            {
+                Title = "Configuration Errors",
+                Content = new ScrollViewer
+                {
+                    Content = new TextBlock
+                    {
+                        Text = issueMessage,
+                        TextWrapping = TextWrapping.Wrap
+                    },
+                    MaxHeight = 400
+                },
+                PrimaryButtonText = "Open Settings",
+                CloseButtonText = "Continue Anyway",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await errorDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                await ShowDirectorySetupDialogAsync();
+                
+                // Revalidate after settings change
+                return await ValidateConfigurationDirectoriesAsync();
+            }
+            else
+            {
+                StatusText.Text = "⚠️ Warning: Running with invalid configuration";
+                return true; // Allow app to continue (risky)
+            }
+        }
     }
 
-    [ComImport]
-    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellItem
+    /// <summary>
+    /// Tests if the application has write access to a directory.
+    /// </summary>
+    private async Task<bool> TestDirectoryWriteAccessAsync(string directoryPath)
     {
-        void BindToHandler(IntPtr pbc, [MarshalAs(UnmanagedType.LPStruct)] Guid bhid, [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IntPtr ppv);
-        void GetParent(out IShellItem ppsi);
-        void GetDisplayName(SIGDN sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
-        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
-        void Compare(IShellItem psi, uint hint, out int piOrder);
+        try
+        {
+            var testFile = Path.Combine(directoryPath, $".writetest_{Guid.NewGuid()}.tmp");
+            
+            await Task.Run(() =>
+            {
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+            });
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
-
-    private enum SIGDN : uint
-    {
-        FILESYSPATH = 0x80058000
-    }
-
-    [ComImport]
-    [Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
-    private class FileOpenDialog
-    {
-    }
-
-    private const uint FOS_PICKFOLDERS = 0x00000020;
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-    private static extern void SHCreateItemFromParsingName(
-        [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
-        IntPtr pbc,
-        [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
-        out IShellItem ppv);
 
     private async void MenuConfig_DirectorySetup_Click(object sender, RoutedEventArgs e)
     {
@@ -94,6 +247,9 @@ public sealed partial class MainWindow
 
     private async Task ShowDirectorySetupDialogAsync()
     {
+        // Initialize folder picker service if needed
+        _folderPickerService ??= new FolderPickerService(this);
+
         // Create UI for directory setup
         var stackPanel = new StackPanel { Spacing = 16 };
 
@@ -142,7 +298,7 @@ public sealed partial class MainWindow
 
         browseWorkingButton.Click += (s, args) =>
         {
-            var selectedPath = BrowseForFolder(workingDirTextBox.Text, "Select Working Directory");
+            var selectedPath = _folderPickerService?.BrowseForFolder(workingDirTextBox.Text, "Select Working Directory");
             if (!string.IsNullOrEmpty(selectedPath))
             {
                 workingDirTextBox.Text = selectedPath;
@@ -151,37 +307,7 @@ public sealed partial class MainWindow
 
         openWorkingInExplorerButton.Click += async (s, args) =>
         {
-            var path = workingDirTextBox.Text;
-            if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
-            {
-                try
-                {
-                    await Launcher.LaunchFolderPathAsync(path);
-                }
-                catch
-                {
-                    // Fallback to Process.Start
-                    try
-                    {
-                        Process.Start("explorer.exe", path);
-                    }
-                    catch
-                    {
-                        // Ignore if both fail
-                    }
-                }
-            }
-            else
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Directory Not Found",
-                    Content = "The specified directory does not exist.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-            }
+            await OpenDirectoryInExplorerAsync(workingDirTextBox.Text);
         };
 
         workingDirButtonPanel.Children.Add(browseWorkingButton);
@@ -241,7 +367,7 @@ public sealed partial class MainWindow
 
         browseLogButton.Click += (s, args) =>
         {
-            var selectedPath = BrowseForFolder(logDirTextBox.Text, "Select Log Directory");
+            var selectedPath = _folderPickerService?.BrowseForFolder(logDirTextBox.Text, "Select Log Directory");
             if (!string.IsNullOrEmpty(selectedPath))
             {
                 logDirTextBox.Text = selectedPath;
@@ -250,37 +376,7 @@ public sealed partial class MainWindow
 
         openLogInExplorerButton.Click += async (s, args) =>
         {
-            var path = logDirTextBox.Text;
-            if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
-            {
-                try
-                {
-                    await Launcher.LaunchFolderPathAsync(path);
-                }
-                catch
-                {
-                    // Fallback to Process.Start
-                    try
-                    {
-                        Process.Start("explorer.exe", path);
-                    }
-                    catch
-                    {
-                        // Ignore if both fail
-                    }
-                }
-            }
-            else if (!string.IsNullOrEmpty(path))
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Directory Not Found",
-                    Content = "The specified directory does not exist.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-            }
+            await OpenDirectoryInExplorerAsync(logDirTextBox.Text);
         };
 
         logDirButtonPanel.Children.Add(browseLogButton);
@@ -338,18 +434,80 @@ public sealed partial class MainWindow
             {
                 // Validate working directory
                 var workingDir = workingDirTextBox.Text.Trim();
-                if (string.IsNullOrEmpty(workingDir))
+                var workingValidation = PathValidationUtilities.ValidateDirectoryPath(workingDir, allowEmpty: false);
+                if (!workingValidation.IsValid)
                 {
-                    await ShowErrorDialogAsync("Invalid Directory", "Working directory cannot be empty.");
+                    await ShowErrorDialogAsync("Invalid Working Directory", workingValidation.ErrorMessage!);
                     return;
                 }
 
                 // Validate log directory if set
                 var logDir = logDirTextBox.Text.Trim();
-                if (!string.IsNullOrEmpty(logDir) && !Path.IsPathRooted(logDir))
+                var logValidation = PathValidationUtilities.ValidateDirectoryPath(logDir, allowEmpty: true);
+                if (!logValidation.IsValid)
                 {
-                    await ShowErrorDialogAsync("Invalid Directory", "Log directory must be a valid absolute path or empty.");
+                    await ShowErrorDialogAsync("Invalid Log Directory", logValidation.ErrorMessage!);
                     return;
+                }
+
+                // Check if directories need to be created
+                var directoriesToCreate = new List<(string Path, string Type)>();
+                
+                if (!Directory.Exists(workingDir))
+                {
+                    directoriesToCreate.Add((workingDir, "Working"));
+                }
+                
+                if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir))
+                {
+                    directoriesToCreate.Add((logDir, "Log"));
+                }
+
+                // Prompt to create missing directories
+                if (directoriesToCreate.Any())
+                {
+                    var createMessage = "The following directories do not exist:\n\n";
+                    foreach (var dir in directoriesToCreate)
+                    {
+                        createMessage += $"• {dir.Type}: {dir.Path}\n";
+                    }
+                    createMessage += "\nWould you like to create them?";
+
+                    var createDialog = new ContentDialog
+                    {
+                        Title = "Create Directories",
+                        Content = createMessage,
+                        PrimaryButtonText = "Create",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = Content.XamlRoot
+                    };
+
+                    if (await createDialog.ShowAsync() == ContentDialogResult.Primary)
+                    {
+                        var failedDirs = new List<string>();
+                        
+                        foreach (var dir in directoriesToCreate)
+                        {
+                            if (!await PathValidationUtilities.EnsureDirectoryExistsAsync(dir.Path))
+                            {
+                                failedDirs.Add($"{dir.Type}: {dir.Path}");
+                            }
+                        }
+
+                        if (failedDirs.Any())
+                        {
+                            await ShowErrorDialogAsync(
+                                "Failed to Create Directories",
+                                $"Could not create the following directories:\n\n{string.Join("\n", failedDirs)}"
+                            );
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        return; // User cancelled directory creation
+                    }
                 }
 
                 var oldWorkingDir = _configService.WorkingDirectory;
@@ -383,62 +541,6 @@ public sealed partial class MainWindow
                     StatusText.Text = "Directory settings saved successfully";
                 }
             }
-        }
-    }
-
-    /// <summary>
-    /// Opens a modern Windows folder browser dialog starting at the specified directory.
-    /// </summary>
-    private string? BrowseForFolder(string? startingDirectory, string title)
-    {
-        try
-        {
-            var dialog = new FileOpenDialog() as IFileOpenDialog;
-            if (dialog == null)
-                return null;
-
-            try
-            {
-                // Set options for folder picker
-                dialog.SetOptions(FOS_PICKFOLDERS);
-                dialog.SetTitle(title);
-
-                // Set starting directory if provided and valid
-                if (!string.IsNullOrEmpty(startingDirectory) && Directory.Exists(startingDirectory))
-                {
-                    try
-                    {
-                        var guid = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"); // IShellItem
-                        SHCreateItemFromParsingName(startingDirectory, IntPtr.Zero, guid, out IShellItem item);
-                        dialog.SetFolder(item);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Could not set starting directory: {ex.Message}");
-                    }
-                }
-
-                var hWnd = WindowNative.GetWindowHandle(this);
-                var hr = dialog.Show(hWnd);
-
-                if (hr == 0) // S_OK
-                {
-                    dialog.GetResult(out IShellItem result);
-                    result.GetDisplayName(SIGDN.FILESYSPATH, out string path);
-                    return path;
-                }
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(dialog);
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Error in BrowseForFolder: {ex.Message}");
-            return null;
         }
     }
 
@@ -872,5 +974,39 @@ public sealed partial class MainWindow
             XamlRoot = Content.XamlRoot
         };
         await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// Opens a directory in Windows Explorer with proper error handling.
+    /// </summary>
+    private async Task OpenDirectoryInExplorerAsync(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            await ShowErrorDialogAsync("No Directory", "No directory path specified.");
+            return;
+        }
+
+        if (!Directory.Exists(path))
+        {
+            await ShowErrorDialogAsync("Directory Not Found", "The specified directory does not exist.");
+            return;
+        }
+
+        try
+        {
+            await Launcher.LaunchFolderPathAsync(path);
+        }
+        catch
+        {
+            try
+            {
+                Process.Start("explorer.exe", path);
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Error Opening Explorer", $"Failed to open directory: {ex.Message}");
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -19,11 +20,13 @@ public class LinkDialogBuilder
 {
     private readonly Window _parentWindow;
     private readonly XamlRoot _xamlRoot;
+    private readonly FolderPickerService _folderPickerService;
 
     public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
+        _folderPickerService = new FolderPickerService(parentWindow);
     }
 
     /// <summary>
@@ -367,8 +370,8 @@ public class LinkDialogBuilder
         controls.BrowseFileButton!.Click += async (s, args) => 
             await BrowseForFileAsync(controls.UrlTextBox, controls.TitleTextBox);
         
-        controls.BrowseFolderButton!.Click += async (s, args) => 
-            await BrowseForFolderAsync(controls.UrlTextBox, controls.TitleTextBox, CheckDirectoryAndUpdateUI);
+        controls.BrowseFolderButton!.Click += (s, args) => 
+            BrowseForFolder(controls.UrlTextBox, controls.TitleTextBox, CheckDirectoryAndUpdateUI);
     }
 
     private void SetupEditLinkEventHandlers(LinkDialogControls controls)
@@ -426,30 +429,27 @@ public class LinkDialogBuilder
         catch { }
     }
 
-    private async Task BrowseForFolderAsync(
+    private void BrowseForFolder(
         TextBox urlTextBox, 
         TextBox titleTextBox, 
         Action onFolderSelected)
     {
-        try
+        var currentPath = urlTextBox.Text.Trim();
+        var startingDirectory = !string.IsNullOrEmpty(currentPath) && Directory.Exists(currentPath) 
+            ? currentPath 
+            : null;
+
+        var selectedPath = _folderPickerService.BrowseForFolder(startingDirectory, "Select Folder");
+        
+        if (!string.IsNullOrEmpty(selectedPath))
         {
-            var folderPicker = new FolderPicker();
-            var hWnd = WindowNative.GetWindowHandle(_parentWindow);
-            InitializeWithWindow.Initialize(folderPicker, hWnd);
-            folderPicker.FileTypeFilter.Add("*");
-            
-            StorageFolder? folder = await folderPicker.PickSingleFolderAsync();
-            if (folder != null)
+            urlTextBox.Text = selectedPath;
+            if (string.IsNullOrWhiteSpace(titleTextBox.Text))
             {
-                urlTextBox.Text = folder.Path;
-                if (string.IsNullOrWhiteSpace(titleTextBox.Text))
-                {
-                    titleTextBox.Text = folder.Name;
-                }
-                onFolderSelected();
+                titleTextBox.Text = Path.GetFileName(selectedPath);
             }
+            onFolderSelected();
         }
-        catch { }
     }
 
     private AddLinkResult? CreateAddLinkResult(LinkDialogControls controls)

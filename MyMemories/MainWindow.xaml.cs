@@ -87,8 +87,16 @@ public sealed partial class MainWindow : Window
             _configService = new ConfigurationService();
             await _configService.LoadConfigurationAsync();
 
+            // Validate configuration directories BEFORE initializing services
+            var validationPassed = await ValidateConfigurationDirectoriesAsync();
+            if (!validationPassed)
+            {
+                StatusText.Text = "⚠️ Warning: Configuration validation failed";
+                // Continue anyway - user chose to proceed
+            }
+
             // Initialize CategoryService WITH ConfigurationService
-            _categoryService = new CategoryService(_dataFolder, _configService);
+            _categoryService = new CategoryService(_configService.WorkingDirectory, _configService);
             
             // Initialize other services
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
@@ -125,8 +133,12 @@ public sealed partial class MainWindow : Window
         if (_configService == null || !_configService.HasGlobalPassword())
             return;
 
+        var workingDir = _configService.WorkingDirectory;
+        if (!Directory.Exists(workingDir))
+            return;
+
         // Check if any .zip.json files exist (encrypted categories)
-        var encryptedFiles = Directory.GetFiles(_dataFolder, "*.zip.json");
+        var encryptedFiles = Directory.GetFiles(workingDir, "*.zip.json");
         if (encryptedFiles.Length == 0)
             return;
 
