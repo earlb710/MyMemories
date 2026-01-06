@@ -292,7 +292,7 @@ public class CategoryDialogBuilder
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryDescriptionTextBox);
 
-        // Password Protection (only for root categories)
+        // Password Protection (only for root categories) - MOVED BEFORE ICON PICKER
         if (isRootCategory && passwordProtectionComboBox != null)
         {
             stackPanel.Children.Add(DialogHelpers.CreateLabel("Password Protection:", 
@@ -305,13 +305,13 @@ public class CategoryDialogBuilder
             if (confirmPasswordBox != null) stackPanel.Children.Add(confirmPasswordBox);
         }
         
-        // Icon Picker
+        // Icon Picker - MOVED TO THE END
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Icon:", 
             new Thickness(0, 8, 0, 4)));
         
         var iconScrollViewer = new ScrollViewer
         {
-            MaxHeight = 300,
+            MaxHeight = 200,  // Reduced from 300 to 200
             Margin = new Thickness(0, 0, 0, 8)
         };
         iconScrollViewer.Content = iconGridView;

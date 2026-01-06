@@ -706,13 +706,17 @@ public sealed partial class MainWindow
 
         if (result == ContentDialogResult.Primary && _configService != null)
         {
+            bool globalPasswordChanged = false;
+            
             // Save global password
             if (!string.IsNullOrEmpty(newGlobalPasswordBox.Password))
             {
                 if (newGlobalPasswordBox.Password == confirmGlobalPasswordBox.Password)
                 {
                     _configService.GlobalPasswordHash = PasswordUtilities.HashPassword(newGlobalPasswordBox.Password);
+                    await _configService.SaveConfigurationAsync();
                     await _configService.LogErrorAsync("Global password set/changed");
+                    globalPasswordChanged = true;
                 }
                 else
                 {
@@ -739,6 +743,14 @@ public sealed partial class MainWindow
             }
 
             await _configService.SaveConfigurationAsync();
+            
+            // Reload the _linkDialog if global password was changed
+            // This ensures CategoryDialogBuilder has the updated ConfigurationService
+            if (globalPasswordChanged && _linkDialog != null)
+            {
+                _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            }
+            
             StatusText.Text = "Security settings saved successfully";
         }
     }

@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,7 +12,20 @@ public sealed partial class MainWindow
 {
     private async void CreateCategoryButton_Click(object sender, RoutedEventArgs e)
     {
-        var result = await _linkDialog!.ShowCategoryDialogAsync("Create New Category");
+        // Ensure _linkDialog has the latest _configService reference
+        if (_linkDialog != null && _configService != null)
+        {
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+        }
+        
+        var result = await _linkDialog!.ShowCategoryDialogAsync(
+            title: "Create New Category",
+            currentName: null,
+            currentDescription: null,
+            currentIcon: null,
+            isRootCategory: true,
+            currentPasswordProtection: PasswordProtectionType.None,
+            currentPasswordHash: null);
 
         if (result != null)
         {
@@ -23,7 +37,11 @@ public sealed partial class MainWindow
                     Description = result.Description,
                     Icon = result.Icon,
                     CreatedDate = DateTime.Now,
-                    ModifiedDate = DateTime.Now
+                    ModifiedDate = DateTime.Now,
+                    PasswordProtection = result.PasswordProtection,
+                    OwnPasswordHash = result.OwnPassword != null 
+                        ? PasswordUtilities.HashPassword(result.OwnPassword) 
+                        : null
                 }
             };
 
@@ -37,7 +55,19 @@ public sealed partial class MainWindow
     private async Task CreateSubCategoryAsync(TreeViewNode parentNode)
     {
         var parentCategoryPath = _treeViewService!.GetCategoryPath(parentNode);
-        var result = await _linkDialog!.ShowCategoryDialogAsync($"Create Sub Category under '{parentCategoryPath}'");
+        
+        // Ensure _linkDialog has the latest _configService reference
+        if (_linkDialog != null && _configService != null)
+        {
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+        }
+        
+        var result = await _linkDialog!.ShowCategoryDialogAsync(
+            title: $"Create Sub Category under '{parentCategoryPath}'",
+            currentName: null,
+            currentDescription: null,
+            currentIcon: null,
+            isRootCategory: false);
 
         if (result != null)
         {
@@ -81,11 +111,20 @@ public sealed partial class MainWindow
     {
         string oldCategoryName = category.Name;
 
+        // Ensure _linkDialog has the latest _configService reference
+        if (_linkDialog != null && _configService != null)
+        {
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+        }
+
         var result = await _linkDialog!.ShowCategoryDialogAsync(
-            "Edit Category",
-            category.Name,
-            category.Description,
-            category.Icon);
+            title: "Edit Category",
+            currentName: category.Name,
+            currentDescription: category.Description,
+            currentIcon: category.Icon,
+            isRootCategory: node.Parent == null,
+            currentPasswordProtection: category.PasswordProtection,
+            currentPasswordHash: category.OwnPasswordHash);
 
         if (result != null)
         {
@@ -100,7 +139,11 @@ public sealed partial class MainWindow
                 Description = result.Description,
                 Icon = result.Icon,
                 CreatedDate = category.CreatedDate,
-                ModifiedDate = DateTime.Now
+                ModifiedDate = DateTime.Now,
+                PasswordProtection = result.PasswordProtection,
+                OwnPasswordHash = result.OwnPassword != null 
+                    ? PasswordUtilities.HashPassword(result.OwnPassword) 
+                    : category.OwnPasswordHash // Keep existing password if not changed
             };
 
             var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
