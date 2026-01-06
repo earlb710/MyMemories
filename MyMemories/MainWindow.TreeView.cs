@@ -173,7 +173,10 @@ public sealed partial class MainWindow
             }
 
             DetailsViewerScroll.Visibility = Visibility.Visible;
-            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+            
+            // Show link badge for Link Only folders
+            bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
+            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
             HeaderViewerScroll.Visibility = Visibility.Visible;
             StatusText.Text = "No URL specified for this link";
             return;
@@ -190,7 +193,9 @@ public sealed partial class MainWindow
                     var result = await _fileViewerService!.LoadZipEntryAsync(linkItem.Url);
                     ShowViewer(result.ViewerType);
                     
-                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                    // Show link badge for Link Only folders
+                    bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
+                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
                     HeaderViewerScroll.Visibility = Visibility.Visible;
                     
                     StatusText.Text = $"Viewing from zip: {linkItem.Title}";
@@ -239,7 +244,10 @@ public sealed partial class MainWindow
                 }
 
                 DetailsViewerScroll.Visibility = Visibility.Visible;
-                _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                
+                // Show link badge for Link Only folders
+                bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
+                _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
                 HeaderViewerScroll.Visibility = Visibility.Visible;
                 StatusText.Text = isZipFile
                     ? $"Viewing zip archive: {linkItem.Title}"
@@ -258,7 +266,10 @@ public sealed partial class MainWindow
                     HideAllViewers();
                     await _fileViewerService!.LoadUrlAsync(uri);
                     WebViewer.Visibility = Visibility.Visible;
-                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                    
+                    // Show link badge for Link Only folders
+                    bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
+                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
                     HeaderViewerScroll.Visibility = Visibility.Visible;
                     StatusText.Text = $"Loaded: {uri}";
                     Debug.WriteLine($"[HandleLinkSelectionAsync] Loaded URL: {uri}");
@@ -285,7 +296,10 @@ public sealed partial class MainWindow
             }
 
             DetailsViewerScroll.Visibility = Visibility.Visible;
-            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+            
+            // Show link badge for Link Only folders
+            bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
+            _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
             HeaderViewerScroll.Visibility = Visibility.Visible;
         }
     }

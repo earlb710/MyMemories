@@ -130,13 +130,16 @@ public class DetailsViewService
     }
 
     /// <summary>
-    /// Shows link header in the header panel with icon on the left.
+    /// Shows link header in the header panel with icon on the left and optional link badge.
     /// </summary>
-    public void ShowLinkHeader(string linkTitle, string? description, string icon)
+    public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false)
     {
         _headerPanel?.Children.Clear();
 
         if (_headerPanel == null) return;
+
+        // Create main container with relative positioning
+        var containerGrid = new Grid();
 
         // Create horizontal layout with icon on left
         var horizontalPanel = new StackPanel
@@ -181,7 +184,45 @@ public class DetailsViewService
         }
 
         horizontalPanel.Children.Add(textPanel);
-        _headerPanel.Children.Add(horizontalPanel);
+        containerGrid.Children.Add(horizontalPanel);
+
+        // Add link badge in lower right corner if requested
+        if (showLinkBadge)
+        {
+            var linkBadge = new Border
+            {
+                Background = new SolidColorBrush(Colors.DodgerBlue),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(8, 4, 8, 4),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 8, 4),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children =
+                    {
+                        new FontIcon 
+                        { 
+                            Glyph = "\uE71B", // Link icon
+                            FontSize = 12,
+                            Foreground = new SolidColorBrush(Colors.White)
+                        },
+                        new TextBlock 
+                        { 
+                            Text = "Link Only",
+                            FontSize = 10,
+                            Foreground = new SolidColorBrush(Colors.White),
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                }
+            };
+            containerGrid.Children.Add(linkBadge);
+        }
+
+        _headerPanel.Children.Add(containerGrid);
     }
 
     /// <summary>
@@ -216,9 +257,13 @@ public class DetailsViewService
         bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
                        File.Exists(linkItem.Url);
 
+        // Check if it's a Link Only folder (should not show catalog buttons)
+        bool isLinkOnlyFolder = linkItem.IsDirectory && 
+                               linkItem.FolderType == FolderLinkType.LinkOnly;
+
         // Add catalog buttons for directories AND zip files at the top (only if we have a valid node)
-        // Modified condition: Show buttons for any zip file OR for directories
-        if (node != null && ((linkItem.IsDirectory && Directory.Exists(linkItem.Url)) || isZipFile))
+        // Modified condition: Show buttons for any zip file OR for directories (EXCEPT Link Only folders)
+        if (node != null && !isLinkOnlyFolder && ((linkItem.IsDirectory && Directory.Exists(linkItem.Url)) || isZipFile))
         {
             var buttonPanel = new StackPanel
             {
@@ -316,6 +361,42 @@ public class DetailsViewService
 
                 _detailsPanel.Children.Add(autoRefreshCheckBox);
             }
+        }
+
+        // Show "Link Only" info banner for Link Only folders
+        if (isLinkOnlyFolder)
+        {
+            var infoBanner = new Border
+            {
+                Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 120, 215)),
+                BorderBrush = new SolidColorBrush(Colors.DodgerBlue),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(0, 0, 0, 16),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new FontIcon 
+                        { 
+                            Glyph = "\uE71B", // Link icon
+                            FontSize = 16,
+                            Foreground = new SolidColorBrush(Colors.DodgerBlue)
+                        },
+                        new TextBlock
+                        {
+                            Text = "This is a Link Only folder. Use it to open the folder directly without cataloging its contents.",
+                            TextWrapping = TextWrapping.Wrap,
+                            Foreground = new SolidColorBrush(Colors.White),
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                }
+            };
+            _detailsPanel.Children.Add(infoBanner);
         }
 
         // Show catalog statistics if this folder has catalog entries

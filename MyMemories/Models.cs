@@ -10,6 +10,16 @@ using Microsoft.UI.Xaml.Controls;
 namespace MyMemories;
 
 /// <summary>
+/// Password protection type for categories.
+/// </summary>
+public enum PasswordProtectionType
+{
+    None = 0,
+    GlobalPassword = 1,
+    OwnPassword = 2
+}
+
+/// <summary>
 /// Represents a category item in the tree view.
 /// </summary>
 public class CategoryItem
@@ -19,6 +29,8 @@ public class CategoryItem
     public string Icon { get; set; } = "📁";
     public DateTime CreatedDate { get; set; } = DateTime.Now;
     public DateTime ModifiedDate { get; set; } = DateTime.Now;
+    public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
+    public string? OwnPasswordHash { get; set; }
 
     public override string ToString() => $"{Icon} {Name}";
 }
@@ -248,6 +260,12 @@ public class CategoryData
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
     
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public PasswordProtectionType PasswordProtection { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwnPasswordHash { get; set; }
+    
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }
     
@@ -348,6 +366,8 @@ public class CategoryEditResult
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Icon { get; set; } = "📁";
+    public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
+    public string? OwnPassword { get; set; }
 }
 
 /// <summary>

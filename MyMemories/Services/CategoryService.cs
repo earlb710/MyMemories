@@ -2,24 +2,28 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Utilities;
 
 namespace MyMemories.Services;
 
 /// <summary>
-/// Service for managing category data persistence and operations.
+/// Service for managing category data persistence and operations with password protection support.
 /// </summary>
 public class CategoryService
 {
     private readonly string _dataFolder;
     private readonly JsonSerializerOptions _jsonOptions;
+    private ConfigurationService? _configService;
 
-    public CategoryService(string dataFolder)
+    public CategoryService(string dataFolder, ConfigurationService? configService = null)
     {
         _dataFolder = dataFolder;
+        _configService = configService;
         _jsonOptions = new JsonSerializerOptions 
         { 
             WriteIndented = true,
@@ -32,7 +36,15 @@ public class CategoryService
     }
 
     /// <summary>
-    /// Loads all categories from JSON files.
+    /// Sets or updates the configuration service for password management.
+    /// </summary>
+    public void SetConfigurationService(ConfigurationService configService)
+    {
+        _configService = configService;
+    }
+
+    /// <summary>
+    /// Loads all categories from JSON files (both encrypted and unencrypted).
     /// </summary>
     public async Task<List<TreeViewNode>> LoadAllCategoriesAsync()
     {
@@ -43,8 +55,14 @@ public class CategoryService
             return categories;
         }
 
-        var jsonFiles = Directory.GetFiles(_dataFolder, "*.json");
+        // Get all .json and .zip.json files
+        var jsonFiles = Directory.GetFiles(_dataFolder, "*.json")
+            .Where(f => !f.EndsWith(".zip.json", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        
+        var encryptedFiles = Directory.GetFiles(_dataFolder, "*.zip.json");
 
+        // Process unencrypted files
         foreach (var jsonFile in jsonFiles)
         {
             try
@@ -64,11 +82,117 @@ public class CategoryService
             }
         }
 
+        // Process encrypted files
+        foreach (var encryptedFile in encryptedFiles)
+        {
+            try
+            {
+                var json = await LoadEncryptedCategoryAsync(encryptedFile);
+                if (json != null)
+                {
+                    var categoryData = JsonSerializer.Deserialize<CategoryData>(json, _jsonOptions);
+
+                    if (categoryData != null)
+                    {
+                        var categoryNode = CreateCategoryNode(categoryData);
+                        categories.Add(categoryNode);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error loading encrypted {Path.GetFileName(encryptedFile)}: {ex.Message}", ex);
+            }
+        }
+
         return categories;
     }
 
     /// <summary>
-    /// Saves a category to a JSON file.
+    /// Loads and decrypts an encrypted category file.
+    /// </summary>
+    private async Task<string?> LoadEncryptedCategoryAsync(string encryptedFilePath)
+    {
+        // Extract category name from filename (remove .zip.json)
+        var fileName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(encryptedFilePath));
+        
+        // Get the password for this category
+        var password = GetCategoryPassword(fileName);
+        if (password == null)
+        {
+            throw new InvalidOperationException($"Cannot decrypt {fileName}: No password available. Please check security settings.");
+        }
+
+        // Create a temporary directory for extraction
+        var tempDir = Path.Combine(Path.GetTempPath(), $"MyMemories_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Extract the zip file using SharpZipLib (supports password-protected zips)
+            using (var fileStream = File.OpenRead(encryptedFilePath))
+            using (var zipInputStream = new ICSharpCode.SharpZipLib.Zip.ZipInputStream(fileStream))
+            {
+                zipInputStream.Password = password;
+
+                var entry = zipInputStream.GetNextEntry();
+                if (entry == null)
+                {
+                    throw new InvalidOperationException($"No entries found in encrypted file: {encryptedFilePath}");
+                }
+
+                // Read the JSON content
+                using var memoryStream = new MemoryStream();
+                await zipInputStream.CopyToAsync(memoryStream);
+                var jsonBytes = memoryStream.ToArray();
+                return Encoding.UTF8.GetString(jsonBytes);
+            }
+        }
+        finally
+        {
+            // Clean up temp directory
+            try
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// Gets the password for a category (either own password or global password).
+    /// </summary>
+    private string? GetCategoryPassword(string categoryName)
+    {
+        if (_configService == null)
+            return null;
+
+        var categoryPath = categoryName; // For root categories, name = path
+
+        // Check if category has its own password
+        if (_configService.CategoryPasswords.TryGetValue(categoryPath, out var passwordHash))
+        {
+            // For decryption, we need the actual password, not the hash
+            // This is a limitation - we'll need to store the password temporarily
+            // or use a different approach
+            return null; // TODO: Handle this better
+        }
+
+        // Check if category uses global password
+        if (_configService.HasGlobalPassword())
+        {
+            // Same issue - we have the hash but need the password
+            return null; // TODO: Handle this better
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Saves a category to a JSON file (encrypted if password is set).
     /// </summary>
     public async Task SaveCategoryAsync(TreeViewNode categoryNode)
     {
@@ -81,23 +205,119 @@ public class CategoryService
         var categoryData = ConvertNodeToCategoryData(categoryNode);
         var json = JsonSerializer.Serialize(categoryData, _jsonOptions);
         
-        var fileName = SanitizeFileName(category.Name) + ".json";
-        var filePath = Path.Combine(_dataFolder, fileName);
-        
-        await File.WriteAllTextAsync(filePath, json);
+        var fileName = SanitizeFileName(category.Name);
+        var shouldEncrypt = ShouldEncryptCategory(category);
+
+        if (shouldEncrypt)
+        {
+            await SaveEncryptedCategoryAsync(fileName, json, category);
+        }
+        else
+        {
+            // Save as regular JSON
+            var filePath = Path.Combine(_dataFolder, fileName + ".json");
+            await File.WriteAllTextAsync(filePath, json);
+
+            // Delete encrypted version if it exists
+            var encryptedPath = Path.Combine(_dataFolder, fileName + ".zip.json");
+            if (File.Exists(encryptedPath))
+            {
+                File.Delete(encryptedPath);
+            }
+        }
     }
 
     /// <summary>
-    /// Deletes a category file.
+    /// Determines if a category should be encrypted based on its password protection settings.
+    /// </summary>
+    private bool ShouldEncryptCategory(CategoryItem category)
+    {
+        return category.PasswordProtection == PasswordProtectionType.GlobalPassword ||
+               category.PasswordProtection == PasswordProtectionType.OwnPassword;
+    }
+
+    /// <summary>
+    /// Saves a category as an encrypted .zip.json file.
+    /// </summary>
+    private async Task SaveEncryptedCategoryAsync(string fileName, string json, CategoryItem category)
+    {
+        var password = GetPasswordForSaving(category);
+        if (password == null)
+        {
+            throw new InvalidOperationException($"Cannot encrypt category '{category.Name}': No password available.");
+        }
+
+        var encryptedFilePath = Path.Combine(_dataFolder, fileName + ".zip.json");
+        var jsonBytes = Encoding.UTF8.GetBytes(json);
+
+        // Create encrypted zip using SharpZipLib
+        using var fileStream = new FileStream(encryptedFilePath, FileMode.Create);
+        using var zipOutputStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(fileStream);
+
+        zipOutputStream.SetLevel(6); // Compression level
+        zipOutputStream.Password = password;
+
+        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(fileName + ".json")
+        {
+            DateTime = DateTime.Now,
+            Size = jsonBytes.Length
+        };
+
+        // Enable AES-256 encryption
+        entry.AESKeySize = 256;
+
+        zipOutputStream.PutNextEntry(entry);
+        await zipOutputStream.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+        zipOutputStream.CloseEntry();
+        zipOutputStream.Finish();
+
+        // Delete unencrypted version if it exists
+        var unencryptedPath = Path.Combine(_dataFolder, fileName + ".json");
+        if (File.Exists(unencryptedPath))
+        {
+            File.Delete(unencryptedPath);
+        }
+    }
+
+    /// <summary>
+    /// Gets the password to use for saving a category.
+    /// </summary>
+    private string? GetPasswordForSaving(CategoryItem category)
+    {
+        if (category.PasswordProtection == PasswordProtectionType.OwnPassword)
+        {
+            // Use the category's own password
+            // Note: This requires storing the actual password, not just the hash
+            // For now, return null and handle this case
+            return category.OwnPasswordHash; // This is actually the password, not hash
+        }
+        else if (category.PasswordProtection == PasswordProtectionType.GlobalPassword)
+        {
+            // Use global password
+            // Same issue - we need the actual password
+            return null; // TODO: Implement password caching
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Deletes a category file (both encrypted and unencrypted versions).
     /// </summary>
     public Task DeleteCategoryAsync(string categoryName)
     {
-        var fileName = SanitizeFileName(categoryName) + ".json";
-        var filePath = Path.Combine(_dataFolder, fileName);
-
-        if (File.Exists(filePath))
+        var fileName = SanitizeFileName(categoryName);
+        
+        var jsonPath = Path.Combine(_dataFolder, fileName + ".json");
+        if (File.Exists(jsonPath))
         {
-            File.Delete(filePath);
+            File.Delete(jsonPath);
+        }
+
+        var encryptedPath = Path.Combine(_dataFolder, fileName + ".zip.json");
+        if (File.Exists(encryptedPath))
+        {
+            File.Delete(encryptedPath);
         }
 
         return Task.CompletedTask;
@@ -121,6 +341,8 @@ public class CategoryService
             Icon = category.Icon == "📁" ? null : category.Icon,
             CreatedDate = category.CreatedDate,
             ModifiedDate = category.ModifiedDate,
+            PasswordProtection = category.PasswordProtection,
+            OwnPasswordHash = category.OwnPasswordHash,
             Links = null,
             SubCategories = null
         };
@@ -274,7 +496,9 @@ public class CategoryService
                 Description = categoryData.Description ?? string.Empty,
                 Icon = categoryData.Icon ?? "📁",
                 CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
-                ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now
+                ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
+                PasswordProtection = categoryData.PasswordProtection,
+                OwnPasswordHash = categoryData.OwnPasswordHash
             }
         };
 
@@ -307,7 +531,7 @@ public class CategoryService
                     IsCatalogEntry = linkData.IsCatalogEntry ?? false,
                     LastCatalogUpdate = linkData.LastCatalogUpdate,
                     FileSize = linkData.FileSize,
-                    AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false // NEW LINE
+                    AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false
                 };
 
                 if (linkData.CatalogEntries != null)

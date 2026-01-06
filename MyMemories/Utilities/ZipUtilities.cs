@@ -151,10 +151,10 @@ public static class ZipUtilities
                 ZipArchive? archive = null;
                 try
                 {
-                    // Open zip archive
+                    // Open zip archive - use System.IO.Compression
                     try
                     {
-                        archive = ZipFile.OpenRead(zipPath);
+                        archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
                     }
                     catch (InvalidDataException ex)
                     {
@@ -301,7 +301,7 @@ public static class ZipUtilities
 
         try
         {
-            using var archive = ZipFile.OpenRead(zipPath);
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
             // Try to enumerate entries to detect corruption
             var count = 0;
             foreach (var entry in archive.Entries)
@@ -333,7 +333,7 @@ public static class ZipUtilities
             if (!File.Exists(zipPath))
                 return (false, 0, DateTime.MinValue);
 
-            using var archive = ZipFile.OpenRead(zipPath);
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
             var normalizedPath = entryPath.Replace('\\', '/');
             var entry = archive.GetEntry(normalizedPath) ?? archive.GetEntry(entryPath);
 
@@ -345,6 +345,224 @@ public static class ZipUtilities
         catch
         {
             return (false, 0, DateTime.MinValue);
+        }
+    }
+
+    /// <summary>
+    /// Creates a password-protected zip file from a directory using SharpZipLib.
+    /// </summary>
+    /// <param name="sourceDirectory">The directory to compress</param>
+    /// <param name="zipFilePath">The output zip file path</param>
+    /// <param name="password">Optional password for encryption (AES-256)</param>
+    /// <param name="compressionLevel">Compression level (0-9, default is 6)</param>
+    /// <returns>True if successful, false otherwise</returns>
+    public static async Task<bool> CreatePasswordProtectedZipAsync(
+        string sourceDirectory, 
+        string zipFilePath, 
+        string? password = null,
+        int compressionLevel = 6)
+    {
+        if (string.IsNullOrEmpty(sourceDirectory) || !Directory.Exists(sourceDirectory))
+        {
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Source directory not found: {sourceDirectory}");
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(zipFilePath))
+        {
+            Debug.WriteLine("[ZipUtilities.CreatePasswordProtectedZipAsync] Zip file path is null or empty");
+            return false;
+        }
+
+        try
+        {
+            // Ensure the output directory exists
+            var outputDir = Path.GetDirectoryName(zipFilePath);
+            if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+
+            await Task.Run(() =>
+            {
+                using var outputStream = new FileStream(zipFilePath, FileMode.Create);
+                using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
+
+                // Set compression level (0-9)
+                zipStream.SetLevel(Math.Clamp(compressionLevel, 0, 9));
+
+                // Set password if provided
+                if (!string.IsNullOrEmpty(password))
+                {
+                    zipStream.Password = password;
+                    // Use Zip64 for better compatibility
+                    zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+                }
+
+                // Get all files recursively
+                var files = Directory.GetFiles(sourceDirectory, "*.*", SearchOption.AllDirectories);
+                var baseDirectory = sourceDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                foreach (var filePath in files)
+                {
+                    try
+                    {
+                        // Get relative path for entry name
+                        var entryName = filePath.Substring(baseDirectory.Length + 1)
+                            .Replace(Path.DirectorySeparatorChar, '/');
+
+                        var fileInfo = new FileInfo(filePath);
+                        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
+                        {
+                            DateTime = fileInfo.LastWriteTime,
+                            Size = fileInfo.Length
+                        };
+
+                        // Enable AES encryption if password is set
+                        if (!string.IsNullOrEmpty(password))
+                        {
+                            entry.AESKeySize = 256; // Use AES-256
+                        }
+
+                        zipStream.PutNextEntry(entry);
+
+                        // Copy file data
+                        using var fileStream = File.OpenRead(filePath);
+                        fileStream.CopyTo(zipStream);
+
+                        zipStream.CloseEntry();
+
+                        Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Added: {entryName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Error adding file {filePath}: {ex.Message}");
+                        // Continue with other files
+                    }
+                }
+
+                zipStream.Finish();
+            });
+
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Successfully created zip: {zipFilePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Error: {ex.Message}");
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipAsync] Stack trace: {ex.StackTrace}");
+            
+            // Clean up partial file if it exists
+            try
+            {
+                if (File.Exists(zipFilePath))
+                {
+                    File.Delete(zipFilePath);
+                }
+            }
+            catch { }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Creates a password-protected zip file from a single file using SharpZipLib.
+    /// </summary>
+    /// <param name="sourceFilePath">The file to compress</param>
+    /// <param name="zipFilePath">The output zip file path</param>
+    /// <param name="password">Optional password for encryption (AES-256)</param>
+    /// <param name="compressionLevel">Compression level (0-9, default is 6)</param>
+    /// <returns>True if successful, false otherwise</returns>
+    public static async Task<bool> CreatePasswordProtectedZipFromFileAsync(
+        string sourceFilePath, 
+        string zipFilePath, 
+        string? password = null,
+        int compressionLevel = 6)
+    {
+        if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath))
+        {
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Source file not found: {sourceFilePath}");
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(zipFilePath))
+        {
+            Debug.WriteLine("[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Zip file path is null or empty");
+            return false;
+        }
+
+        try
+        {
+            // Ensure the output directory exists
+            var outputDir = Path.GetDirectoryName(zipFilePath);
+            if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+
+            await Task.Run(() =>
+            {
+                using var outputStream = new FileStream(zipFilePath, FileMode.Create);
+                using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
+
+                // Set compression level (0-9)
+                zipStream.SetLevel(Math.Clamp(compressionLevel, 0, 9));
+
+                // Set password if provided
+                if (!string.IsNullOrEmpty(password))
+                {
+                    zipStream.Password = password;
+                    zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+                }
+
+                // Get file name for entry
+                var fileName = Path.GetFileName(sourceFilePath);
+                var fileInfo = new FileInfo(sourceFilePath);
+
+                var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(fileName)
+                {
+                    DateTime = fileInfo.LastWriteTime,
+                    Size = fileInfo.Length
+                };
+
+                // Enable AES encryption if password is set
+                if (!string.IsNullOrEmpty(password))
+                {
+                    entry.AESKeySize = 256; // Use AES-256
+                }
+
+                zipStream.PutNextEntry(entry);
+
+                // Copy file data
+                using var fileStream = File.OpenRead(sourceFilePath);
+                fileStream.CopyTo(zipStream);
+
+                zipStream.CloseEntry();
+                zipStream.Finish();
+
+                Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Successfully added file: {fileName}");
+            });
+
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Successfully created zip: {zipFilePath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Error: {ex.Message}");
+            Debug.WriteLine($"[ZipUtilities.CreatePasswordProtectedZipFromFileAsync] Stack trace: {ex.StackTrace}");
+            
+            // Clean up partial file if it exists
+            try
+            {
+                if (File.Exists(zipFilePath))
+                {
+                    File.Delete(zipFilePath);
+                }
+            }
+            catch { }
+
+            return false;
         }
     }
 }
