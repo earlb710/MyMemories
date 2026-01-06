@@ -29,6 +29,7 @@ public sealed partial class MainWindow : Window
     private FileViewerService? _fileViewerService;
     private DetailsViewService? _detailsViewService;
     private TreeViewService? _treeViewService;
+    private ConfigurationService? _configService;
 
     public MainWindow()
     {
@@ -79,6 +80,10 @@ public sealed partial class MainWindow : Window
         {
             // Initialize WebView2
             await WebViewer.EnsureCoreWebView2Async();
+
+            // Initialize configuration service
+            _configService = new ConfigurationService();
+            await _configService.LoadConfigurationAsync();
 
             // Initialize services
             _categoryService = new CategoryService(_dataFolder);

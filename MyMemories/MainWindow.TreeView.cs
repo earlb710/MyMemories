@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using MyMemories.Utilities;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -176,6 +177,32 @@ public sealed partial class MainWindow
             HeaderViewerScroll.Visibility = Visibility.Visible;
             StatusText.Text = "No URL specified for this link";
             return;
+        }
+
+        // Check if it's a zip entry URL
+        if (ZipUtilities.IsZipEntryUrl(linkItem.Url))
+        {
+            try
+            {
+                if (!linkItem.IsDirectory)
+                {
+                    HideAllViewers();
+                    var result = await _fileViewerService!.LoadZipEntryAsync(linkItem.Url);
+                    ShowViewer(result.ViewerType);
+                    
+                    _detailsViewService!.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon());
+                    HeaderViewerScroll.Visibility = Visibility.Visible;
+                    
+                    StatusText.Text = $"Viewing from zip: {linkItem.Title}";
+                    Debug.WriteLine($"[HandleLinkSelectionAsync] Loaded zip entry: {linkItem.Url}");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Error loading zip entry: {ex.Message}";
+                Debug.WriteLine($"[HandleLinkSelectionAsync] Error with zip entry: {ex}");
+            }
         }
 
         try

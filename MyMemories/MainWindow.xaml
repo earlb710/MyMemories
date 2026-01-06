@@ -10,12 +10,29 @@
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Menu Bar -->
+        <MenuBar Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <MenuBarItem Title="Config">
+                <MenuFlyoutItem Text="Directory Setup" Click="MenuConfig_DirectorySetup_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8B7;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Security Setup" Click="MenuConfig_SecuritySetup_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE72E;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+            </MenuBarItem>
+        </MenuBar>
+
         <!-- Main Content Area with TreeView and Viewer -->
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250" MinWidth="150" MaxWidth="600" x:Name="TreeViewColumn"/>
                 <ColumnDefinition Width="Auto"/>
@@ -294,7 +311,7 @@
         </Grid>
 
         <!-- Status Bar -->
-        <Grid Grid.Row="1" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="2" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <TextBlock 
                 x:Name="StatusText"
                 Text="Ready"
