@@ -233,6 +233,12 @@
                                     <FontIcon Glyph="&#xE9D9;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Sort By..." Click="CategoryMenu_SortBy_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8CB;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                         
                         <!-- Context Menu for Link Nodes -->
@@ -257,6 +263,12 @@
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Sort Catalog..." Click="LinkMenu_SortCatalog_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8CB;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                         </MenuFlyout>
                     </TreeView.Resources>
                 </TreeView>

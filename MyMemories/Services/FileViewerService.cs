@@ -72,8 +72,6 @@ public class FileViewerService
     /// </summary>
     public async Task<FileLoadResult> LoadZipEntryAsync(string zipEntryUrl, string? password = null)
     {
-        LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", $"Loading zip entry: {zipEntryUrl}");
-
         var (zipPath, entryPath) = ZipUtilities.ParseZipEntryUrl(zipEntryUrl);
 
         if (zipPath == null || entryPath == null)
@@ -91,7 +89,6 @@ public class FileViewerService
         }
 
         // Check if it's password-protected
-        bool isPasswordProtected = false;
         try
         {
             using (var archive = System.IO.Compression.ZipFile.OpenRead(zipPath))
@@ -102,8 +99,6 @@ public class FileViewerService
         catch (InvalidDataException)
         {
             // Password-protected
-            isPasswordProtected = true;
-            
             if (string.IsNullOrEmpty(password))
             {
                 throw new InvalidOperationException(
@@ -122,31 +117,26 @@ public class FileViewerService
         {
             if (IsImageFile(extension))
             {
-                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as image");
                 var bitmap = await LoadImageFromZipAsync(zipPath, entryPath, password);
                 return new FileLoadResult(FileViewerType.Image, fileName, bitmap);
             }
             else if (extension == ".pdf")
             {
-                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as PDF");
                 await LoadPdfFromZipAsync(zipPath, entryPath, password);
                 return new FileLoadResult(FileViewerType.Web, fileName, null);
             }
             else if (extension is ".html" or ".htm")
             {
-                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as HTML");
                 await LoadHtmlFromZipAsync(zipPath, entryPath, password);
                 return new FileLoadResult(FileViewerType.Web, fileName, null);
             }
             else if (IsTextFile(extension))
             {
-                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as text");
                 await LoadTextFromZipAsync(zipPath, entryPath, password);
                 return new FileLoadResult(FileViewerType.Text, fileName, null);
             }
             else
             {
-                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as text (default)");
                 await LoadTextFromZipAsync(zipPath, entryPath, password);
                 return new FileLoadResult(FileViewerType.Text, fileName, null);
             }
@@ -182,15 +172,11 @@ public class FileViewerService
 
     private async Task<BitmapImage> LoadImageFromZipAsync(string zipPath, string entryPath, string? password = null)
     {
-        LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Extracting image from zip");
-
         var stream = await ZipUtilities.ExtractZipEntryToStreamAsync(zipPath, entryPath, password);
         if (stream == null)
         {
             throw new InvalidOperationException($"Failed to extract image '{entryPath}' from zip archive");
         }
-
-        LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Stream size: {stream.Length} bytes");
 
         try
         {
@@ -198,20 +184,13 @@ public class FileViewerService
 
             using (var memStream = new InMemoryRandomAccessStream())
             {
-                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Converting to InMemoryRandomAccessStream");
-
                 var writeStream = memStream.AsStreamForWrite();
                 await stream.CopyToAsync(writeStream);
                 await writeStream.FlushAsync();
 
-                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Stream copied, size: {memStream.Size} bytes");
-
                 memStream.Seek(0);
 
-                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Setting bitmap source");
                 await bitmap.SetSourceAsync(memStream);
-
-                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Bitmap loaded - PixelWidth: {bitmap.PixelWidth}, PixelHeight: {bitmap.PixelHeight}");
             }
 
             _imageViewer.Source = bitmap;
@@ -275,8 +254,6 @@ public class FileViewerService
 
         var tempFilePath = Path.Combine(tempDir, Path.GetFileName(entryPath));
 
-        LogUtilities.LogDebug("FileViewerService.LoadPdfFromZipAsync", $"Extracting PDF to: {tempFilePath}");
-
         var stream = await ZipUtilities.ExtractZipEntryToStreamAsync(zipPath, entryPath, password);
         if (stream == null)
         {
@@ -288,8 +265,6 @@ public class FileViewerService
         {
             await stream.CopyToAsync(fileStream);
         }
-
-        LogUtilities.LogDebug("FileViewerService.LoadPdfFromZipAsync", $"PDF extracted, size: {new FileInfo(tempFilePath).Length} bytes");
 
         if (_webViewer.CoreWebView2 == null)
         {

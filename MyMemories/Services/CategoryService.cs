@@ -19,7 +19,7 @@ public class CategoryService
     private readonly string _dataFolder;
     private readonly JsonSerializerOptions _jsonOptions;
     private ConfigurationService? _configService;
-    
+
     // Cache for storing actual passwords (not hashes) for encryption/decryption
     private readonly Dictionary<string, string> _passwordCache = new();
 
@@ -27,13 +27,13 @@ public class CategoryService
     {
         _dataFolder = dataFolder;
         _configService = configService;
-        _jsonOptions = new JsonSerializerOptions 
-        { 
+        _jsonOptions = new JsonSerializerOptions
+        {
             WriteIndented = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             Converters = { new JsonStringEnumConverter() }
         };
-        
+
         // Ensure data folder exists
         Directory.CreateDirectory(_dataFolder);
     }
@@ -88,7 +88,7 @@ public class CategoryService
         var jsonFiles = Directory.GetFiles(_dataFolder, "*.json")
             .Where(f => !f.EndsWith(".zip.json", StringComparison.OrdinalIgnoreCase))
             .ToList();
-        
+
         var encryptedFiles = Directory.GetFiles(_dataFolder, "*.zip.json");
 
         // Process unencrypted files
@@ -108,7 +108,7 @@ public class CategoryService
             catch (Exception ex)
             {
                 // Log but continue with other categories
-                System.Diagnostics.Debug.WriteLine($"Error loading {Path.GetFileName(jsonFile)}: {ex.Message}");
+                LogUtilities.LogError("CategoryService.LoadAllCategoriesAsync", $"Error loading {Path.GetFileName(jsonFile)}", ex);
             }
         }
 
@@ -132,7 +132,7 @@ public class CategoryService
             catch (Exception ex)
             {
                 // Log but continue with other categories
-                System.Diagnostics.Debug.WriteLine($"Error loading encrypted {Path.GetFileName(encryptedFile)}: {ex.Message}");
+                LogUtilities.LogError("CategoryService.LoadAllCategoriesAsync", $"Error loading encrypted {Path.GetFileName(encryptedFile)}", ex);
                 // Don't throw - just skip this encrypted category if password is wrong
             }
         }
@@ -147,23 +147,20 @@ public class CategoryService
     {
         // Extract category name from filename (remove .zip.json)
         var fileName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(encryptedFilePath));
-        
+
         // Get the password for this category
         var password = GetCategoryPassword(fileName);
         if (password == null)
         {
-            System.Diagnostics.Debug.WriteLine($"Cannot decrypt {fileName}: No password available");
             return null; // Return null instead of throwing - will be handled gracefully
         }
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"Attempting to decrypt {fileName}...");
-            
             // Use ZipFile.OpenRead instead of ZipInputStream for better AES support
             using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(encryptedFilePath);
             zipFile.Password = password; // Set password for the archive
-            
+
             if (zipFile.Count == 0)
             {
                 throw new InvalidOperationException($"No entries found in encrypted file: {encryptedFilePath}");
@@ -171,26 +168,23 @@ public class CategoryService
 
             // Get the first entry
             var entry = zipFile[0];
-            
+
             // Read the JSON content
             using var entryStream = zipFile.GetInputStream(entry);
             using var memoryStream = new MemoryStream();
             await entryStream.CopyToAsync(memoryStream);
-            
+
             var jsonBytes = memoryStream.ToArray();
             var json = Encoding.UTF8.GetString(jsonBytes);
-            
-            System.Diagnostics.Debug.WriteLine($"Successfully decrypted {fileName}");
+
             return json;
         }
         catch (ICSharpCode.SharpZipLib.Zip.ZipException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"ZipException decrypting {fileName}: {ex.Message}");
             throw new InvalidOperationException($"Cannot decrypt {fileName}: {ex.Message}. Please verify the password is correct.", ex);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error decrypting {fileName}: {ex.Message}");
             throw new InvalidOperationException($"Cannot decrypt {fileName}: {ex.Message}", ex);
         }
     }
@@ -228,7 +222,7 @@ public class CategoryService
         var category = (CategoryItem)categoryNode.Content;
         var categoryData = ConvertNodeToCategoryData(categoryNode);
         var json = JsonSerializer.Serialize(categoryData, _jsonOptions);
-        
+
         var fileName = SanitizeFileName(category.Name);
         var shouldEncrypt = ShouldEncryptCategory(category);
 
@@ -315,7 +309,7 @@ public class CategoryService
             {
                 return ownPassword;
             }
-            
+
             // If not in cache, we can't encrypt - this should never happen if passwords are cached properly
             return null;
         }
@@ -326,7 +320,7 @@ public class CategoryService
             {
                 return globalPassword;
             }
-            
+
             return null;
         }
 
@@ -339,7 +333,7 @@ public class CategoryService
     public Task DeleteCategoryAsync(string categoryName)
     {
         var fileName = SanitizeFileName(categoryName);
-        
+
         var jsonPath = Path.Combine(_dataFolder, fileName + ".json");
         if (File.Exists(jsonPath))
         {
@@ -375,6 +369,7 @@ public class CategoryService
             ModifiedDate = category.ModifiedDate,
             PasswordProtection = category.PasswordProtection,
             OwnPasswordHash = category.OwnPasswordHash,
+            SortOrder = category.SortOrder,
             Links = null,
             SubCategories = null
         };
@@ -392,7 +387,7 @@ public class CategoryService
                 {
                     continue;
                 }
-                
+
                 var linkData = new LinkData
                 {
                     Title = link.Title,
@@ -408,6 +403,7 @@ public class CategoryService
                     LastCatalogUpdate = link.LastCatalogUpdate,
                     FileSize = link.FileSize,
                     AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null,
+                    CatalogSortOrder = link.CatalogSortOrder,
                     CatalogEntries = null
                 };
 
@@ -415,7 +411,7 @@ public class CategoryService
                 if (child.Children.Count > 0 && !link.IsCatalogEntry)
                 {
                     var catalogEntries = new List<LinkData>();
-                    
+
                     foreach (var catalogChild in child.Children)
                     {
                         if (catalogChild.Content is LinkItem catalogEntry)
@@ -423,7 +419,7 @@ public class CategoryService
                             string relativeUrl = catalogEntry.Url;
                             if (!string.IsNullOrEmpty(link.Url) && catalogEntry.Url.StartsWith(link.Url, StringComparison.OrdinalIgnoreCase))
                             {
-                                relativeUrl = catalogEntry.IsDirectory 
+                                relativeUrl = catalogEntry.IsDirectory
                                     ? new DirectoryInfo(catalogEntry.Url).Name
                                     : Path.GetFileName(catalogEntry.Url);
                             }
@@ -449,7 +445,7 @@ public class CategoryService
                             if (catalogEntry.IsDirectory && catalogChild.Children.Count > 0)
                             {
                                 var subCatalogEntries = new List<LinkData>();
-                                
+
                                 foreach (var subCatalogChild in catalogChild.Children)
                                 {
                                     if (subCatalogChild.Content is LinkItem subCatalogEntry)
@@ -476,7 +472,7 @@ public class CategoryService
                                         });
                                     }
                                 }
-                                
+
                                 if (subCatalogEntries.Count > 0)
                                 {
                                     catalogData.CatalogEntries = subCatalogEntries;
@@ -486,7 +482,7 @@ public class CategoryService
                             catalogEntries.Add(catalogData);
                         }
                     }
-                    
+
                     if (catalogEntries.Count > 0)
                     {
                         linkData.CatalogEntries = catalogEntries;
@@ -506,12 +502,12 @@ public class CategoryService
         {
             categoryData.Links = links;
         }
-        
+
         if (subCategories.Count > 0)
         {
             categoryData.SubCategories = subCategories;
         }
-        
+
         return categoryData;
     }
 
@@ -530,7 +526,8 @@ public class CategoryService
                 CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
                 ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
                 PasswordProtection = categoryData.PasswordProtection,
-                OwnPasswordHash = categoryData.OwnPasswordHash
+                OwnPasswordHash = categoryData.OwnPasswordHash,
+                SortOrder = categoryData.SortOrder
             }
         };
 
@@ -563,7 +560,8 @@ public class CategoryService
                     IsCatalogEntry = linkData.IsCatalogEntry ?? false,
                     LastCatalogUpdate = linkData.LastCatalogUpdate,
                     FileSize = linkData.FileSize,
-                    AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false
+                    AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false,
+                    CatalogSortOrder = linkData.CatalogSortOrder
                 };
 
                 if (linkData.CatalogEntries != null)
@@ -579,8 +577,8 @@ public class CategoryService
                 {
                     foreach (var catalogData in linkData.CatalogEntries)
                     {
-                        var fullUrl = string.IsNullOrEmpty(linkData.Url) 
-                            ? catalogData.Url 
+                        var fullUrl = string.IsNullOrEmpty(linkData.Url)
+                            ? catalogData.Url
                             : Path.Combine(linkData.Url, catalogData.Url ?? string.Empty);
 
                         var catalogEntry = new LinkItem
@@ -600,14 +598,14 @@ public class CategoryService
                         };
 
                         var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
-                        
+
                         // Recursively add sub-catalog entries (files within subdirectories)
                         if (catalogData.CatalogEntries != null && catalogData.CatalogEntries.Count > 0)
                         {
                             foreach (var subCatalogData in catalogData.CatalogEntries)
                             {
                                 var subFullUrl = Path.Combine(fullUrl, subCatalogData.Url ?? string.Empty);
-                                
+
                                 var subCatalogEntry = new LinkItem
                                 {
                                     Title = subCatalogData.Title ?? string.Empty,
@@ -622,12 +620,12 @@ public class CategoryService
                                     IsCatalogEntry = true,
                                     FileSize = subCatalogData.FileSize
                                 };
-                                
+
                                 var subCatalogEntryNode = new TreeViewNode { Content = subCatalogEntry };
                                 catalogEntryNode.Children.Add(subCatalogEntryNode);
                             }
                         }
-                        
+
                         linkNode.Children.Add(catalogEntryNode);
                     }
                 }
@@ -668,7 +666,7 @@ public class CategoryService
             foreach (var subDirPath in directories)
             {
                 var dirInfo = new DirectoryInfo(subDirPath);
-                
+
                 var subDirEntry = new LinkItem
                 {
                     Title = dirInfo.Name,
@@ -681,7 +679,7 @@ public class CategoryService
                     FolderType = FolderLinkType.LinkOnly,
                     IsCatalogEntry = true
                 };
-                
+
                 catalogEntries.Add(subDirEntry);
             }
 
@@ -690,10 +688,10 @@ public class CategoryService
             foreach (var filePath in files)
             {
                 var fileInfo = new FileInfo(filePath);
-                
+
                 // Generate rich description based on file type
                 var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
-                
+
                 catalogEntries.Add(new LinkItem
                 {
                     Title = fileInfo.Name,
@@ -737,10 +735,10 @@ public class CategoryService
             foreach (var filePath in files)
             {
                 var fileInfo = new FileInfo(filePath);
-                
+
                 // Generate rich description based on file type
                 var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
-                
+
                 catalogEntries.Add(new LinkItem
                 {
                     Title = fileInfo.Name,
@@ -761,7 +759,7 @@ public class CategoryService
             foreach (var subDirPath in directories)
             {
                 var dirInfo = new DirectoryInfo(subDirPath);
-                
+
                 catalogEntries.Add(new LinkItem
                 {
                     Title = dirInfo.Name,
@@ -839,11 +837,11 @@ public class CategoryService
         if (linkNode.Content is LinkItem link && link.IsDirectory)
         {
             // Count only files that are direct children, exclude subdirectory entries
-            var fileCount = linkNode.Children.Count(child => 
-                child.Content is LinkItem catalogEntry && 
-                catalogEntry.IsCatalogEntry && 
+            var fileCount = linkNode.Children.Count(child =>
+                child.Content is LinkItem catalogEntry &&
+                catalogEntry.IsCatalogEntry &&
                 !catalogEntry.IsDirectory);
-            
+
             link.CatalogFileCount = fileCount;
         }
     }

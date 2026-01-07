@@ -801,4 +801,150 @@ public sealed partial class MainWindow
             zipStream.Finish();
         });
     }
+
+    private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        var sortOptions = new[]
+        {
+            SortOption.NameAscending,
+            SortOption.NameDescending,
+            SortOption.SizeAscending,
+            SortOption.SizeDescending,
+            SortOption.DateAscending,
+            SortOption.DateDescending
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Sort '{category.Name}'",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Choose how to sort this category's children:",
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 12)
+                    },
+                    new ComboBox
+                    {
+                        Name = "SortComboBox",
+                        ItemsSource = sortOptions.Select(o => new { Option = o, Display = SortingService.GetSortOptionDisplayName(o) }).ToList(),
+                        DisplayMemberPath = "Display",
+                        SelectedValuePath = "Option",
+                        SelectedValue = category.SortOrder,
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    }
+                }
+            },
+            PrimaryButtonText = "Sort",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            var comboBox = (dialog.Content as StackPanel)?. Children.OfType<ComboBox>().FirstOrDefault();
+            if (comboBox?.SelectedValue is SortOption sortOption)
+            {
+                SortingService.SortCategoryChildren(_contextMenuNode, sortOption);
+
+                var rootNode = GetRootCategoryNode(_contextMenuNode);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                StatusText.Text = $"Sorted '{category.Name}' by {SortingService.GetSortOptionDisplayName(sortOption)}";
+            }
+        }
+    }
+
+    private async void LinkMenu_SortCatalog_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link || !link.IsDirectory)
+            return;
+
+        var sortOptions = new[]
+        {
+            SortOption.NameAscending,
+            SortOption.NameDescending,
+            SortOption.SizeAscending,
+            SortOption.SizeDescending,
+            SortOption.DateAscending,
+            SortOption.DateDescending
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Sort Catalog '{link.Title}'",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Choose how to sort this catalog's entries:",
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 0, 0, 12)
+                    },
+                    new ComboBox
+                    {
+                        Name = "SortComboBox",
+                        ItemsSource = sortOptions.Select(o => new { Option = o, Display = SortingService.GetSortOptionDisplayName(o) }).ToList(),
+                        DisplayMemberPath = "Display",
+                        SelectedValuePath = "Option",
+                        SelectedValue = link.CatalogSortOrder,
+                        HorizontalAlignment = HorizontalAlignment.Stretch
+                    },
+                    new CheckBox
+                    {
+                        Name = "RecursiveCheckBox",
+                        Content = "Apply to all subdirectories",
+                        IsChecked = true,
+                        Margin = new Thickness(0, 8, 0, 0)
+                    }
+                }
+            },
+            PrimaryButtonText = "Sort",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            var stack = dialog.Content as StackPanel;
+            var comboBox = stack?.Children.OfType<ComboBox>().FirstOrDefault();
+            var checkBox = stack?.Children.OfType<CheckBox>().FirstOrDefault();
+
+            if (comboBox?.SelectedValue is SortOption sortOption)
+            {
+                bool recursive = checkBox?.IsChecked ?? false;
+
+                if (recursive)
+                {
+                    SortingService.SortCatalogEntriesRecursive(_contextMenuNode, sortOption);
+                }
+                else
+                {
+                    SortingService.SortCatalogEntries(_contextMenuNode, sortOption);
+                }
+
+                var rootNode = GetRootCategoryNode(_contextMenuNode);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                var recursiveText = recursive ? " (including subdirectories)" : "";
+                StatusText.Text = $"Sorted catalog '{link.Title}' by {SortingService.GetSortOptionDisplayName(sortOption)}{recursiveText}";
+            }
+        }
+    }
 }

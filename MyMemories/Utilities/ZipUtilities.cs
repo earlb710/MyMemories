@@ -14,76 +14,56 @@ public static class ZipUtilities
     public static (string? zipPath, string? entryPath) ParseZipEntryUrl(string url)
     {
         if (string.IsNullOrEmpty(url))
-        {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", "URL is null or empty");
             return (null, null);
-        }
 
         var parts = url.Split("::", 2);
         if (parts.Length != 2)
-        {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Invalid URL format (missing ::): {url}");
             return (null, null);
-        }
 
         var zipPath = parts[0]?.Trim();
         var entryPath = parts[1]?.Trim();
 
         if (string.IsNullOrEmpty(zipPath) || string.IsNullOrEmpty(entryPath))
-        {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Invalid parts - zipPath: '{zipPath}', entryPath: '{entryPath}'");
             return (null, null);
-        }
 
         // Fix corrupted URLs where the zip filename is duplicated
-        // Example: "C:\path\file.zip\file.zip" should be "C:\path\file.zip"
         if (zipPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && !File.Exists(zipPath))
         {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Zip file not found, checking for corruption: {zipPath}");
-            
             var lastBackslashIndex = zipPath.LastIndexOf('\\');
             if (lastBackslashIndex > 0)
             {
                 var potentialZipPath = zipPath.Substring(0, lastBackslashIndex);
                 if (potentialZipPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(potentialZipPath))
                 {
-                    LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Found corrupted path, repairing: {potentialZipPath}");
                     zipPath = potentialZipPath;
                 }
             }
         }
 
-        // Validate that the zip path doesn't already contain :: (another corruption pattern)
+        // Validate that the zip path doesn't contain :: (another corruption pattern)
         if (zipPath.Contains("::"))
         {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Corrupted URL - zip path contains ::: {zipPath}");
-            // Try to extract the actual zip path
             var lastZipIndex = zipPath.LastIndexOf(".zip", StringComparison.OrdinalIgnoreCase);
             if (lastZipIndex > 0)
             {
                 zipPath = zipPath.Substring(0, lastZipIndex + 4);
-                LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Recovered zip path: {zipPath}");
             }
         }
 
-        // Final validation
+        // Final validation - try to find the .zip file in the path
         if (!File.Exists(zipPath))
         {
-            LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Final validation failed - zip file not found: {zipPath}");
-            // Last attempt: try to find the .zip file in the path
             var lastZipIndex = zipPath.LastIndexOf(".zip", StringComparison.OrdinalIgnoreCase);
             if (lastZipIndex > 0)
             {
                 var attemptPath = zipPath.Substring(0, lastZipIndex + 4);
                 if (File.Exists(attemptPath))
                 {
-                    LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Found valid zip at: {attemptPath}");
                     zipPath = attemptPath;
                 }
             }
         }
 
-        LogUtilities.LogDebug("ZipUtilities.ParseZipEntryUrl", $"Parsed - zipPath: '{zipPath}', entryPath: '{entryPath}'");
         return (zipPath, entryPath);
     }
 
@@ -103,25 +83,11 @@ public static class ZipUtilities
     {
         try
         {
-            if (string.IsNullOrEmpty(zipPath))
-            {
-                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", "Zip path is null or empty");
+            if (string.IsNullOrEmpty(zipPath) || string.IsNullOrEmpty(entryPath))
                 return null;
-            }
-
-            if (string.IsNullOrEmpty(entryPath))
-            {
-                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", "Entry path is null or empty");
-                return null;
-            }
 
             if (!File.Exists(zipPath))
-            {
-                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Zip file not found: {zipPath}");
                 return null;
-            }
-
-            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Extracting '{entryPath}' from '{zipPath}'");
 
             return await Task.Run(() =>
             {
@@ -134,15 +100,10 @@ public static class ZipUtilities
                         var entry = archive.GetEntry(normalizedEntryPath) ?? archive.GetEntry(entryPath);
 
                         if (entry == null)
-                        {
-                            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry not found in archive: {entryPath}");
                             return null;
-                        }
 
                         if (entry.Length == 0)
-                        {
                             return new MemoryStream();
-                        }
 
                         var memoryStream = new MemoryStream((int)entry.Length);
                         using (var entryStream = entry.Open())
@@ -151,7 +112,6 @@ public static class ZipUtilities
                         }
 
                         memoryStream.Position = 0;
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Successfully extracted {memoryStream.Length} bytes");
                         return (Stream)memoryStream;
                     }
                 }
@@ -165,9 +125,6 @@ public static class ZipUtilities
                         return null;
                     }
 
-                    LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
-                        "Using SharpZipLib with password to extract from password-protected zip");
-
                     try
                     {
                         using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath))
@@ -178,22 +135,13 @@ public static class ZipUtilities
                             var entry = zipFile.GetEntry(normalizedEntryPath);
 
                             if (entry == null)
-                            {
-                                // Try without normalization
                                 entry = zipFile.GetEntry(entryPath);
-                            }
 
                             if (entry == null)
-                            {
-                                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
-                                    $"Entry not found in password-protected archive: {entryPath}");
                                 return null;
-                            }
 
                             if (entry.Size == 0)
-                            {
                                 return new MemoryStream();
-                            }
 
                             var memoryStream = new MemoryStream((int)entry.Size);
                             
@@ -203,8 +151,6 @@ public static class ZipUtilities
                             }
 
                             memoryStream.Position = 0;
-                            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
-                                $"Successfully extracted {memoryStream.Length} bytes from password-protected zip");
                             return (Stream)memoryStream;
                         }
                     }
@@ -257,7 +203,6 @@ public static class ZipUtilities
 
         try
         {
-            // Try standard .NET first
             using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
             var count = 0;
             foreach (var entry in archive.Entries)
@@ -267,7 +212,7 @@ public static class ZipUtilities
             }
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (InvalidDataException)
         {
             // Might be password-protected, try SharpZipLib
             try
@@ -275,9 +220,9 @@ public static class ZipUtilities
                 using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath);
                 return zipFile.Count > 0;
             }
-            catch (Exception sharpEx)
+            catch (Exception ex)
             {
-                LogUtilities.LogError("ZipUtilities.ValidateZipFile", $"Invalid zip file (SharpZipLib): {zipPath}", sharpEx);
+                LogUtilities.LogError("ZipUtilities.ValidateZipFile", $"Invalid zip file: {zipPath}", ex);
                 return false;
             }
         }
@@ -383,7 +328,6 @@ public static class ZipUtilities
                         fileStream.CopyTo(zipStream);
 
                         zipStream.CloseEntry();
-                        LogUtilities.LogDebug("ZipUtilities.CreatePasswordProtectedZipAsync", $"Added: {entryName}");
                     }
                     catch (Exception ex)
                     {
@@ -477,8 +421,6 @@ public static class ZipUtilities
 
                 zipStream.CloseEntry();
                 zipStream.Finish();
-
-                LogUtilities.LogDebug("ZipUtilities.CreatePasswordProtectedZipFromFileAsync", $"Successfully added file: {fileName}");
             });
 
             LogUtilities.LogInfo("ZipUtilities.CreatePasswordProtectedZipFromFileAsync", $"Successfully created zip: {zipFilePath}");

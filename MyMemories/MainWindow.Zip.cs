@@ -35,31 +35,18 @@ public sealed partial class MainWindow
         var folderInfo = new DirectoryInfo(linkItem.Url);
         var parentDirectory = folderInfo.Parent?.FullName ?? folderInfo.Root.FullName;
 
-        // Get the parent category to check for password protection
-        var parentCategoryNode = _treeViewService!.GetParentCategoryNode(linkNode);
-        CategoryItem? parentCategory = parentCategoryNode?.Content as CategoryItem;
-        
-        // CRITICAL FIX: Get the ROOT category to check for password protection
+        // Get the ROOT category to check for password protection
         var rootCategoryNode = GetRootCategoryNode(linkNode);
         var rootCategory = rootCategoryNode?.Content as CategoryItem;
-        
-        // DEBUG OUTPUT
-        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Link: {linkItem.Title}");
-        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Parent category: {parentCategory?.Name}, PasswordProtection: {parentCategory?.PasswordProtection}");
-        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Root category: {rootCategory?.Name}, PasswordProtection: {rootCategory?.PasswordProtection}");
         
         // Check if ROOT category has password protection
         bool categoryHasPassword = rootCategory?.PasswordProtection != PasswordProtectionType.None;
         string? categoryPassword = null;
 
-        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] categoryHasPassword: {categoryHasPassword}");
-
         if (categoryHasPassword && rootCategory != null)
         {
-            System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Attempting to get password for root category: {rootCategory.Name}");
             // Get the password from the ROOT category
             categoryPassword = await GetCategoryPasswordAsync(rootCategory);
-            System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Password retrieved: {(categoryPassword != null ? "Yes" : "No")}");
             if (categoryPassword == null)
             {
                 // User cancelled password entry or password retrieval failed
@@ -139,7 +126,7 @@ public sealed partial class MainWindow
 
             if (isCatalogFolder)
             {
-                // CRITICAL FIX: Collect file paths on UI thread BEFORE entering background thread
+                // Collect file paths on UI thread BEFORE entering background thread
                 var filesToZip = CollectCatalogedFilePaths(linkNode, linkItem.Url);
 
                 if (result.UsePassword && !string.IsNullOrEmpty(result.Password))

@@ -20,7 +20,7 @@ public class TreeViewEventService
         _linkSelectionService = linkSelectionService;
     }
 
-    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
+    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
     {
         if (node.Content is CategoryItem category)
         {
@@ -28,8 +28,7 @@ public class TreeViewEventService
         }
         else if (node.Content is LinkItem linkItem)
         {
-            // CRITICAL FIX: Pass the node to the link selection service
-            await _linkSelectionService.HandleLinkSelectionAsync(linkItem, node, hideAllViewers, showDetailsViewers, setStatus);
+            await _linkSelectionService.HandleLinkSelectionAsync(linkItem, node, hideAllViewers, showDetailsViewers, showViewer, setStatus);
         }
     }
 

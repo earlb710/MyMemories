@@ -16,6 +16,7 @@ public sealed partial class MainWindow
             node,
             HideAllViewers,
             ShowDetailsViewers,
+            ShowViewer,
             status => StatusText.Text = status);
     }
 

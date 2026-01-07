@@ -21,6 +21,19 @@ public enum PasswordProtectionType
 }
 
 /// <summary>
+/// Sort options for categories and catalog items.
+/// </summary>
+public enum SortOption
+{
+    NameAscending,
+    NameDescending,
+    SizeAscending,
+    SizeDescending,
+    DateAscending,
+    DateDescending
+}
+
+/// <summary>
 /// Represents a category item in the tree view.
 /// </summary>
 public class CategoryItem
@@ -32,6 +45,7 @@ public class CategoryItem
     public DateTime ModifiedDate { get; set; } = DateTime.Now;
     public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
     public string? OwnPasswordHash { get; set; }
+    public SortOption SortOrder { get; set; } = SortOption.NameAscending;
 
     public override string ToString() => $"{Icon} {Name}";
 }
@@ -43,7 +57,7 @@ public class LinkItem : INotifyPropertyChanged
 {
     private int _catalogFileCount;
     private DateTime? _lastCatalogUpdate;
-    
+
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
@@ -54,7 +68,8 @@ public class LinkItem : INotifyPropertyChanged
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
-    
+    public SortOption CatalogSortOrder { get; set; } = SortOption.NameAscending;
+
     public DateTime? LastCatalogUpdate
     {
         get => _lastCatalogUpdate;
@@ -68,10 +83,10 @@ public class LinkItem : INotifyPropertyChanged
             }
         }
     }
-    
+
     public ulong? FileSize { get; set; }
     public bool AutoRefreshCatalog { get; set; } = false;
-    
+
     // Internal property to store catalog count for display
     [JsonIgnore]
     public int CatalogFileCount
@@ -102,7 +117,7 @@ public class LinkItem : INotifyPropertyChanged
                 var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
                 return $"{Title}{catalogInfo}";
             }
-            
+
             return Title;
         }
     }
@@ -120,7 +135,7 @@ public class LinkItem : INotifyPropertyChanged
             {
                 return Visibility.Visible;
             }
-            
+
             return Visibility.Collapsed;
         }
     }
@@ -143,8 +158,8 @@ public class LinkItem : INotifyPropertyChanged
             {
                 // Check if this folder or any of its subdirectories have been modified
                 // after the last catalog update
-                return HasDirectoryChangedRecursive(Url, LastCatalogUpdate.Value) 
-                    ? Visibility.Visible 
+                return HasDirectoryChangedRecursive(Url, LastCatalogUpdate.Value)
+                    ? Visibility.Visible
                     : Visibility.Collapsed;
             }
             catch
@@ -186,7 +201,7 @@ public class LinkItem : INotifyPropertyChanged
             foreach (var subdir in subdirectories)
             {
                 var subdirInfo = new DirectoryInfo(subdir);
-                
+
                 // Check if this subdirectory was modified after last update
                 if (subdirInfo.LastWriteTime > lastUpdate)
                 {
@@ -246,7 +261,7 @@ public class LinkItem : INotifyPropertyChanged
     {
         // Check if this is a zip archive (directory with .zip URL)
         bool isZipArchive = IsDirectory && Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
-        
+
         // For directories
         if (IsDirectory)
         {
@@ -255,13 +270,13 @@ public class LinkItem : INotifyPropertyChanged
             {
                 return "📁";
             }
-            
+
             // IMPORTANT: Catalog subdirectories should always use normal folder icon
             if (IsCatalogEntry)
             {
                 return "📁"; // Normal folder icon for catalog subdirectories
             }
-            
+
             // For non-catalog directories, use FolderType to determine icon
             return FolderType switch
             {
@@ -271,11 +286,11 @@ public class LinkItem : INotifyPropertyChanged
                 _ => "📁"                                   // Default folder icon (fallback)
             };
         }
-        
+
         // For web URLs (non-file URIs)
         if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)
             return "🌐";
-        
+
         // For files (both catalog entries and direct file links), use file extension
         var extension = Path.GetExtension(Url).ToLowerInvariant();
         return extension switch
@@ -305,7 +320,7 @@ public class LinkItem : INotifyPropertyChanged
             {
                 return Visibility.Visible;
             }
-            
+
             return Visibility.Collapsed;
         }
     }
@@ -313,14 +328,14 @@ public class LinkItem : INotifyPropertyChanged
     public override string ToString()
     {
         var icon = GetIconWithoutBadge();
-        
+
         // Show file count for catalog folders
         if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
         {
             var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
             return $"{icon} {Title}{catalogInfo}";
         }
-        
+
         return $"{icon} {Title}";
     }
 
@@ -354,25 +369,28 @@ public class CategoryNode
 public class CategoryData
 {
     public string Name { get; set; } = string.Empty;
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; set; }
-    
+
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public PasswordProtectionType PasswordProtection { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? OwnPasswordHash { get; set; }
-    
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public SortOption SortOrder { get; set; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<CategoryData>? SubCategories { get; set; }
 }
@@ -384,35 +402,38 @@ public class LinkData
 {
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsDirectory { get; set; }
-    
+
     public string CategoryPath { get; set; } = string.Empty;
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FolderLinkType? FolderType { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FileFilters { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsCatalogEntry { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTime? LastCatalogUpdate { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ulong? FileSize { get; set; }
-    
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AutoRefreshCatalog { get; set; }
-    
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public SortOption CatalogSortOrder { get; set; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }
 }
