@@ -15,6 +15,7 @@ public sealed partial class MainWindow
         await _treeViewEventService!.HandleSelectionChangedAsync(
             node,
             HideAllViewers,
+            ShowDetailsViewers,
             status => StatusText.Text = status);
     }
 

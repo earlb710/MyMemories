@@ -244,9 +244,18 @@ public class LinkItem : INotifyPropertyChanged
     /// </summary>
     public string GetIconWithoutBadge()
     {
+        // Check if this is a zip archive (directory with .zip URL)
+        bool isZipArchive = IsDirectory && Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        
         // For directories
         if (IsDirectory)
         {
+            // For zip archives, always use folder icon (will have Zip badge)
+            if (isZipArchive)
+            {
+                return "📁";
+            }
+            
             // IMPORTANT: Catalog subdirectories should always use normal folder icon
             if (IsCatalogEntry)
             {
@@ -281,6 +290,24 @@ public class LinkItem : INotifyPropertyChanged
             ".txt" or ".md" => "📃",
             _ => "📄" // Default file icon
         };
+    }
+
+    /// <summary>
+    /// Gets the visibility of the zip badge for zip archive folders
+    /// </summary>
+    [JsonIgnore]
+    public Visibility ShowZipBadge
+    {
+        get
+        {
+            // Show Zip badge only for zip archives (directories with .zip URLs)
+            if (IsDirectory && !IsCatalogEntry && Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return Visibility.Visible;
+            }
+            
+            return Visibility.Collapsed;
+        }
     }
 
     public override string ToString()
@@ -455,4 +482,6 @@ public class ZipFolderResult
     public string ZipFileName { get; set; } = string.Empty;
     public string TargetDirectory { get; set; } = string.Empty;
     public bool LinkToCategory { get; set; }
+    public bool UsePassword { get; set; }
+    public string? Password { get; set; }
 }

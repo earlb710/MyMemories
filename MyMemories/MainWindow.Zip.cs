@@ -1,5 +1,6 @@
-using Microsoft.UI.Xaml.Controls;
+﻿using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
+using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -34,11 +35,45 @@ public sealed partial class MainWindow
         var folderInfo = new DirectoryInfo(linkItem.Url);
         var parentDirectory = folderInfo.Parent?.FullName ?? folderInfo.Root.FullName;
 
-        // Show zip configuration dialog with folder statistics
+        // Get the parent category to check for password protection
+        var parentCategoryNode = _treeViewService!.GetParentCategoryNode(linkNode);
+        CategoryItem? parentCategory = parentCategoryNode?.Content as CategoryItem;
+        
+        // CRITICAL FIX: Get the ROOT category to check for password protection
+        var rootCategoryNode = GetRootCategoryNode(linkNode);
+        var rootCategory = rootCategoryNode?.Content as CategoryItem;
+        
+        // DEBUG OUTPUT
+        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Link: {linkItem.Title}");
+        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Parent category: {parentCategory?.Name}, PasswordProtection: {parentCategory?.PasswordProtection}");
+        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Root category: {rootCategory?.Name}, PasswordProtection: {rootCategory?.PasswordProtection}");
+        
+        // Check if ROOT category has password protection
+        bool categoryHasPassword = rootCategory?.PasswordProtection != PasswordProtectionType.None;
+        string? categoryPassword = null;
+
+        System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] categoryHasPassword: {categoryHasPassword}");
+
+        if (categoryHasPassword && rootCategory != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Attempting to get password for root category: {rootCategory.Name}");
+            // Get the password from the ROOT category
+            categoryPassword = await GetCategoryPasswordAsync(rootCategory);
+            System.Diagnostics.Debug.WriteLine($"[ZipFolderAsync] Password retrieved: {(categoryPassword != null ? "Yes" : "No")}");
+            if (categoryPassword == null)
+            {
+                // User cancelled password entry or password retrieval failed
+                return;
+            }
+        }
+
+        // Show zip configuration dialog with folder statistics and password option
         var result = await _linkDialog!.ShowZipFolderDialogAsync(
             linkItem.Title,
             parentDirectory,
-            linkItem.Url
+            new[] { linkItem.Url },
+            categoryHasPassword,
+            categoryPassword
         );
 
         if (result == null)
@@ -96,7 +131,7 @@ public sealed partial class MainWindow
         // Create zip file
         try
         {
-            StatusText.Text = $"Creating zip file '{zipFileName}'...";
+            StatusText.Text = $"Creating{(result.UsePassword ? " password-protected" : "")} zip file '{zipFileName}'...";
 
             // Check if this is a catalog folder
             bool isCatalogFolder = linkItem.FolderType == FolderLinkType.CatalogueFiles || 
@@ -107,30 +142,56 @@ public sealed partial class MainWindow
                 // CRITICAL FIX: Collect file paths on UI thread BEFORE entering background thread
                 var filesToZip = CollectCatalogedFilePaths(linkNode, linkItem.Url);
 
-                // Zip only the cataloged files (from TreeView children)
-                await Task.Run(() =>
+                if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
                 {
-                    using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                    // Password-protected catalog zip
+                    await ZipUtilities.CreatePasswordProtectedZipAsync(linkItem.Url, zipFilePath, result.Password);
+                }
+                else
+                {
+                    // Zip only the cataloged files (from TreeView children)
+                    await Task.Run(() =>
                     {
-                        foreach (var (filePath, relativePath) in filesToZip)
+                        using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
                         {
-                            if (File.Exists(filePath))
+                            foreach (var (filePath, relativePath) in filesToZip)
                             {
-                                archive.CreateEntryFromFile(filePath, relativePath, CompressionLevel.Optimal);
+                                if (File.Exists(filePath))
+                                {
+                                    archive.CreateEntryFromFile(filePath, relativePath, CompressionLevel.Optimal);
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
 
                 StatusText.Text = $"Successfully created '{zipFileName}' (cataloged files only)";
             }
             else
             {
-                // Zip entire folder contents (normal behavior)
-                await Task.Run(() =>
+                // Zip entire folder contents
+                if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
                 {
-                    ZipFile.CreateFromDirectory(linkItem.Url, zipFilePath, CompressionLevel.Optimal, false);
-                });
+                    // Use password-protected zip creation from ZipUtilities
+                    var success = await ZipUtilities.CreatePasswordProtectedZipAsync(
+                        linkItem.Url, 
+                        zipFilePath, 
+                        result.Password
+                    );
+
+                    if (!success)
+                    {
+                        throw new Exception("Failed to create password-protected zip file");
+                    }
+                }
+                else
+                {
+                    // Standard zip creation
+                    await Task.Run(() =>
+                    {
+                        ZipFile.CreateFromDirectory(linkItem.Url, zipFilePath, CompressionLevel.Optimal, false);
+                    });
+                }
 
                 StatusText.Text = $"Successfully created '{zipFileName}'";
             }
@@ -138,19 +199,20 @@ public sealed partial class MainWindow
             // If user wants to link the zip to the parent category
             if (result.LinkToCategory && linkNode.Parent != null)
             {
-                var parentCategoryNode = _treeViewService!.GetParentCategoryNode(linkNode);
-                if (parentCategoryNode != null)
+                var parentCategoryNodeForLink = _treeViewService!.GetParentCategoryNode(linkNode);
+                if (parentCategoryNodeForLink != null)
                 {
-                    var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNode);
+                    var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNodeForLink);
 
                     // Create a new link for the zip file AS A CATALOG FOLDER
                     var zipLinkItem = new LinkItem
                     {
                         Title = Path.GetFileNameWithoutExtension(zipFileName),
                         Url = zipFilePath,
-                        Description = isCatalogFolder 
+                        Description = (isCatalogFolder 
                             ? $"Zip archive of cataloged files from '{linkItem.Title}'"
-                            : $"Zip archive of '{linkItem.Title}'",
+                            : $"Zip archive of '{linkItem.Title}'")
+                            + (result.UsePassword ? " (password-protected)" : ""),
                         IsDirectory = true, // Treat zip as a directory/catalog folder
                         CategoryPath = categoryPath,
                         CreatedDate = DateTime.Now,
@@ -166,10 +228,10 @@ public sealed partial class MainWindow
                     await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
 
                     // Add the zip link to the parent category
-                    parentCategoryNode.Children.Add(zipLinkNode);
+                    parentCategoryNodeForLink.Children.Add(zipLinkNode);
 
                     // Save the updated category
-                    var rootNode = GetRootCategoryNode(parentCategoryNode);
+                    var rootNode = GetRootCategoryNode(parentCategoryNodeForLink);
                     await _categoryService!.SaveCategoryAsync(rootNode);
 
                     StatusText.Text = $"Created '{zipFileName}' and linked to '{categoryPath}'";
@@ -181,7 +243,8 @@ public sealed partial class MainWindow
             {
                 Title = "Zip Created Successfully",
                 Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
-                    + (isCatalogFolder ? "\n\nNote: Only cataloged files were included." : ""),
+                    + (isCatalogFolder ? "\n\nNote: Only cataloged files were included." : "")
+                    + (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };

@@ -129,11 +129,40 @@ public sealed partial class MainWindow
             defaultTargetDirectory = firstFolder.Parent?.FullName ?? defaultTargetDirectory;
         }
 
-        // Show zip dialog with multiple source folders
+        // CRITICAL FIX: Get the ROOT category to check for password protection
+        var rootCategoryNode = GetRootCategoryNode(_contextMenuNode);
+        var rootCategory = rootCategoryNode?.Content as CategoryItem;
+        
+        // DEBUG OUTPUT
+        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Current category: {category.Name}, PasswordProtection: {category.PasswordProtection}");
+        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Root category: {rootCategory?.Name}, PasswordProtection: {rootCategory?.PasswordProtection}");
+        
+        // Check if ROOT category has password protection (not the current subcategory)
+        bool categoryHasPassword = rootCategory?.PasswordProtection != PasswordProtectionType.None;
+        string? categoryPassword = null;
+
+        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] categoryHasPassword: {categoryHasPassword}");
+
+        if (categoryHasPassword && rootCategory != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Attempting to get password for root category: {rootCategory.Name}");
+            // Get the password from the ROOT category
+            categoryPassword = await GetCategoryPasswordAsync(rootCategory);
+            System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Password retrieved: {(categoryPassword != null ? "Yes" : "No")}");
+            if (categoryPassword == null)
+            {
+                // User cancelled password entry or password retrieval failed
+                return;
+            }
+        }
+
+        // Show zip dialog with multiple source folders and password info
         var result = await _linkDialog!.ShowZipFolderDialogAsync(
             category.Name,
             defaultTargetDirectory,
-            folderPaths.ToArray()
+            folderPaths.ToArray(),
+            categoryHasPassword,
+            categoryPassword
         );
 
         if (result == null)
@@ -191,30 +220,39 @@ public sealed partial class MainWindow
         // Create zip file from all folders
         try
         {
-            StatusText.Text = $"Creating zip file '{zipFileName}' from {folderPaths.Count} folder(s)...";
+            StatusText.Text = $"Creating{(result.UsePassword ? " password-protected" : "")} zip file '{zipFileName}' from {folderPaths.Count} folder(s)...";
 
-            await Task.Run(() =>
+            if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
             {
-                using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
+                // Use password-protected zip creation
+                await CreatePasswordProtectedMultiFolderZipAsync(folderPaths.ToArray(), zipFilePath, result.Password);
+            }
+            else
+            {
+                // Standard zip creation (existing code)
+                await Task.Run(() =>
                 {
-                    foreach (var folderPath in folderPaths)
+                    using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
                     {
-                        if (!Directory.Exists(folderPath))
-                            continue;
-
-                        // Add all files from this folder recursively
-                        var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-                        var folderName = new DirectoryInfo(folderPath).Name;
-
-                        foreach (var file in files)
+                        foreach (var folderPath in folderPaths)
                         {
-                            var relativePath = Path.GetRelativePath(folderPath, file);
-                            var entryName = Path.Combine(folderName, relativePath);
-                            archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                            if (!Directory.Exists(folderPath))
+                                continue;
+
+                            // Add all files from this folder recursively
+                            var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                            var folderName = new DirectoryInfo(folderPath).Name;
+
+                            foreach (var file in files)
+                            {
+                                var relativePath = Path.GetRelativePath(folderPath, file);
+                                var entryName = Path.Combine(folderName, relativePath);
+                                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
             StatusText.Text = $"Successfully created '{zipFileName}'";
 
@@ -222,7 +260,8 @@ public sealed partial class MainWindow
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}",
+                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
+                    + (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
@@ -539,5 +578,227 @@ public sealed partial class MainWindow
 
             await DeleteLinkAsync(link, _contextMenuNode);
         }
+    }
+
+    private async void LinkMenu_ExploreHere_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Check if this is a directory or zip file
+        bool isZipFile = link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(link.Url);
+        bool isDirectory = link.IsDirectory && Directory.Exists(link.Url);
+
+        if (isZipFile)
+        {
+            // For zip files, open the parent directory and select the zip file
+            try
+            {
+                var zipFileInfo = new FileInfo(link.Url);
+                var parentDirectory = zipFileInfo.DirectoryName;
+
+                if (!string.IsNullOrEmpty(parentDirectory) && Directory.Exists(parentDirectory))
+                {
+                    // Use Windows Explorer to open the folder and select the file
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{link.Url}\"");
+                    StatusText.Text = $"Opened location of '{link.Title}'";
+                }
+                else
+                {
+                    var errorDialog = new ContentDialog
+                    {
+                        Title = "Directory Not Found",
+                        Content = "The parent directory of this zip file does not exist.",
+                        CloseButtonText = "OK",
+                        XamlRoot = Content.XamlRoot
+                    };
+                    await errorDialog.ShowAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error Opening Location",
+                    Content = $"Could not open the file location:\n\n{ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+        else if (isDirectory)
+        {
+            // For directories, open in File Explorer
+            try
+            {
+                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(link.Url);
+                await Windows.System.Launcher.LaunchFolderAsync(folder);
+                StatusText.Text = $"Opened '{link.Title}' in File Explorer";
+            }
+            catch (Exception ex)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error Opening Folder",
+                    Content = $"Could not open the folder:\n\n{ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+            }
+        }
+        else
+        {
+            // Not a directory or zip file
+            var errorDialog = new ContentDialog
+            {
+                Title = "Not a Folder or Zip File",
+                Content = "The 'Explore Here' option is only available for folders and zip files.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+        }
+    }
+
+    /// <summary>
+    /// Gets the password for a category (either from cache or prompts user).
+    /// </summary>
+    private async Task<string?> GetCategoryPasswordAsync(CategoryItem category)
+    {
+        if (category.PasswordProtection == PasswordProtectionType.GlobalPassword)
+        {
+            // Use global password from category service
+            var globalPassword = _categoryService!.GetCachedGlobalPassword();
+            if (!string.IsNullOrEmpty(globalPassword))
+            {
+                return globalPassword;
+            }
+
+            // Global password not cached, this shouldn't happen but handle it
+            StatusText.Text = "Global password not available";
+            return null;
+        }
+        else if (category.PasswordProtection == PasswordProtectionType.OwnPassword)
+        {
+            // Prompt user for category's own password
+            var passwordDialog = new ContentDialog
+            {
+                Title = "Category Password Required",
+                Content = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = $"Enter the password for category '{category.Name}':",
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(0, 0, 0, 8)
+                        },
+                        new PasswordBox
+                        {
+                            Name = "CategoryPasswordInput",
+                            PlaceholderText = "Enter category password"
+                        }
+                    }
+                },
+                PrimaryButtonText = "OK",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await passwordDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                var passwordBox = (passwordDialog.Content as StackPanel)
+                    ?.Children.OfType<PasswordBox>()
+                    .FirstOrDefault();
+
+                if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
+                {
+                    // Verify password
+                    var enteredHash = PasswordUtilities.HashPassword(passwordBox.Password);
+                    if (enteredHash == category.OwnPasswordHash)
+                    {
+                        return passwordBox.Password;
+                    }
+                    else
+                    {
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Incorrect Password",
+                            Content = "The password you entered is incorrect.",
+                            CloseButtonText = "OK",
+                            XamlRoot = Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                        return null;
+                    }
+                }
+            }
+            
+            return null; // User cancelled
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Creates a password-protected zip file from multiple folders using SharpZipLib.
+    /// </summary>
+    private async Task CreatePasswordProtectedMultiFolderZipAsync(string[] folderPaths, string zipFilePath, string password)
+    {
+        await Task.Run(() =>
+        {
+            using var outputStream = new FileStream(zipFilePath, FileMode.Create);
+            using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
+
+            zipStream.SetLevel(6); // Compression level 0-9
+            zipStream.Password = password;
+            zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+
+            foreach (var folderPath in folderPaths)
+            {
+                if (!Directory.Exists(folderPath))
+                    continue;
+
+                var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                var folderName = new DirectoryInfo(folderPath).Name;
+
+                foreach (var filePath in files)
+                {
+                    try
+                    {
+                        var relativePath = Path.GetRelativePath(folderPath, filePath);
+                        var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
+
+                        var fileInfo = new FileInfo(filePath);
+                        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
+                        {
+                            DateTime = fileInfo.LastWriteTime,
+                            Size = fileInfo.Length,
+                            AESKeySize = 256
+                        };
+
+                        zipStream.PutNextEntry(entry);
+
+                        using var fileStream = File.OpenRead(filePath);
+                        fileStream.CopyTo(zipStream);
+
+                        zipStream.CloseEntry();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtilities.LogError("MainWindow.CreatePasswordProtectedMultiFolderZipAsync", $"Error adding file {filePath}", ex);
+                    }
+                }
+            }
+
+            zipStream.Finish();
+        });
     }
 }

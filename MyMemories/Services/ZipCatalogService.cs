@@ -33,30 +33,69 @@ public class ZipCatalogService
 
         try
         {
-            Debug.WriteLine($"[CatalogZipFileAsync] Cataloging zip file: {zipLinkItem.Url}");
+            // CRITICAL: Store the zip path at the start to ensure consistency
+            var zipPath = zipLinkItem.Url;
+            
+            Debug.WriteLine($"[CatalogZipFileAsync] Cataloging zip file: {zipPath}");
 
             // Read zip archive on background thread and collect data
             var catalogData = await Task.Run(() =>
             {
                 var entries = new List<(string name, string fullName, bool isDirectory, long length, DateTime lastWrite)>();
                 
-                using (var archive = ZipFile.OpenRead(zipLinkItem.Url))
+                try
                 {
-                    // Group entries by their immediate parent directory - get root level items only
-                    var rootEntries = archive.Entries
-                        .Where(entry => !string.IsNullOrEmpty(entry.Name)) // Skip directory-only entries
-                        .Where(entry => !entry.FullName.Contains('/') || entry.FullName.Split('/').Length == 2) // Root level files or first-level subdirs
-                        .ToList();
-
-                    foreach (var entry in rootEntries)
+                    // Try standard .NET ZipFile first - USE zipPath
+                    using (var archive = ZipFile.OpenRead(zipPath))
                     {
-                        entries.Add((
-                            entry.Name,
-                            entry.FullName,
-                            entry.FullName.EndsWith("/"),
-                            entry.Length,
-                            entry.LastWriteTime.DateTime
-                        ));
+                        var rootEntries = archive.Entries
+                            .Where(entry => !string.IsNullOrEmpty(entry.Name))
+                            .Where(entry => !entry.FullName.Contains('/') || entry.FullName.Split('/').Length == 2)
+                            .ToList();
+
+                        foreach (var entry in rootEntries)
+                        {
+                            entries.Add((
+                                entry.Name,
+                                entry.FullName,
+                                entry.FullName.EndsWith("/"),
+                                entry.Length,
+                                entry.LastWriteTime.DateTime
+                            ));
+                        }
+                    }
+                }
+                catch (InvalidDataException)
+                {
+                    // This is likely a password-protected zip, try SharpZipLib
+                    Debug.WriteLine($"[CatalogZipFileAsync] Standard ZipFile failed, trying SharpZipLib for password-protected zip");
+                    
+                    using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath))
+                    {
+                        // Note: For password-protected zips, we can enumerate entries but not read their contents
+                        // The password would be needed to extract/view files
+                        foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry entry in zipFile)
+                        {
+                            // Only get root-level entries
+                            var entryPath = entry.Name.Replace('\\', '/');
+                            var pathParts = entryPath.Split('/');
+                            
+                            // Root level: either no slashes, or one slash at end (directory), or exactly one path segment before file
+                            bool isRootLevel = pathParts.Length == 1 || 
+                                             (pathParts.Length == 2 && string.IsNullOrEmpty(pathParts[1]));
+                            
+
+                            if (isRootLevel && !string.IsNullOrEmpty(entry.Name))
+                            {
+                                entries.Add((
+                                    Path.GetFileName(entry.Name.TrimEnd('/', '\\')),
+                                    entryPath,
+                                    entry.IsDirectory,
+                                    entry.Size,
+                                    entry.DateTime
+                                ));
+                            }
+                        }
                     }
                 }
                 
@@ -75,7 +114,7 @@ public class ZipCatalogService
                 var catalogEntry = new LinkItem
                 {
                     Title = entryName,
-                    Url = $"{zipLinkItem.Url}::{fullName}", // Special format for zip entries
+                    Url = $"{zipPath}::{fullName}",  // CHANGED: Use zipPath instead of zipLinkItem.Url
                     Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
                     IsDirectory = isDirectory,
                     CategoryPath = zipLinkItem.CategoryPath,
@@ -88,19 +127,19 @@ public class ZipCatalogService
 
                 var catalogNode = new TreeViewNode { Content = catalogEntry };
 
-                // If it's a directory, catalog its contents recursively
+                // If it's a directory, catalog its contents recursively - USE zipPath
                 if (isDirectory)
                 {
-                    await CatalogZipDirectoryRecursiveAsync(zipLinkItem.Url, fullName, catalogNode, zipLinkItem);
+                    await CatalogZipDirectoryRecursiveAsync(zipPath, fullName, catalogNode, zipLinkItem);
                 }
 
                 zipLinkNode.Children.Add(catalogNode);
             }
 
-            // Update file count - this will populate CatalogFileCount
+            // Update file count
             _categoryService.UpdateCatalogFileCount(zipLinkNode);
             
-            // Trigger property change notification to update the display text
+            // Trigger property change notification
             if (zipLinkNode.Content is LinkItem linkItem)
             {
                 linkItem.RefreshChangeStatus();
@@ -122,30 +161,68 @@ public class ZipCatalogService
     {
         Debug.WriteLine($"[CatalogZipDirectoryRecursiveAsync] Cataloging subdirectory: {directoryPath}");
 
-        // Read subdirectory entries on background thread
         var subCatalogData = await Task.Run(() =>
         {
             var entries = new List<(string name, string fullName, bool isDirectory, long length, DateTime lastWrite)>();
             
             var dirPath = directoryPath.TrimEnd('/') + "/";
             
-            using (var archive = ZipFile.OpenRead(zipPath))
+            try
             {
-                var subEntries = archive.Entries
-                    .Where(entry => !string.IsNullOrEmpty(entry.Name))
-                    .Where(entry => entry.FullName.StartsWith(dirPath) && entry.FullName != dirPath)
-                    .Where(entry => entry.FullName.Substring(dirPath.Length).Split('/').Length <= 2) // Direct children only
-                    .ToList();
-
-                foreach (var entry in subEntries)
+                // Try standard .NET ZipFile first
+                using (var archive = ZipFile.OpenRead(zipPath))
                 {
-                    entries.Add((
-                        entry.Name,
-                        entry.FullName,
-                        entry.FullName.EndsWith("/"),
-                        entry.Length,
-                        entry.LastWriteTime.DateTime
-                    ));
+                    var subEntries = archive.Entries
+                        .Where(entry => !string.IsNullOrEmpty(entry.Name))
+                        .Where(entry => entry.FullName.StartsWith(dirPath) && entry.FullName != dirPath)
+                        .Where(entry => entry.FullName.Substring(dirPath.Length).Split('/').Length <= 2)
+                        .ToList();
+
+                    foreach (var entry in subEntries)
+                    {
+                        entries.Add((
+                            entry.Name,
+                            entry.FullName,
+                            entry.FullName.EndsWith("/"),
+                            entry.Length,
+                            entry.LastWriteTime.DateTime
+                        ));
+                    }
+                }
+            }
+            catch (InvalidDataException)
+            {
+                // Password-protected zip, use SharpZipLib
+                Debug.WriteLine($"[CatalogZipDirectoryRecursiveAsync] Using SharpZipLib for password-protected zip");
+                
+                using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath))
+                {
+                    foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry entry in zipFile)
+                    {
+                        var entryPath = entry.Name.Replace('\\', '/');
+                        
+                        if (entryPath.StartsWith(dirPath) && entryPath != dirPath)
+                        {
+                            var relativePath = entryPath.Substring(dirPath.Length);
+                            var pathParts = relativePath.Split('/');
+                            
+                            // Direct children only
+                            bool isDirectChild = pathParts.Length == 1 || 
+                                               (pathParts.Length == 2 && string.IsNullOrEmpty(pathParts[1]));
+                            
+
+                            if (isDirectChild)
+                            {
+                                entries.Add((
+                                    Path.GetFileName(entry.Name.TrimEnd('/', '\\')),
+                                    entryPath,
+                                    entry.IsDirectory,
+                                    entry.Size,
+                                    entry.DateTime
+                                ));
+                            }
+                        }
+                    }
                 }
             }
             
@@ -165,7 +242,7 @@ public class ZipCatalogService
             var catalogEntry = new LinkItem
             {
                 Title = entryName,
-                Url = $"{zipLinkItem.Url}::{fullName}",
+                Url = $"{zipPath}::{fullName}",  // CHANGED: Use zipPath instead of zipLinkItem.Url
                 Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
                 IsDirectory = isDirectory,
                 CategoryPath = zipLinkItem.CategoryPath,

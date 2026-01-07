@@ -25,15 +25,15 @@ public class ZipDialogBuilder
         _folderPickerService = new FolderPickerService(parentWindow);
     }
 
-    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath)
+    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string[] sourceFolderPaths,
+        bool categoryHasPassword = false,
+        string? categoryPassword = null)
     {
-        // For single source, wrap in array
-        return await ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, new[] { sourceFolderPath });
-    }
-
-    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string[] sourceFolderPaths)
-    {
-        var (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock) = BuildZipDialogUI(folderTitle, defaultTargetDirectory, sourceFolderPaths);
+        var (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox) = 
+            BuildZipDialogUI(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword);
 
         // Calculate and display folder statistics
         await UpdateFolderStatisticsAsync(sourceFolderPaths, statsTextBlock);
@@ -54,7 +54,7 @@ public class ZipDialogBuilder
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = _xamlRoot,
             IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
-                                      !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text)
+                                    !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text)
         };
 
         var result = await dialog.ShowAsync();
@@ -62,14 +62,27 @@ public class ZipDialogBuilder
         if (result == ContentDialogResult.Primary)
         {
             return await CreateZipResult(zipFileNameTextBox, targetDirectoryTextBox, 
-                stackPanel.Children[^1] as CheckBox);
+                linkToCategoryCheckBox, usePasswordCheckBox, categoryPassword);
         }
 
         return null;
     }
 
-    private (StackPanel, TextBox, TextBox, TextBlock, TextBlock) BuildZipDialogUI(string folderTitle, string defaultTargetDirectory, string[] sourceFolderPaths)
+    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath)
     {
+        // For single source, wrap in array
+        return await ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, new[] { sourceFolderPath }, false, null);
+    }
+
+    private (StackPanel, TextBox, TextBox, TextBlock, TextBlock, CheckBox, CheckBox?) BuildZipDialogUI(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string[] sourceFolderPaths,
+        bool categoryHasPassword)
+    {
+        // ADD THIS DEBUG LINE
+        System.Diagnostics.Debug.WriteLine($"[ZipDialogBuilder] Building UI - categoryHasPassword: {categoryHasPassword}");
+        
         var zipFileNameTextBox = new TextBox
         {
             Text = folderTitle,
@@ -138,6 +151,18 @@ public class ZipDialogBuilder
             Margin = new Thickness(0, 0, 0, 8)
         };
 
+        // Password checkbox (only show if category has password protection)
+        CheckBox? usePasswordCheckBox = null;
+        if (categoryHasPassword)
+        {
+            usePasswordCheckBox = new CheckBox
+            {
+                Content = "🔒 Password protect zip with category password",
+                IsChecked = true,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+        }
+
         var stackPanel = new StackPanel();
         
         // Description at top
@@ -197,7 +222,13 @@ public class ZipDialogBuilder
         // Link to category checkbox
         stackPanel.Children.Add(linkToCategoryCheckBox);
 
-        return (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock);
+        // Password checkbox (if available)
+        if (usePasswordCheckBox != null)
+        {
+            stackPanel.Children.Add(usePasswordCheckBox);
+        }
+
+        return (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox);
     }
 
     /// <summary>
@@ -375,7 +406,9 @@ public class ZipDialogBuilder
     private async Task<ZipFolderResult?> CreateZipResult(
         TextBox zipFileNameTextBox, 
         TextBox targetDirectoryTextBox,
-        CheckBox? linkToCategoryCheckBox)
+        CheckBox? linkToCategoryCheckBox,
+        CheckBox? usePasswordCheckBox,
+        string? categoryPassword)
     {
         string zipFileName = zipFileNameTextBox.Text.Trim();
         string targetDirectory = targetDirectoryTextBox.Text.Trim();
@@ -393,11 +426,15 @@ public class ZipDialogBuilder
             return null;
         }
 
+        bool usePassword = usePasswordCheckBox?.IsChecked == true;
+
         return new ZipFolderResult
         {
             ZipFileName = zipFileName,
             TargetDirectory = targetDirectory,
-            LinkToCategory = linkToCategoryCheckBox?.IsChecked == true
+            LinkToCategory = linkToCategoryCheckBox?.IsChecked == true,
+            UsePassword = usePassword,
+            Password = usePassword ? categoryPassword : null
         };
     }
 }

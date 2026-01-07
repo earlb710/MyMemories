@@ -847,4 +847,16 @@ public class CategoryService
             link.CatalogFileCount = fileCount;
         }
     }
+
+    /// <summary>
+    /// Gets the cached global password if available.
+    /// </summary>
+    public string? GetCachedGlobalPassword()
+    {
+        if (_passwordCache.TryGetValue("__GLOBAL__", out var globalPassword))
+        {
+            return globalPassword;
+        }
+        return null;
+    }
 }

@@ -99,7 +99,7 @@ public static class ZipUtilities
     /// Extracts a zip entry to a memory stream for viewing.
     /// Returns null if the entry doesn't exist or cannot be read.
     /// </summary>
-    public static async Task<Stream?> ExtractZipEntryToStreamAsync(string zipPath, string entryPath)
+    public static async Task<Stream?> ExtractZipEntryToStreamAsync(string zipPath, string entryPath, string? password = null)
     {
         try
         {
@@ -121,128 +121,104 @@ public static class ZipUtilities
                 return null;
             }
 
-            FileInfo zipFileInfo;
-            try
-            {
-                zipFileInfo = new FileInfo(zipPath);
-                if (zipFileInfo.Length == 0)
-                {
-                    LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Zip file is empty: {zipPath}");
-                    return null;
-                }
-            }
-            catch (Exception ex)
-            {
-                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Cannot access zip file: {ex.Message}");
-                return null;
-            }
-
             LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Extracting '{entryPath}' from '{zipPath}'");
 
             return await Task.Run(() =>
             {
-                ZipArchive? archive = null;
                 try
                 {
-                    try
+                    // Try standard .NET ZipArchive first (for non-password-protected)
+                    using (var archive = System.IO.Compression.ZipFile.OpenRead(zipPath))
                     {
-                        archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
-                    }
-                    catch (InvalidDataException ex)
-                    {
-                        LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", "Invalid zip file format", ex);
-                        return null;
-                    }
-                    catch (IOException ex)
-                    {
-                        LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", "IO error opening zip", ex);
-                        return null;
-                    }
+                        var normalizedEntryPath = entryPath.Replace('\\', '/');
+                        var entry = archive.GetEntry(normalizedEntryPath) ?? archive.GetEntry(entryPath);
 
-                    var normalizedEntryPath = entryPath.Replace('\\', '/');
-                    var entry = archive.GetEntry(normalizedEntryPath);
-
-                    if (entry == null)
-                    {
-                        entry = archive.GetEntry(entryPath);
-                    }
-
-                    if (entry == null)
-                    {
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", "Entry not found, trying case-insensitive search");
-                        var lowerEntryPath = normalizedEntryPath.ToLowerInvariant();
-
-                        foreach (var e in archive.Entries)
+                        if (entry == null)
                         {
-                            if (e.FullName.ToLowerInvariant() == lowerEntryPath)
-                            {
-                                entry = e;
-                                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Found entry with different case: {e.FullName}");
-                                break;
-                            }
+                            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry not found in archive: {entryPath}");
+                            return null;
                         }
-                    }
 
-                    if (entry == null)
-                    {
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry not found in archive: {entryPath}");
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", "Available entries:");
-                        foreach (var e in archive.Entries)
+                        if (entry.Length == 0)
                         {
-                            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"  - {e.FullName}");
+                            return new MemoryStream();
                         }
-                        return null;
-                    }
 
-                    if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
-                    {
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry is a directory, not a file: {entryPath}");
-                        return null;
-                    }
-
-                    if (entry.Length == 0)
-                    {
-                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry is empty (0 bytes): {entryPath}");
-                        return new MemoryStream();
-                    }
-
-                    const long MaxSizeInBytes = 500 * 1024 * 1024; // 500 MB limit
-                    if (entry.Length > MaxSizeInBytes)
-                    {
-                        LogUtilities.LogWarning("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry too large ({entry.Length} bytes): {entryPath}");
-                        return null;
-                    }
-
-                    LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Entry size: {entry.Length} bytes");
-
-                    var memoryStream = new MemoryStream((int)entry.Length);
-
-                    try
-                    {
+                        var memoryStream = new MemoryStream((int)entry.Length);
                         using (var entryStream = entry.Open())
                         {
                             entryStream.CopyTo(memoryStream);
                         }
+
+                        memoryStream.Position = 0;
+                        LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Successfully extracted {memoryStream.Length} bytes");
+                        return (Stream)memoryStream;
                     }
-                    catch (Exception ex)
+                }
+                catch (InvalidDataException)
+                {
+                    // Password-protected zip - use SharpZipLib with password
+                    if (string.IsNullOrEmpty(password))
                     {
-                        LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", "Error extracting entry", ex);
-                        memoryStream.Dispose();
+                        LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", 
+                            "Cannot extract from password-protected zip without password", null);
                         return null;
                     }
 
-                    memoryStream.Position = 0;
-                    LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", $"Successfully extracted {memoryStream.Length} bytes");
-                    return (Stream)memoryStream;
+                    LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
+                        "Using SharpZipLib with password to extract from password-protected zip");
+
+                    try
+                    {
+                        using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath))
+                        {
+                            zipFile.Password = password;
+
+                            var normalizedEntryPath = entryPath.Replace('\\', '/');
+                            var entry = zipFile.GetEntry(normalizedEntryPath);
+
+                            if (entry == null)
+                            {
+                                // Try without normalization
+                                entry = zipFile.GetEntry(entryPath);
+                            }
+
+                            if (entry == null)
+                            {
+                                LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
+                                    $"Entry not found in password-protected archive: {entryPath}");
+                                return null;
+                            }
+
+                            if (entry.Size == 0)
+                            {
+                                return new MemoryStream();
+                            }
+
+                            var memoryStream = new MemoryStream((int)entry.Size);
+                            
+                            using (var zipStream = zipFile.GetInputStream(entry))
+                            {
+                                zipStream.CopyTo(memoryStream);
+                            }
+
+                            memoryStream.Position = 0;
+                            LogUtilities.LogDebug("ZipUtilities.ExtractZipEntryToStreamAsync", 
+                                $"Successfully extracted {memoryStream.Length} bytes from password-protected zip");
+                            return (Stream)memoryStream;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", 
+                            "Error extracting from password-protected zip", ex);
+                        return null;
+                    }
                 }
                 catch (Exception ex)
                 {
                     LogUtilities.LogError("ZipUtilities.ExtractZipEntryToStreamAsync", "Unexpected error", ex);
                     return null;
-                }
-                finally
-                {
-                    archive?.Dispose();
                 }
             });
         }
@@ -281,6 +257,7 @@ public static class ZipUtilities
 
         try
         {
+            // Try standard .NET first
             using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
             var count = 0;
             foreach (var entry in archive.Entries)
@@ -292,8 +269,17 @@ public static class ZipUtilities
         }
         catch (InvalidDataException ex)
         {
-            LogUtilities.LogError("ZipUtilities.ValidateZipFile", $"Invalid zip file: {zipPath}", ex);
-            return false;
+            // Might be password-protected, try SharpZipLib
+            try
+            {
+                using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipPath);
+                return zipFile.Count > 0;
+            }
+            catch (Exception sharpEx)
+            {
+                LogUtilities.LogError("ZipUtilities.ValidateZipFile", $"Invalid zip file (SharpZipLib): {zipPath}", sharpEx);
+                return false;
+            }
         }
         catch (Exception ex)
         {

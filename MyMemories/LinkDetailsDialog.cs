@@ -59,5 +59,13 @@ public class LinkDetailsDialog
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPath);
 
     public Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string[] sourceFolderPaths) => 
-        _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths);
+        _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths, false, null);
+
+    public Task<ZipFolderResult?> ShowZipFolderDialogAsync(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string[] sourceFolderPaths,
+        bool categoryHasPassword,
+        string? categoryPassword) => 
+        _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword, categoryPassword);
 }

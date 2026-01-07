@@ -20,20 +20,20 @@ public class TreeViewEventService
         _linkSelectionService = linkSelectionService;
     }
 
-    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action<string> setStatus)
+    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         if (node.Content is CategoryItem category)
         {
-            await HandleCategorySelectionAsync(category, node, hideAllViewers, setStatus);
+            await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus);
         }
         else if (node.Content is LinkItem linkItem)
         {
             // CRITICAL FIX: Pass the node to the link selection service
-            await _linkSelectionService.HandleLinkSelectionAsync(linkItem, node, hideAllViewers, setStatus);
+            await _linkSelectionService.HandleLinkSelectionAsync(linkItem, node, hideAllViewers, showDetailsViewers, setStatus);
         }
     }
 
-    private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action<string> setStatus)
+    private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         hideAllViewers();
         _detailsViewService.ShowCategoryDetails(category, node);
@@ -41,6 +41,7 @@ public class TreeViewEventService
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);
 
+        showDetailsViewers();
         setStatus($"Viewing: {categoryPath} ({node.Children.Count} item(s))");
     }
 }

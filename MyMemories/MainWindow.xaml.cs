@@ -115,7 +115,7 @@ public sealed partial class MainWindow : Window
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
                 new ZipCatalogService(_categoryService, _treeViewService));
             _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, 
-                _treeViewService, _catalogService, _fileLauncherService);
+                _treeViewService, _catalogService, _fileLauncherService, _categoryService);
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
             _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService);
 

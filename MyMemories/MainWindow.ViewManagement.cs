@@ -49,6 +49,12 @@ public sealed partial class MainWindow
         }
     }
 
+    private void ShowDetailsViewers()
+    {
+        DetailsViewerScroll.Visibility = Visibility.Visible;
+        HeaderViewerScroll.Visibility = Visibility.Visible;
+    }
+
     private void SearchButton_Click(object sender, RoutedEventArgs e)
     {
         PerformSearch();

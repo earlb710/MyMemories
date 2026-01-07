@@ -163,6 +163,26 @@
                                                 </ToolTipService.ToolTip>
                                             </FontIcon>
 
+                                            <!-- Zip Badge Text for Zip Archives (bottom-right corner) -->
+                                            <Border
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Bottom"
+                                                Background="#FF2196F3"
+                                                CornerRadius="2"
+                                                Padding="2,0"
+                                                Margin="0,0,0,0"
+                                                Visibility="{Binding Content.ShowZipBadge, Mode=OneWay}">
+                                                <TextBlock
+                                                    Text="Zip"
+                                                    FontSize="6"
+                                                    FontWeight="Bold"
+                                                    Foreground="White"
+                                                    VerticalAlignment="Center"/>
+                                                <ToolTipService.ToolTip>
+                                                    <ToolTip Content="Zip archive"/>
+                                                </ToolTipService.ToolTip>
+                                            </Border>
+
                                             <!-- Warning Badge Icon for Changed Folders (top-right corner) -->
                                             <FontIcon 
                                                 Glyph="&#xE7BA;"
@@ -223,6 +243,12 @@
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem Text="Explore Here" Click="LinkMenu_ExploreHere_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8DA;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Zip Folder" Click="LinkMenu_ZipFolder_Click">
                                 <MenuFlyoutItem.Icon>

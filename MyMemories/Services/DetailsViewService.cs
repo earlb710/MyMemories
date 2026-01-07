@@ -827,31 +827,93 @@ public class DetailsViewService
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
         
-        // Count files and directories in the zip archive
+        // Count files and directories in the zip archive with retry logic
         try
         {
-            using (var archive = ZipFile.OpenRead(path))
+            int fileCount = 0;
+            int dirCount = 0;
+            int maxRetries = 3;
+            int retryDelay = 100; // milliseconds
+            bool isPasswordProtected = false;
+
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                int fileCount = 0;
-                int dirCount = 0;
-
-                foreach (var entry in archive.Entries)
+                try
                 {
-                    if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
+                    // Try standard .NET ZipArchive first (for non-encrypted zips)
+                    using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    using (var archive = new ZipArchive(fileStream, ZipArchiveMode.Read, false))
                     {
-                        dirCount++;
+                        foreach (var entry in archive.Entries)
+                        {
+                            if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
+                            {
+                                dirCount++;
+                            }
+                            else if (!string.IsNullOrEmpty(entry.Name))
+                            {
+                                fileCount++;
+                            }
+                        }
                     }
-                    else if (!string.IsNullOrEmpty(entry.Name))
+                    break; // Success, exit retry loop
+                }
+                catch (InvalidDataException)
+                {
+                    // This might be a password-protected zip, try SharpZipLib
+                    try
                     {
-                        fileCount++;
+                        using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(path))
+                        {
+                            // Note: We can't read encrypted zip contents without password
+                            // But we can at least detect it's password-protected
+                            isPasswordProtected = true;
+                            
+                            // Count entries (will be encrypted names)
+                            foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry entry in zipFile)
+                            {
+                                if (entry.IsDirectory)
+                                {
+                                    dirCount++;
+                                }
+                                else
+                                {
+                                    fileCount++;
+                                }
+                            }
+                        }
+                        break; // Successfully read with SharpZipLib
+                    }
+                    catch
+                    {
+                        // Still failed, maybe corrupted zip
+                        throw;
                     }
                 }
-
-                infoPanel.Children.Add(CreateStatLine($"📄 Files in Archive: {fileCount}"));
-                if (dirCount > 0)
+                catch (IOException) when (attempt < maxRetries - 1)
                 {
-                    infoPanel.Children.Add(CreateStatLine($"📁 Folders in Archive: {dirCount}"));
+                    // File is locked, wait and retry
+                    System.Threading.Thread.Sleep(retryDelay);
+                    retryDelay *= 2; // Exponential backoff
                 }
+            }
+
+            if (isPasswordProtected)
+            {
+                infoPanel.Children.Add(new TextBlock
+                {
+                    Text = "🔒 This archive is password-protected",
+                    FontSize = 14,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Colors.Orange),
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+            }
+
+            infoPanel.Children.Add(CreateStatLine($"📄 Files in Archive: {fileCount}"));
+            if (dirCount > 0)
+            {
+                infoPanel.Children.Add(CreateStatLine($"📁 Folders in Archive: {dirCount}"));
             }
         }
         catch (Exception ex)
@@ -975,8 +1037,25 @@ public class DetailsViewService
         {
             return await Task.Run(() =>
             {
-                using var archive = ZipFile.OpenRead(zipFilePath);
-                return archive.GetEntry("_MANIFEST.txt") != null;
+                try
+                {
+                    // Try standard .NET first
+                    using var archive = ZipFile.OpenRead(zipFilePath);
+                    return archive.GetEntry("_MANIFEST.txt") != null;
+                }
+                catch (InvalidDataException)
+                {
+                    // Might be password-protected, try SharpZipLib
+                    try
+                    {
+                        using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipFilePath);
+                        return zipFile.GetEntry("_MANIFEST.txt") != null;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
             });
         }
         catch
@@ -997,24 +1076,33 @@ public class DetailsViewService
         {
             return await Task.Run(() =>
             {
-                using var archive = ZipFile.OpenRead(zipFilePath);
-                var manifestEntry = archive.GetEntry("_MANIFEST.txt");
-                
-                if (manifestEntry == null)
-                    return null;
-
-                using var stream = manifestEntry.Open();
-                using var reader = new StreamReader(stream);
-                var content = reader.ReadToEnd();
-
-                // Parse the manifest to find "Root Category: [name]"
-                var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
-                if (match.Success)
+                try
                 {
-                    return match.Groups[1].Value.Trim();
-                }
+                    // Try standard .NET first
+                    using var archive = ZipFile.OpenRead(zipFilePath);
+                    var manifestEntry = archive.GetEntry("_MANIFEST.txt");
+                    
+                    if (manifestEntry == null)
+                        return null;
 
-                return null;
+                    using var stream = manifestEntry.Open();
+                    using var reader = new StreamReader(stream);
+                    var content = reader.ReadToEnd();
+
+                    // Parse the manifest to find "Root Category: [name]"
+                    var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
+                    if (match.Success)
+                    {
+                        return match.Groups[1].Value.Trim();
+                    }
+
+                    return null;
+                }
+                catch (InvalidDataException)
+                {
+                    // Password-protected zip - can't read manifest without password
+                    return "Password Protected";
+                }
             });
         }
         catch
