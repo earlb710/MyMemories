@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -37,7 +38,7 @@ public sealed partial class MainWindow
         var result = await _linkDialog!.ShowZipFolderDialogAsync(
             linkItem.Title,
             parentDirectory,
-            linkItem.Url  // Add the source folder path parameter
+            linkItem.Url
         );
 
         if (result == null)
@@ -103,29 +104,19 @@ public sealed partial class MainWindow
 
             if (isCatalogFolder)
             {
+                // CRITICAL FIX: Collect file paths on UI thread BEFORE entering background thread
+                var filesToZip = CollectCatalogedFilePaths(linkNode, linkItem.Url);
+
                 // Zip only the cataloged files (from TreeView children)
                 await Task.Run(() =>
                 {
                     using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
                     {
-                        // Get all catalog entries from the TreeView node
-                        var catalogEntries = linkNode.Children
-                            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
-                            .Select(child => (LinkItem)child.Content)
-                            .ToList();
-
-                        foreach (var catalogEntry in catalogEntries)
+                        foreach (var (filePath, relativePath) in filesToZip)
                         {
-                            if (catalogEntry.IsDirectory)
+                            if (File.Exists(filePath))
                             {
-                                // Add subdirectory and its cataloged contents
-                                AddDirectoryToCatalogZip(archive, catalogEntry, linkNode, linkItem.Url);
-                            }
-                            else if (File.Exists(catalogEntry.Url))
-                            {
-                                // Add individual file
-                                var relativePath = Path.GetRelativePath(linkItem.Url, catalogEntry.Url);
-                                archive.CreateEntryFromFile(catalogEntry.Url, relativePath, CompressionLevel.Optimal);
+                                archive.CreateEntryFromFile(filePath, relativePath, CompressionLevel.Optimal);
                             }
                         }
                     }
@@ -171,8 +162,8 @@ public sealed partial class MainWindow
 
                     var zipLinkNode = new TreeViewNode { Content = zipLinkItem };
 
-                    // Catalog the zip file contents immediately
-                    await CatalogZipFileAsync(zipLinkItem, zipLinkNode);
+                    // Catalog the zip file contents immediately using CatalogService
+                    await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
 
                     // Add the zip link to the parent category
                     parentCategoryNode.Children.Add(zipLinkNode);
@@ -189,7 +180,7 @@ public sealed partial class MainWindow
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
+                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
                     + (isCatalogFolder ? "\n\nNote: Only cataloged files were included." : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
@@ -208,6 +199,71 @@ public sealed partial class MainWindow
                 XamlRoot = Content.XamlRoot
             };
             await errorDialog.ShowAsync();
+        }
+    }
+
+    /// <summary>
+    /// Collects all cataloged file paths from the TreeView hierarchy.
+    /// MUST be called on UI thread before background processing.
+    /// </summary>
+    private List<(string filePath, string relativePath)> CollectCatalogedFilePaths(TreeViewNode linkNode, string rootPath)
+    {
+        var filesToZip = new List<(string, string)>();
+
+        // Get all catalog entries from the TreeView node
+        var catalogEntries = linkNode.Children
+            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
+            .Select(child => (node: child, link: (LinkItem)child.Content))
+            .ToList();
+
+        foreach (var (node, catalogEntry) in catalogEntries)
+        {
+            if (catalogEntry.IsDirectory)
+            {
+                // Recursively collect files from subdirectory
+                CollectCatalogedFilePathsRecursive(node, catalogEntry, rootPath, filesToZip);
+            }
+            else
+            {
+                // Add individual file
+                var relativePath = Path.GetRelativePath(rootPath, catalogEntry.Url);
+                filesToZip.Add((catalogEntry.Url, relativePath));
+            }
+        }
+
+        return filesToZip;
+    }
+
+    /// <summary>
+    /// Recursively collects cataloged file paths from a directory node.
+    /// MUST be called on UI thread.
+    /// </summary>
+    private void CollectCatalogedFilePathsRecursive(TreeViewNode dirNode, LinkItem directoryEntry, string rootPath, List<(string, string)> filesToZip)
+    {
+        if (!Directory.Exists(directoryEntry.Url))
+        {
+            return;
+        }
+
+        // Add all cataloged files from this directory
+        var catalogEntries = dirNode.Children
+            .Where(child => child.Content is LinkItem link && link.IsCatalogEntry)
+            .Select(child => (node: child, link: (LinkItem)child.Content))
+            .ToList();
+
+        foreach (var (node, catalogEntry) in catalogEntries)
+        {
+            if (catalogEntry.IsDirectory)
+            {
+                // Recursively add subdirectory files
+                CollectCatalogedFilePathsRecursive(node, catalogEntry, rootPath, filesToZip);
+            }
+            else
+            {
+                // Add file
+                var relativePath = Path.GetRelativePath(rootPath, catalogEntry.Url);
+                filesToZip.Add((catalogEntry.Url, relativePath));
+            }
         }
     }
 
@@ -253,177 +309,5 @@ public sealed partial class MainWindow
                 archive.CreateEntryFromFile(catalogEntry.Url, relativePath, CompressionLevel.Optimal);
             }
         }
-    }
-
-    /// <summary>
-    /// Creates a catalog of all files inside a zip archive.
-    /// </summary>
-    private async Task CatalogZipFileAsync(LinkItem zipLinkItem, TreeViewNode zipLinkNode)
-    {
-        if (!File.Exists(zipLinkItem.Url))
-        {
-            return;
-        }
-
-        try
-        {
-            // Read zip archive on background thread and collect data
-            var catalogData = await Task.Run(() =>
-            {
-                var entries = new List<(string name, string fullName, bool isDirectory, long length, DateTime lastWrite)>();
-                
-                using (var archive = ZipFile.OpenRead(zipLinkItem.Url))
-                {
-                    // Group entries by their immediate parent directory
-                    var rootEntries = archive.Entries
-                        .Where(entry => !string.IsNullOrEmpty(entry.Name)) // Skip directory-only entries
-                        .Where(entry => !entry.FullName.Contains('/') || entry.FullName.Split('/').Length == 2) // Root level files or first-level subdirs
-                        .ToList();
-
-                    foreach (var entry in rootEntries)
-                    {
-                        entries.Add((
-                            entry.Name,
-                            entry.FullName,
-                            entry.FullName.EndsWith("/"),
-                            entry.Length,
-                            entry.LastWriteTime.DateTime
-                        ));
-                    }
-                }
-                
-                return entries;
-            });
-
-            // Create TreeViewNode objects on UI thread
-            foreach (var (name, fullName, isDirectory, length, lastWrite) in catalogData)
-            {
-                var entryName = isDirectory 
-                    ? fullName.TrimEnd('/').Split('/').Last()
-                    : name;
-
-                var catalogEntry = new LinkItem
-                {
-                    Title = entryName,
-                    Url = $"{zipLinkItem.Url}::{fullName}", // Special format for zip entries
-                    Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
-                    IsDirectory = isDirectory,
-                    CategoryPath = zipLinkItem.CategoryPath,
-                    CreatedDate = lastWrite,
-                    ModifiedDate = lastWrite,
-                    FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true,
-                    FileSize = isDirectory ? null : (ulong)length
-                };
-
-                var catalogNode = new TreeViewNode { Content = catalogEntry };
-
-                // If it's a directory, catalog its contents recursively
-                if (isDirectory)
-                {
-                    await CatalogZipDirectoryRecursiveAsync(zipLinkItem.Url, fullName, catalogNode, zipLinkItem);
-                }
-
-                zipLinkNode.Children.Add(catalogNode);
-            }
-
-            // Update file count - this will populate CatalogFileCount
-            _categoryService!.UpdateCatalogFileCount(zipLinkNode);
-            
-            // Trigger property change notification to update the display text
-            if (zipLinkNode.Content is LinkItem linkItem)
-            {
-                linkItem.RefreshChangeStatus();
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = $"Error cataloging zip file: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Recursively catalogs subdirectories within a zip archive.
-    /// </summary>
-    private async Task CatalogZipDirectoryRecursiveAsync(string zipPath, string directoryPath, TreeViewNode parentNode, LinkItem zipLinkItem)
-    {
-        // Read subdirectory entries on background thread
-        var subCatalogData = await Task.Run(() =>
-        {
-            var entries = new List<(string name, string fullName, bool isDirectory, long length, DateTime lastWrite)>();
-            
-            var dirPath = directoryPath.TrimEnd('/') + "/";
-            
-            using (var archive = ZipFile.OpenRead(zipPath))
-            {
-                var subEntries = archive.Entries
-                    .Where(entry => !string.IsNullOrEmpty(entry.Name))
-                    .Where(entry => entry.FullName.StartsWith(dirPath) && entry.FullName != dirPath)
-                    .Where(entry => entry.FullName.Substring(dirPath.Length).Split('/').Length <= 2) // Direct children only
-                    .ToList();
-
-                foreach (var entry in subEntries)
-                {
-                    entries.Add((
-                        entry.Name,
-                        entry.FullName,
-                        entry.FullName.EndsWith("/"),
-                        entry.Length,
-                        entry.LastWriteTime.DateTime
-                    ));
-                }
-            }
-            
-            return entries;
-        });
-
-        // Create TreeViewNode objects on UI thread
-        foreach (var (name, fullName, isDirectory, length, lastWrite) in subCatalogData)
-        {
-            var relativePath = fullName.Substring(directoryPath.TrimEnd('/').Length + 1);
-            var entryName = isDirectory 
-                ? relativePath.TrimEnd('/').Split('/').Last()
-                : name;
-
-            var catalogEntry = new LinkItem
-            {
-                Title = entryName,
-                Url = $"{zipLinkItem.Url}::{fullName}",
-                Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
-                IsDirectory = isDirectory,
-                CategoryPath = zipLinkItem.CategoryPath,
-                CreatedDate = lastWrite,
-                ModifiedDate = lastWrite,
-                FolderType = FolderLinkType.LinkOnly,
-                IsCatalogEntry = true,
-                FileSize = isDirectory ? null : (ulong)length
-            };
-
-            var catalogNode = new TreeViewNode { Content = catalogEntry };
-
-            // Recursively catalog subdirectories
-            if (isDirectory)
-            {
-                await CatalogZipDirectoryRecursiveAsync(zipPath, fullName, catalogNode, zipLinkItem);
-            }
-
-            parentNode.Children.Add(catalogNode);
-        }
-    }
-
-    /// <summary>
-    /// Formats file size in human-readable format.
-    /// </summary>
-    private string FormatFileSize(ulong bytes)
-    {
-        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
     }
 }

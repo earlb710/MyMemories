@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using MyMemories.Services; 
 
 namespace MyMemories;
 
@@ -316,7 +317,7 @@ public sealed partial class MainWindow
 
             // Re-catalog the updated zip
             _categoryService!.RemoveCatalogEntries(zipLinkNode);
-            await CatalogZipFileAsync(zipLinkItem, zipLinkNode);
+            await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
 
             // Update the zip link item
             zipLinkItem.LastCatalogUpdate = DateTime.Now;
@@ -340,7 +341,7 @@ public sealed partial class MainWindow
                 Title = "Archive Refreshed",
                 Content = $"The zip archive has been successfully refreshed from the current state of category '{rootCategoryName}'.\n\n" +
                          $"Location: {zipLinkItem.Url}\n" +
-                         $"Size: {FormatFileSize(zipLinkItem.FileSize ?? 0)}",
+                         $"Size: {FileViewerService.FormatFileSize(zipLinkItem.FileSize ?? 0)}",
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };

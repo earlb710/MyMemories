@@ -1,11 +1,11 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
-using MyMemories.Utilities; // Add this line
+using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq; // Add this line
+using System.Linq;
 using System.Threading.Tasks;
 using WinRT.Interop;
 using Microsoft.UI.Windowing;
@@ -32,6 +32,11 @@ public sealed partial class MainWindow : Window
     private DetailsViewService? _detailsViewService;
     private TreeViewService? _treeViewService;
     private ConfigurationService? _configService;
+    private TreeViewEventService? _treeViewEventService;
+    private DoubleTapHandlerService? _doubleTapHandlerService;
+    private CatalogService? _catalogService;
+    private FileLauncherService? _fileLauncherService;
+    private LinkSelectionService? _linkSelectionService;
 
     public MainWindow()
     {
@@ -104,6 +109,15 @@ public sealed partial class MainWindow : Window
             _detailsViewService.SetHeaderPanel(HeaderPanel);
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            
+            // Initialize new refactored services
+            _fileLauncherService = new FileLauncherService();
+            _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
+                new ZipCatalogService(_categoryService, _treeViewService));
+            _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, 
+                _treeViewService, _catalogService, _fileLauncherService);
+            _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
+            _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService);
 
             // Check if any categories use global password and prompt BEFORE loading
             await PromptForGlobalPasswordIfNeededAsync();
@@ -341,38 +355,12 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            // Remove existing catalog entries
-            _categoryService!.RemoveCatalogEntries(linkNode);
+            // Delegate to CatalogService for the actual refresh
+            await _catalogService!.RefreshCatalogAsync(linkItem, linkNode);
 
-            // Create new catalog entries
-            var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
-
-            // Update the folder link's LastCatalogUpdate timestamp
-            linkItem.LastCatalogUpdate = DateTime.Now;
-
-            // Add new catalog entries to the tree
-            foreach (var entry in catalogEntries)
-            {
-                var entryNode = new TreeViewNode { Content = entry };
-                
-                // If it's a subdirectory, recursively populate its contents
-                if (entry.IsDirectory)
-                {
-                    await PopulateSubdirectoryAsync(entryNode, entry, linkItem.CategoryPath);
-                }
-                
-                linkNode.Children.Add(entryNode);
-            }
-
-            // Update the catalog file count
-            _categoryService.UpdateCatalogFileCount(linkNode);
-
-            // Refresh the link node to update the display and get the NEW node reference
-            var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
-
-            // Save the changes using the NEW refreshed node (not the old linkNode)
-            var rootNode = GetRootCategoryNode(refreshedNode);
-            await _categoryService.SaveCategoryAsync(rootNode);
+            // Save the changes
+            var rootNode = GetRootCategoryNode(linkNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
         }
         catch
         {

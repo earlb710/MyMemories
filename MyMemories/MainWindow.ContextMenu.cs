@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using MyMemories.Services;
 using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
@@ -221,7 +222,7 @@ public sealed partial class MainWindow
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}",
+                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}",
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };

@@ -99,8 +99,8 @@ public sealed partial class MainWindow
                 await _detailsViewService!.ShowLinkDetailsAsync(
                     link,
                     newNode,
-                    async () => await CreateCatalogAsync(link, newNode),
-                    async () => await RefreshCatalogAsync(link, newNode)
+                    async () => await _catalogService!.CreateCatalogAsync(link, newNode),
+                    async () => await _catalogService!.RefreshCatalogAsync(link, newNode)
                 );
             }
         }
@@ -150,8 +150,8 @@ public sealed partial class MainWindow
                 await _detailsViewService!.ShowLinkDetailsAsync(
                     link,
                     node,
-                    async () => await CreateCatalogAsync(link, node),
-                    async () => await RefreshCatalogAsync(link, node)
+                    async () => await _catalogService!.CreateCatalogAsync(link, node),
+                    async () => await _catalogService!.RefreshCatalogAsync(link, node)
                 );
             }
         }
