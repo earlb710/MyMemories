@@ -19,6 +19,9 @@ public static class SortingService
         if (categoryNode.Content is not CategoryItem category)
             return;
 
+        // Preserve expansion states
+        var expansionStates = PreserveExpansionStates(categoryNode);
+
         var children = categoryNode.Children.ToList();
         
         // Separate categories and links
@@ -44,6 +47,9 @@ public static class SortingService
 
         // Update the category's sort order
         category.SortOrder = sortOption;
+
+        // Restore expansion states
+        RestoreExpansionStates(categoryNode, expansionStates);
     }
 
     /// <summary>
@@ -53,6 +59,9 @@ public static class SortingService
     {
         if (linkNode.Content is not LinkItem link || !link.IsDirectory)
             return;
+
+        // Preserve expansion states
+        var expansionStates = PreserveExpansionStates(linkNode);
 
         var children = linkNode.Children.ToList();
         
@@ -79,6 +88,9 @@ public static class SortingService
 
         // Update the link's catalog sort order
         link.CatalogSortOrder = sortOption;
+
+        // Restore expansion states
+        RestoreExpansionStates(linkNode, expansionStates);
     }
 
     /// <summary>
@@ -100,6 +112,71 @@ public static class SortingService
         foreach (var subdir in subdirectories)
         {
             SortCatalogEntriesRecursive(subdir, sortOption);
+        }
+    }
+
+    /// <summary>
+    /// Preserves the expansion state of all nodes in a tree hierarchy.
+    /// </summary>
+    private static Dictionary<string, bool> PreserveExpansionStates(TreeViewNode rootNode)
+    {
+        var states = new Dictionary<string, bool>();
+        PreserveExpansionStatesRecursive(rootNode, states, "");
+        return states;
+    }
+
+    private static void PreserveExpansionStatesRecursive(TreeViewNode node, Dictionary<string, bool> states, string path)
+    {
+        // Create a unique path for this node
+        string nodeName = node.Content switch
+        {
+            CategoryItem cat => cat.Name,
+            LinkItem link => link.Title,
+            _ => node.GetHashCode().ToString()
+        };
+
+        string currentPath = string.IsNullOrEmpty(path) ? nodeName : $"{path}/{nodeName}";
+        
+        // Store expansion state
+        states[currentPath] = node.IsExpanded;
+
+        // Recursively process children
+        foreach (var child in node.Children)
+        {
+            PreserveExpansionStatesRecursive(child, states, currentPath);
+        }
+    }
+
+    /// <summary>
+    /// Restores the expansion state of all nodes in a tree hierarchy.
+    /// </summary>
+    private static void RestoreExpansionStates(TreeViewNode rootNode, Dictionary<string, bool> states)
+    {
+        RestoreExpansionStatesRecursive(rootNode, states, "");
+    }
+
+    private static void RestoreExpansionStatesRecursive(TreeViewNode node, Dictionary<string, bool> states, string path)
+    {
+        // Create the same unique path used during preservation
+        string nodeName = node.Content switch
+        {
+            CategoryItem cat => cat.Name,
+            LinkItem link => link.Title,
+            _ => node.GetHashCode().ToString()
+        };
+
+        string currentPath = string.IsNullOrEmpty(path) ? nodeName : $"{path}/{nodeName}";
+        
+        // Restore expansion state if it was recorded
+        if (states.TryGetValue(currentPath, out bool wasExpanded))
+        {
+            node.IsExpanded = wasExpanded;
+        }
+
+        // Recursively process children
+        foreach (var child in node.Children)
+        {
+            RestoreExpansionStatesRecursive(child, states, currentPath);
         }
     }
 
