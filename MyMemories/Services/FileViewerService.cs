@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
@@ -63,7 +62,7 @@ public class FileViewerService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[FileViewerService.LoadFileAsync] Error: {ex.Message}");
+            LogUtilities.LogError("FileViewerService.LoadFileAsync", "Error loading file", ex);
             throw new InvalidOperationException($"Error loading file: {ex.Message}", ex);
         }
     }
@@ -73,42 +72,40 @@ public class FileViewerService
     /// </summary>
     public async Task<FileLoadResult> LoadZipEntryAsync(string zipEntryUrl)
     {
-        Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading zip entry: {zipEntryUrl}");
+        LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", $"Loading zip entry: {zipEntryUrl}");
 
         var (zipPath, entryPath) = ZipUtilities.ParseZipEntryUrl(zipEntryUrl);
 
         if (zipPath == null || entryPath == null)
         {
             var error = "Invalid zip entry URL format. Expected format: 'zipPath::entryPath'";
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] {error}");
+            LogUtilities.LogError("FileViewerService.LoadZipEntryAsync", error);
             throw new InvalidOperationException(error);
         }
 
-        // Validate zip file
         if (!File.Exists(zipPath))
         {
             var error = $"Zip file not found: {zipPath}";
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] {error}");
+            LogUtilities.LogError("FileViewerService.LoadZipEntryAsync", error);
             throw new FileNotFoundException(error, zipPath);
         }
 
         if (!ZipUtilities.ValidateZipFile(zipPath))
         {
             var error = $"Zip file is corrupted or invalid: {zipPath}";
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] {error}");
+            LogUtilities.LogError("FileViewerService.LoadZipEntryAsync", error);
             throw new InvalidDataException(error);
         }
 
-        // Check if entry exists
         var (exists, size, modified) = ZipUtilities.GetEntryInfo(zipPath, entryPath);
         if (!exists)
         {
             var error = $"Entry '{entryPath}' not found in zip archive '{Path.GetFileName(zipPath)}'";
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] {error}");
+            LogUtilities.LogError("FileViewerService.LoadZipEntryAsync", error);
             throw new FileNotFoundException(error);
         }
 
-        Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Entry info - Size: {size} bytes, Modified: {modified}");
+        LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", $"Entry info - Size: {size} bytes, Modified: {modified}");
 
         var extension = ZipUtilities.GetZipEntryExtension(entryPath);
         var fileName = Path.GetFileName(entryPath);
@@ -117,39 +114,38 @@ public class FileViewerService
         {
             if (IsImageFile(extension))
             {
-                Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading as image");
+                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as image");
                 var bitmap = await LoadImageFromZipAsync(zipPath, entryPath);
                 return new FileLoadResult(FileViewerType.Image, fileName, bitmap);
             }
             else if (extension == ".pdf")
             {
-                Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading as PDF");
+                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as PDF");
                 await LoadPdfFromZipAsync(zipPath, entryPath);
                 return new FileLoadResult(FileViewerType.Web, fileName, null);
             }
             else if (extension is ".html" or ".htm")
             {
-                Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading as HTML");
+                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as HTML");
                 await LoadHtmlFromZipAsync(zipPath, entryPath);
                 return new FileLoadResult(FileViewerType.Web, fileName, null);
             }
             else if (IsTextFile(extension))
             {
-                Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading as text");
+                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as text");
                 await LoadTextFromZipAsync(zipPath, entryPath);
                 return new FileLoadResult(FileViewerType.Text, fileName, null);
             }
             else
             {
-                Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Loading as text (default)");
+                LogUtilities.LogDebug("FileViewerService.LoadZipEntryAsync", "Loading as text (default)");
                 await LoadTextFromZipAsync(zipPath, entryPath);
                 return new FileLoadResult(FileViewerType.Text, fileName, null);
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Error loading entry: {ex.GetType().Name} - {ex.Message}");
-            Debug.WriteLine($"[FileViewerService.LoadZipEntryAsync] Stack trace: {ex.StackTrace}");
+            LogUtilities.LogError("FileViewerService.LoadZipEntryAsync", $"Error loading entry '{fileName}' from zip", ex);
             throw new InvalidOperationException($"Error loading '{fileName}' from zip: {ex.Message}", ex);
         }
     }
@@ -178,7 +174,7 @@ public class FileViewerService
 
     private async Task<BitmapImage> LoadImageFromZipAsync(string zipPath, string entryPath)
     {
-        Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Extracting image from zip");
+        LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Extracting image from zip");
 
         var stream = await ZipUtilities.ExtractZipEntryToStreamAsync(zipPath, entryPath);
         if (stream == null)
@@ -186,32 +182,28 @@ public class FileViewerService
             throw new InvalidOperationException($"Failed to extract image '{entryPath}' from zip archive");
         }
 
-        Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Stream size: {stream.Length} bytes");
+        LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Stream size: {stream.Length} bytes");
 
         try
         {
             var bitmap = new BitmapImage();
 
-            // Convert Stream to IRandomAccessStream properly
             using (var memStream = new InMemoryRandomAccessStream())
             {
-                Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Converting to InMemoryRandomAccessStream");
+                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Converting to InMemoryRandomAccessStream");
 
-                // Copy data to InMemoryRandomAccessStream
                 var writeStream = memStream.AsStreamForWrite();
                 await stream.CopyToAsync(writeStream);
                 await writeStream.FlushAsync();
 
-                Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Stream copied, size: {memStream.Size} bytes");
+                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Stream copied, size: {memStream.Size} bytes");
 
-                // Reset position for reading
                 memStream.Seek(0);
 
-                // Set source
-                Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Setting bitmap source");
+                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", "Setting bitmap source");
                 await bitmap.SetSourceAsync(memStream);
 
-                Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Bitmap loaded - PixelWidth: {bitmap.PixelWidth}, PixelHeight: {bitmap.PixelHeight}");
+                LogUtilities.LogDebug("FileViewerService.LoadImageFromZipAsync", $"Bitmap loaded - PixelWidth: {bitmap.PixelWidth}, PixelHeight: {bitmap.PixelHeight}");
             }
 
             _imageViewer.Source = bitmap;
@@ -219,7 +211,7 @@ public class FileViewerService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[FileViewerService.LoadImageFromZipAsync] Error setting bitmap: {ex.GetType().Name} - {ex.Message}");
+            LogUtilities.LogError("FileViewerService.LoadImageFromZipAsync", "Error setting bitmap", ex);
             throw new InvalidOperationException($"Failed to load image: {ex.Message}", ex);
         }
         finally
@@ -270,13 +262,12 @@ public class FileViewerService
 
     private async Task LoadPdfFromZipAsync(string zipPath, string entryPath)
     {
-        // Extract PDF to temp file since WebView2 needs a file path for PDFs
         var tempDir = Path.Combine(Path.GetTempPath(), "MyMemories", Path.GetFileNameWithoutExtension(zipPath));
         Directory.CreateDirectory(tempDir);
 
         var tempFilePath = Path.Combine(tempDir, Path.GetFileName(entryPath));
 
-        Debug.WriteLine($"[FileViewerService.LoadPdfFromZipAsync] Extracting PDF to: {tempFilePath}");
+        LogUtilities.LogDebug("FileViewerService.LoadPdfFromZipAsync", $"Extracting PDF to: {tempFilePath}");
 
         var stream = await ZipUtilities.ExtractZipEntryToStreamAsync(zipPath, entryPath);
         if (stream == null)
@@ -290,7 +281,7 @@ public class FileViewerService
             await stream.CopyToAsync(fileStream);
         }
 
-        Debug.WriteLine($"[FileViewerService.LoadPdfFromZipAsync] PDF extracted, size: {new FileInfo(tempFilePath).Length} bytes");
+        LogUtilities.LogDebug("FileViewerService.LoadPdfFromZipAsync", $"PDF extracted, size: {new FileInfo(tempFilePath).Length} bytes");
 
         if (_webViewer.CoreWebView2 == null)
         {

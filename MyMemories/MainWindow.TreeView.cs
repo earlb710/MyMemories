@@ -394,8 +394,8 @@ public sealed partial class MainWindow
             _categoryService!.UpdateCatalogFileCount(linkNode);
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
-            var rootNode = GetRootCategoryNode(refreshedNode);
-            await _categoryService.SaveCategoryAsync(rootNode);
+            // Update parent categories' ModifiedDate and save
+            await UpdateParentCategoriesAndSaveAsync(refreshedNode);
 
             refreshedNode.IsExpanded = true;
             await _detailsViewService!.ShowLinkDetailsAsync(linkItem, refreshedNode,
@@ -473,8 +473,8 @@ public sealed partial class MainWindow
 
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
-            var rootNode = GetRootCategoryNode(refreshedNode);
-            await _categoryService.SaveCategoryAsync(rootNode);
+            // Update parent categories' ModifiedDate and save
+            await UpdateParentCategoriesAndSaveAsync(refreshedNode);
 
             await _detailsViewService!.ShowLinkDetailsAsync(linkItem, refreshedNode,
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),

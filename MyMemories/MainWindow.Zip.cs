@@ -33,10 +33,11 @@ public sealed partial class MainWindow
         var folderInfo = new DirectoryInfo(linkItem.Url);
         var parentDirectory = folderInfo.Parent?.FullName ?? folderInfo.Root.FullName;
 
-        // Show zip configuration dialog
+        // Show zip configuration dialog with folder statistics
         var result = await _linkDialog!.ShowZipFolderDialogAsync(
             linkItem.Title,
-            parentDirectory
+            parentDirectory,
+            linkItem.Url  // Add the source folder path parameter
         );
 
         if (result == null)

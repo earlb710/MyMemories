@@ -56,8 +56,8 @@ public sealed partial class MainWindow
             result.CategoryNode.IsExpanded = true;
             _lastUsedCategory = result.CategoryNode;
 
-            var rootNode = GetRootCategoryNode(result.CategoryNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
+            // Update parent categories' ModifiedDate and save
+            await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
 
             StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
         }
@@ -88,8 +88,8 @@ public sealed partial class MainWindow
             var parentCategory = newNode.Parent;
             if (parentCategory != null)
             {
-                var rootNode = GetRootCategoryNode(parentCategory);
-                await _categoryService!.SaveCategoryAsync(rootNode);
+                // Update parent categories' ModifiedDate and save
+                await UpdateParentCategoriesAndSaveAsync(parentCategory);
             }
 
             StatusText.Text = $"Updated link: {editResult.Title}";
@@ -128,6 +128,10 @@ public sealed partial class MainWindow
             currentCategoryNode.Children.Remove(node);
             targetCategoryNode.Children.Add(node);
             targetCategoryNode.IsExpanded = true;
+
+            // Update ModifiedDate for both source and target category hierarchies
+            UpdateParentCategoriesModifiedDate(currentCategoryNode);
+            UpdateParentCategoriesModifiedDate(targetCategoryNode);
 
             var sourceRootNode = GetRootCategoryNode(currentCategoryNode);
             var targetRootNode = GetRootCategoryNode(targetCategoryNode);
@@ -172,8 +176,8 @@ public sealed partial class MainWindow
             var parentCategory = node.Parent;
             parentCategory.Children.Remove(node);
 
-            var rootNode = GetRootCategoryNode(parentCategory);
-            await _categoryService!.SaveCategoryAsync(rootNode);
+            // Update parent categories' ModifiedDate and save
+            await UpdateParentCategoriesAndSaveAsync(parentCategory);
 
             if (LinksTreeView.SelectedNode == node)
             {

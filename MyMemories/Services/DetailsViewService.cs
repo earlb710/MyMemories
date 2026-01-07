@@ -875,4 +875,23 @@ public class DetailsViewService
 
         _detailsPanel.Children.Add(timestampsPanel);
     }
+
+    private async Task<bool> CheckZipHasManifestAsync(string zipFilePath)
+    {
+        if (!File.Exists(zipFilePath))
+            return false;
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                using var archive = ZipFile.OpenRead(zipFilePath);
+                return archive.GetEntry("_MANIFEST.txt") != null;
+            });
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

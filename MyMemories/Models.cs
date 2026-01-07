@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml;
@@ -107,6 +108,24 @@ public class LinkItem : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// Gets the visibility of the link badge for LinkOnly folders
+    /// </summary>
+    [JsonIgnore]
+    public Visibility ShowLinkBadge
+    {
+        get
+        {
+            // Show link badge only for LinkOnly folder types (not catalog entries)
+            if (IsDirectory && !IsCatalogEntry && FolderType == FolderLinkType.LinkOnly)
+            {
+                return Visibility.Visible;
+            }
+            
+            return Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
     /// Gets the visibility of the change badge
     /// </summary>
     [JsonIgnore]
@@ -114,7 +133,7 @@ public class LinkItem : INotifyPropertyChanged
     {
         get
         {
-            if (!IsDirectory || IsCatalogEntry || !LastCatalogUpdate.HasValue)
+            if (!IsDirectory || !LastCatalogUpdate.HasValue)
                 return Visibility.Collapsed;
 
             if (!Directory.Exists(Url))
@@ -122,28 +141,86 @@ public class LinkItem : INotifyPropertyChanged
 
             try
             {
-                var dirInfo = new DirectoryInfo(Url);
-                
-                // Method 1: Check if directory was modified after last catalog update
-                if (dirInfo.LastWriteTime > LastCatalogUpdate.Value)
-                {
-                    return Visibility.Visible;
-                }
-                
-                // Method 2: Compare actual file count with cataloged file count
-                // This catches deletions that don't update LastWriteTime
-                var currentFileCount = Directory.GetFiles(Url).Length;
-                if (currentFileCount != CatalogFileCount)
-                {
-                    return Visibility.Visible;
-                }
-                
-                return Visibility.Collapsed;
+                // Check if this folder or any of its subdirectories have been modified
+                // after the last catalog update
+                return HasDirectoryChangedRecursive(Url, LastCatalogUpdate.Value) 
+                    ? Visibility.Visible 
+                    : Visibility.Collapsed;
             }
             catch
             {
                 return Visibility.Collapsed;
             }
+        }
+    }
+
+    /// <summary>
+    /// Recursively checks if a directory or any of its subdirectories have changed
+    /// after the specified timestamp.
+    /// </summary>
+    private bool HasDirectoryChangedRecursive(string directoryPath, DateTime lastUpdate)
+    {
+        try
+        {
+            var dirInfo = new DirectoryInfo(directoryPath);
+
+            // Method 1: Check if the directory itself was modified after last update
+            if (dirInfo.LastWriteTime > lastUpdate)
+            {
+                return true;
+            }
+
+            // Method 2: For catalog entries (subdirectories), compare file count
+            // This catches deletions that don't update LastWriteTime
+            if (IsCatalogEntry)
+            {
+                var currentFileCount = Directory.GetFiles(directoryPath).Length;
+                if (currentFileCount != CatalogFileCount)
+                {
+                    return true;
+                }
+            }
+
+            // Method 3: Check all subdirectories recursively
+            var subdirectories = Directory.GetDirectories(directoryPath);
+            foreach (var subdir in subdirectories)
+            {
+                var subdirInfo = new DirectoryInfo(subdir);
+                
+                // Check if this subdirectory was modified after last update
+                if (subdirInfo.LastWriteTime > lastUpdate)
+                {
+                    return true;
+                }
+
+                // Recursively check deeper subdirectories
+                if (HasDirectoryChangedRecursive(subdir, lastUpdate))
+                {
+                    return true;
+                }
+            }
+
+            // Method 4: Check all files in the current directory
+            var files = Directory.GetFiles(directoryPath);
+            foreach (var file in files)
+            {
+                var fileInfo = new FileInfo(file);
+                if (fileInfo.LastWriteTime > lastUpdate)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // If we can't access a directory, assume no changes
+            return false;
+        }
+        catch
+        {
+            return false;
         }
     }
 
