@@ -206,7 +206,8 @@ public sealed partial class MainWindow
                         ModifiedDate = DateTime.Now,
                         FolderType = FolderLinkType.CatalogueFiles, // Make it a catalog folder
                         FileSize = (ulong)new FileInfo(zipFilePath).Length,
-                        LastCatalogUpdate = DateTime.Now
+                        LastCatalogUpdate = DateTime.Now,
+                        IsZipPasswordProtected = result.UsePassword // Set password protection flag
                     };
 
                     var zipLinkNode = new TreeViewNode { Content = zipLinkItem };

@@ -403,9 +403,16 @@ public class CategoryService
                     LastCatalogUpdate = link.LastCatalogUpdate,
                     FileSize = link.FileSize,
                     AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null,
+                    IsZipPasswordProtected = link.IsZipPasswordProtected ? true : null,
                     CatalogSortOrder = link.CatalogSortOrder,
                     CatalogEntries = null
                 };
+
+                // Debug: Log zip file password protection status
+                if ((linkData.IsDirectory ?? false) && (linkData.Url ?? string.Empty).EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CategoryService] Loaded zip link: '{linkData.Title}', IsZipPasswordProtected={linkData.IsZipPasswordProtected}");
+                }
 
                 // Process catalog entries (only for non-catalog-entry links)
                 if (child.Children.Count > 0 && !link.IsCatalogEntry)
@@ -561,8 +568,15 @@ public class CategoryService
                     LastCatalogUpdate = linkData.LastCatalogUpdate,
                     FileSize = linkData.FileSize,
                     AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false,
+                    IsZipPasswordProtected = linkData.IsZipPasswordProtected ?? false,
                     CatalogSortOrder = linkData.CatalogSortOrder
                 };
+
+                // Debug: Log zip file password protection status
+                if (linkItem.IsDirectory && linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CategoryService] Loaded zip link: '{linkItem.Title}', IsZipPasswordProtected={linkItem.IsZipPasswordProtected}");
+                }
 
                 if (linkData.CatalogEntries != null)
                 {

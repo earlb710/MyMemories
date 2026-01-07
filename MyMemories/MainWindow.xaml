@@ -130,7 +130,41 @@
                             <local:TreeNodeTemplateSelector.CategoryTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{Binding Content.Icon}" FontSize="16"/>
+                                        <!-- Icon Container with Password Badge -->
+                                        <Grid Width="20" Height="20">
+                                            <!-- Primary Icon -->
+                                            <TextBlock 
+                                                Text="{Binding Content.Icon}" 
+                                                FontSize="16"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"/>
+                                            
+                                            <!-- Password Protected Badge (top-right position) -->
+                                            <Border
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Background="Black"
+                                                CornerRadius="2"
+                                                Padding="1"
+                                                Margin="0,0,-1,0">
+                                                <Border.Visibility>
+                                                    <Binding Path="Content.PasswordProtection">
+                                                        <Binding.Converter>
+                                                            <local:PasswordProtectionToVisibilityConverter/>
+                                                        </Binding.Converter>
+                                                    </Binding>
+                                                </Border.Visibility>
+                                                <FontIcon 
+                                                    Glyph="&#xE72E;"
+                                                    FontSize="9"
+                                                    FontWeight="Black"
+                                                    Foreground="#FFFFD700"/>
+                                                <ToolTipService.ToolTip>
+                                                    <ToolTip Content="Password protected"/>
+                                                </ToolTipService.ToolTip>
+                                            </Border>
+                                        </Grid>
+                                        
                                         <TextBlock Text="{Binding Content.Name}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </DataTemplate>
@@ -180,6 +214,31 @@
                                                     VerticalAlignment="Center"/>
                                                 <ToolTipService.ToolTip>
                                                     <ToolTip Content="Zip archive"/>
+                                                </ToolTipService.ToolTip>
+                                            </Border>
+
+                                            <!-- Password Protected Badge for Zip Files (top-right corner) -->
+                                            <Border
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Background="Black"
+                                                CornerRadius="2"
+                                                Padding="1"
+                                                Margin="0,0,-1,0">
+                                                <Border.Visibility>
+                                                    <Binding Path="Content.IsZipPasswordProtected" Mode="OneWay">
+                                                        <Binding.Converter>
+                                                            <local:BoolToVisibilityConverter/>
+                                                        </Binding.Converter>
+                                                    </Binding>
+                                                </Border.Visibility>
+                                                <FontIcon 
+                                                    Glyph="&#xE72E;"
+                                                    FontSize="9"
+                                                    FontWeight="Black"
+                                                    Foreground="#FFFFD700"/>
+                                                <ToolTipService.ToolTip>
+                                                    <ToolTip Content="Password protected zip"/>
                                                 </ToolTipService.ToolTip>
                                             </Border>
 

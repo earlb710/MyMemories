@@ -57,6 +57,7 @@ public class LinkItem : INotifyPropertyChanged
 {
     private int _catalogFileCount;
     private DateTime? _lastCatalogUpdate;
+    private bool _isZipPasswordProtected;
 
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
@@ -86,6 +87,20 @@ public class LinkItem : INotifyPropertyChanged
 
     public ulong? FileSize { get; set; }
     public bool AutoRefreshCatalog { get; set; } = false;
+    
+    public bool IsZipPasswordProtected
+    {
+        get => _isZipPasswordProtected;
+        set
+        {
+            if (_isZipPasswordProtected != value)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LinkItem] IsZipPasswordProtected changing: {_isZipPasswordProtected} -> {value} for '{Title}'");
+                _isZipPasswordProtected = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     // Internal property to store catalog count for display
     [JsonIgnore]
@@ -430,6 +445,9 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AutoRefreshCatalog { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsZipPasswordProtected { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SortOption CatalogSortOrder { get; set; }
