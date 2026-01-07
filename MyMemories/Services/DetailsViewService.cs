@@ -2,6 +2,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
@@ -246,7 +247,12 @@ public class DetailsViewService
     /// <summary>
     /// Shows link details with file information and catalog buttons for directories.
     /// </summary>
-    public async Task<(Button? createButton, Button? refreshButton)> ShowLinkDetailsAsync(LinkItem linkItem, TreeViewNode? node, Func<Task> onCreateCatalog, Func<Task> onRefreshCatalog)
+    public async Task<(Button? createButton, Button? refreshButton)> ShowLinkDetailsAsync(
+        LinkItem linkItem, 
+        TreeViewNode? node, 
+        Func<Task> onCreateCatalog, 
+        Func<Task> onRefreshCatalog, 
+        Func<Task>? onRefreshArchive = null)
     {
         _detailsPanel.Children.Clear();
 
@@ -330,6 +336,44 @@ public class DetailsViewService
                     }
                 };
                 buttonPanel.Children.Add(refreshButton);
+
+                // Add "Refresh Archive" button for zip files with manifest
+                if (isZipFile && hasCatalog && onRefreshArchive != null)
+                {
+                    // Check if this zip has a manifest
+                    var hasManifest = await CheckZipHasManifestAsync(linkItem.Url);
+                    
+                    if (hasManifest)
+                    {
+                        var refreshArchiveButton = new Button
+                        {
+                            Content = new StackPanel
+                            {
+                                Orientation = Orientation.Horizontal,
+                                Spacing = 8,
+                                Children =
+                                {
+                                    new FontIcon { Glyph = "\uE777" }, // Package icon
+                                    new TextBlock { Text = "Refresh Archive", VerticalAlignment = VerticalAlignment.Center }
+                                }
+                            }
+                        };
+                        
+                        refreshArchiveButton.Click += async (s, e) =>
+                        {
+                            try
+                            {
+                                await onRefreshArchive();
+                            }
+                            catch
+                            {
+                                // Silently handle errors
+                            }
+                        };
+                        
+                        buttonPanel.Children.Add(refreshArchiveButton);
+                    }
+                }
             }
 
             _detailsPanel.Children.Add(buttonPanel);
@@ -360,6 +404,49 @@ public class DetailsViewService
                 };
 
                 _detailsPanel.Children.Add(autoRefreshCheckBox);
+            }
+
+            // Add manifest info for zip files
+            if (isZipFile && hasCatalog)
+            {
+                var hasManifest = await CheckZipHasManifestAsync(linkItem.Url);
+                
+                if (hasManifest)
+                {
+                    var manifestRootCategory = await GetManifestRootCategoryAsync(linkItem.Url);
+                    
+                    var manifestInfo = new Border
+                    {
+                        Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 180, 0)),
+                        BorderBrush = new SolidColorBrush(Colors.Green),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(12, 8, 12, 8),
+                        Margin = new Thickness(0, 0, 0, 16),
+                        Child = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new FontIcon 
+                                { 
+                                    Glyph = "\uE8A5", // Document icon
+                                    FontSize = 16,
+                                    Foreground = new SolidColorBrush(Colors.LightGreen)
+                                },
+                                new TextBlock
+                                {
+                                    Text = $"This archive contains a manifest. Source category: {manifestRootCategory ?? "Unknown"}",
+                                    TextWrapping = TextWrapping.Wrap,
+                                    Foreground = new SolidColorBrush(Colors.White),
+                                    VerticalAlignment = VerticalAlignment.Center
+                                }
+                            }
+                        }
+                    };
+                    _detailsPanel.Children.Add(manifestInfo);
+                }
             }
         }
 
@@ -876,6 +963,9 @@ public class DetailsViewService
         _detailsPanel.Children.Add(timestampsPanel);
     }
 
+    /// <summary>
+    /// Checks if a zip file contains a manifest entry.
+    /// </summary>
     private async Task<bool> CheckZipHasManifestAsync(string zipFilePath)
     {
         if (!File.Exists(zipFilePath))
@@ -892,6 +982,44 @@ public class DetailsViewService
         catch
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Extracts the root category name from a zip manifest file.
+    /// </summary>
+    private async Task<string?> GetManifestRootCategoryAsync(string zipFilePath)
+    {
+        if (!File.Exists(zipFilePath))
+            return null;
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                using var archive = ZipFile.OpenRead(zipFilePath);
+                var manifestEntry = archive.GetEntry("_MANIFEST.txt");
+                
+                if (manifestEntry == null)
+                    return null;
+
+                using var stream = manifestEntry.Open();
+                using var reader = new StreamReader(stream);
+                var content = reader.ReadToEnd();
+
+                // Parse the manifest to find "Root Category: [name]"
+                var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
+                if (match.Success)
+                {
+                    return match.Groups[1].Value.Trim();
+                }
+
+                return null;
+            });
+        }
+        catch
+        {
+            return null;
         }
     }
 }

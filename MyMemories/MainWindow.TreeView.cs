@@ -165,7 +165,8 @@ public sealed partial class MainWindow
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(linkItem, linkNode,
                     async () => await CreateCatalogAsync(linkItem, linkNode),
-                    async () => await RefreshCatalogAsync(linkItem, linkNode));
+                    async () => await RefreshCatalogAsync(linkItem, linkNode),
+                    async () => await RefreshArchiveFromManifestAsync(linkItem, linkNode));
             }
             else
             {
@@ -230,7 +231,8 @@ public sealed partial class MainWindow
                 {
                     await _detailsViewService!.ShowLinkDetailsAsync(linkItem, linkNode,
                         async () => await CreateCatalogAsync(linkItem, linkNode),
-                        async () => await RefreshCatalogAsync(linkItem, linkNode));
+                        async () => await RefreshCatalogAsync(linkItem, linkNode),
+                        async () => await RefreshArchiveFromManifestAsync(linkItem, linkNode));
                 }
                 else
                 {
@@ -288,7 +290,8 @@ public sealed partial class MainWindow
             {
                 await _detailsViewService!.ShowLinkDetailsAsync(linkItem, linkNode,
                     async () => await CreateCatalogAsync(linkItem, linkNode),
-                    async () => await RefreshCatalogAsync(linkItem, linkNode));
+                    async () => await RefreshCatalogAsync(linkItem, linkNode),
+                    async () => await RefreshArchiveFromManifestAsync(linkItem, linkNode));
             }
             else
             {
@@ -390,7 +393,10 @@ public sealed partial class MainWindow
                 }
             }
 
+            // Update both LastCatalogUpdate AND ModifiedDate
             linkItem.LastCatalogUpdate = DateTime.Now;
+            linkItem.ModifiedDate = DateTime.Now;
+            
             _categoryService!.UpdateCatalogFileCount(linkNode);
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
 
@@ -400,7 +406,8 @@ public sealed partial class MainWindow
             refreshedNode.IsExpanded = true;
             await _detailsViewService!.ShowLinkDetailsAsync(linkItem, refreshedNode,
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),
-                async () => await RefreshCatalogAsync(linkItem, refreshedNode));
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode));
 
             var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
             StatusText.Text = $"Created catalog with {count} entries";
@@ -468,7 +475,10 @@ public sealed partial class MainWindow
                 }
             }
 
+            // Update both LastCatalogUpdate AND ModifiedDate
             linkItem.LastCatalogUpdate = DateTime.Now;
+            linkItem.ModifiedDate = DateTime.Now;
+            
             _categoryService.UpdateCatalogFileCount(linkNode);
 
             var refreshedNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
@@ -478,7 +488,8 @@ public sealed partial class MainWindow
 
             await _detailsViewService!.ShowLinkDetailsAsync(linkItem, refreshedNode,
                 async () => await CreateCatalogAsync(linkItem, refreshedNode),
-                async () => await RefreshCatalogAsync(linkItem, refreshedNode));
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode));
 
             var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
             StatusText.Text = $"Refreshed catalog with {count} entries";

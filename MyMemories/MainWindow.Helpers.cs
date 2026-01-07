@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -12,6 +14,19 @@ namespace MyMemories;
 
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// Helper class to store folder and category information.
+    /// </summary>
+    private class FolderCategoryInfo
+    {
+        public string FolderPath { get; set; } = string.Empty;
+        public string FolderTitle { get; set; } = string.Empty;
+        public string CategoryPath { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
     /// <summary>
     /// Creates a visual element for a tree node with icon and optional badge.
     /// </summary>
@@ -243,10 +258,14 @@ public sealed partial class MainWindow
             
             if (string.IsNullOrEmpty(rootCategoryName))
             {
-                await ShowErrorDialogAsync(
-                    "No Manifest Found",
-                    "This zip file does not contain a manifest (_MANIFEST.txt) or the manifest could not be parsed."
-                );
+                var errorDialog = new ContentDialog
+                {
+                    Title = "No Manifest Found",
+                    Content = "This zip file does not contain a manifest (_MANIFEST.txt) or the manifest could not be parsed.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
                 return;
             }
 
@@ -256,10 +275,14 @@ public sealed partial class MainWindow
 
             if (rootCategoryNode == null)
             {
-                await ShowErrorDialogAsync(
-                    "Category Not Found",
-                    $"The root category '{rootCategoryName}' specified in the manifest was not found in the tree."
-                );
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Category Not Found",
+                    Content = $"The root category '{rootCategoryName}' specified in the manifest was not found in the tree.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
                 return;
             }
 
@@ -377,7 +400,7 @@ public sealed partial class MainWindow
             // Create and add the manifest file
             var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
             var manifestEntry = archive.CreateEntry("_MANIFEST.txt", CompressionLevel.Optimal);
-            using (var writer = new System.IO.StreamWriter(manifestEntry.Open(), System.Text.Encoding.UTF8))
+            using (var writer = new StreamWriter(manifestEntry.Open(), Encoding.UTF8))
             {
                 writer.Write(manifestContent);
             }
@@ -399,5 +422,101 @@ public sealed partial class MainWindow
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// Collects folder information including their category paths.
+    /// </summary>
+    private List<FolderCategoryInfo> CollectFolderInfoFromCategory(TreeViewNode categoryNode, string parentCategoryPath)
+    {
+        var folderInfoList = new List<FolderCategoryInfo>();
+
+        foreach (var child in categoryNode.Children)
+        {
+            if (child.Content is LinkItem link)
+            {
+                // Only include directory links that are not catalog entries
+                if (link.IsDirectory && !link.IsCatalogEntry && Directory.Exists(link.Url))
+                {
+                    folderInfoList.Add(new FolderCategoryInfo
+                    {
+                        FolderPath = link.Url,
+                        FolderTitle = link.Title,
+                        CategoryPath = parentCategoryPath,
+                        Description = link.Description,
+                        CreatedDate = link.CreatedDate,
+                        ModifiedDate = link.ModifiedDate
+                    });
+                }
+            }
+            else if (child.Content is CategoryItem subCategory)
+            {
+                // Recursively collect from subcategories
+                var subCategoryPath = string.IsNullOrEmpty(parentCategoryPath) 
+                    ? subCategory.Name 
+                    : $"{parentCategoryPath} > {subCategory.Name}";
+                folderInfoList.AddRange(CollectFolderInfoFromCategory(child, subCategoryPath));
+            }
+        }
+
+        return folderInfoList;
+    }
+
+    /// <summary>
+    /// Generates the manifest file content.
+    /// </summary>
+    private string GenerateManifestContent(List<FolderCategoryInfo> folderInfoList, string rootCategoryName)
+    {
+        var sb = new StringBuilder();
+        
+        // Header
+        sb.AppendLine("================================================================================");
+        sb.AppendLine("                    ZIP ARCHIVE MANIFEST");
+        sb.AppendLine("================================================================================");
+        sb.AppendLine();
+        sb.AppendLine($"Root Category: {rootCategoryName}");
+        sb.AppendLine($"Created: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Total Folders: {folderInfoList.Count}");
+        sb.AppendLine();
+        sb.AppendLine("================================================================================");
+        sb.AppendLine("                    DIRECTORY-TO-CATEGORY MAPPINGS");
+        sb.AppendLine("================================================================================");
+        sb.AppendLine();
+
+        // Group by category for better organization
+        var groupedByCategory = folderInfoList
+            .GroupBy(f => f.CategoryPath)
+            .OrderBy(g => g.Key);
+
+        foreach (var categoryGroup in groupedByCategory)
+        {
+            sb.AppendLine($"Category: {categoryGroup.Key}");
+            sb.AppendLine(new string('-', 80));
+            sb.AppendLine();
+
+            foreach (var folder in categoryGroup.OrderBy(f => f.FolderTitle))
+            {
+                sb.AppendLine($"  Title: {folder.FolderTitle}");
+                sb.AppendLine($"  Path:  {folder.FolderPath}");
+                
+                if (!string.IsNullOrWhiteSpace(folder.Description))
+                {
+                    sb.AppendLine($"  Desc:  {folder.Description}");
+                }
+                
+                sb.AppendLine($"  Created:  {folder.CreatedDate:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"  Modified: {folder.ModifiedDate:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine();
+            }
+
+            sb.AppendLine();
+        }
+
+        // Footer
+        sb.AppendLine("================================================================================");
+        sb.AppendLine("                         END OF MANIFEST");
+        sb.AppendLine("================================================================================");
+
+        return sb.ToString();
     }
 }
