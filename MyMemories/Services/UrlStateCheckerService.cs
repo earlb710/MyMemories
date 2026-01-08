@@ -77,6 +77,18 @@ public class UrlStateCheckerService
                 {
                     var status = await CheckUrlAsync(link.Url, _cancellationTokenSource.Token);
                     link.UrlStatus = status;
+                    link.UrlLastChecked = DateTime.Now;
+                    
+                    // Get detailed message for non-accessible URLs
+                    if (status != UrlStatus.Accessible)
+                    {
+                        var (_, message) = await CheckSingleUrlAsync(link.Url);
+                        link.UrlStatusMessage = message;
+                    }
+                    else
+                    {
+                        link.UrlStatusMessage = "URL is accessible";
+                    }
 
                     switch (status)
                     {
@@ -97,6 +109,8 @@ public class UrlStateCheckerService
                 {
                     Debug.WriteLine($"[UrlStateChecker] Exception checking {link.Url}: {ex.Message}");
                     link.UrlStatus = UrlStatus.Error;
+                    link.UrlLastChecked = DateTime.Now;
+                    link.UrlStatusMessage = $"Exception: {ex.Message}";
                     stats.ErrorCount++;
                 }
             }
@@ -117,6 +131,61 @@ public class UrlStateCheckerService
     public void CancelCheck()
     {
         _cancellationTokenSource?.Cancel();
+    }
+
+    /// <summary>
+    /// Checks a single URL and returns its status with a detailed message.
+    /// </summary>
+    /// <returns>Tuple of (UrlStatus, DetailedMessage)</returns>
+    public async Task<(UrlStatus status, string message)> CheckSingleUrlAsync(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return (UrlStatus.NotFound, "URL is empty");
+        }
+
+        // Only check HTTP/HTTPS URLs
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return (UrlStatus.Unknown, "Not an HTTP/HTTPS URL");
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, url);
+            using var response = await _httpClient.SendAsync(request, CancellationToken.None);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return (UrlStatus.Accessible, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+            else if ((int)response.StatusCode == 404 || (int)response.StatusCode == 410)
+            {
+                // 404 Not Found or 410 Gone
+                return (UrlStatus.NotFound, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+            else
+            {
+                // Other HTTP errors (403, 500, etc.)
+                return (UrlStatus.Error, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            // DNS failure, connection refused, etc.
+            return (UrlStatus.NotFound, $"Connection failed: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            // Timeout
+            return (UrlStatus.Error, "Request timed out");
+        }
+        catch (Exception ex)
+        {
+            // Other errors (invalid URL, etc.)
+            return (UrlStatus.Error, $"Error: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -213,6 +282,8 @@ public class UrlStateCheckerService
         foreach (var link in urlLinks)
         {
             link.UrlStatus = UrlStatus.Unknown;
+            link.UrlLastChecked = null;
+            link.UrlStatusMessage = string.Empty;
         }
     }
 }

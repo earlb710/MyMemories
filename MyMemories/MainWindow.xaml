@@ -268,6 +268,32 @@
                                                     <ToolTip Content="Folder has changed since last catalog"/>
                                                 </ToolTipService.ToolTip>
                                             </FontIcon>
+
+                                            <!-- URL Status Badge (right side, vertically centered) -->
+                                            <Ellipse 
+                                                Width="8" 
+                                                Height="8"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,-2,0"
+                                                Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}">
+                                                <Ellipse.Fill>
+                                                    <SolidColorBrush Color="{Binding Content.UrlStatusColor, Mode=OneWay}"/>
+                                                </Ellipse.Fill>
+                                                <ToolTipService.ToolTip>
+                                                    <ToolTip>
+                                                        <TextBlock>
+                                                            <TextBlock.Text>
+                                                                <Binding Path="Content.UrlStatus" Mode="OneWay">
+                                                                    <Binding.Converter>
+                                                                        <local:UrlStatusToTooltipConverter/>
+                                                                    </Binding.Converter>
+                                                                </Binding>
+                                                            </TextBlock.Text>
+                                                        </TextBlock>
+                                                    </ToolTip>
+                                                </ToolTipService.ToolTip>
+                                            </Ellipse>
                                         </Grid>
 
                                         <!-- Text Label -->

@@ -300,7 +300,16 @@ public sealed partial class MainWindow
         if (createNew)
         {
             // Create a new category for bookmarks with import metadata
-            var categoryName = $"Imported Bookmarks - {DateTime.Now:yyyy-MM-dd}";
+            var baseCategoryName = "Imported Bookmarks";
+            var categoryName = baseCategoryName;
+            
+            // Check if category name already exists and add sequence number if needed
+            var sequenceNumber = 1;
+            while (CategoryNameExists(categoryName))
+            {
+                sequenceNumber++;
+                categoryName = $"{baseCategoryName} ({sequenceNumber})";
+            }
             
             var categoryNode = new TreeViewNode
             {
@@ -380,48 +389,14 @@ public sealed partial class MainWindow
         }
     }
 
-    private async Task AddBookmarksToCategory(System.Collections.Generic.List<BookmarkItem> bookmarks, 
-        TreeViewNode targetCategory, bool organizeByFolder)
+    /// <summary>
+    /// Checks if a category name already exists in the root level.
+    /// </summary>
+    private bool CategoryNameExists(string categoryName)
     {
-        var categoryPath = _treeViewService!.GetCategoryPath(targetCategory);
-        var addedCount = 0;
-
-        if (organizeByFolder)
-        {
-            // Group bookmarks by folder path and create subcategories
-            var folderGroups = bookmarks.GroupBy(b => b.FolderPath);
-
-            foreach (var group in folderGroups)
-            {
-                var folderPath = group.Key;
-                
-                // Create subcategory for this folder (if it doesn't exist)
-                var subCategory = await GetOrCreateSubcategoryAsync(targetCategory, folderPath);
-
-                // Add bookmarks to subcategory
-                foreach (var bookmark in group)
-                {
-                    if (await AddBookmarkLinkAsync(subCategory, bookmark, categoryPath))
-                        addedCount++;
-                }
-            }
-        }
-        else
-        {
-            // Add all bookmarks to the target category
-            foreach (var bookmark in bookmarks)
-            {
-                if (await AddBookmarkLinkAsync(targetCategory, bookmark, categoryPath))
-                    addedCount++;
-            }
-        }
-
-        // Save the category
-        var rootNode = GetRootCategoryNode(targetCategory);
-        await _categoryService!.SaveCategoryAsync(rootNode);
-
-        LogUtilities.LogInfo("MainWindow.AddBookmarksToCategory", 
-            $"Added {addedCount} bookmarks to category '{categoryPath}'");
+        return LinksTreeView.RootNodes
+            .Any(node => node.Content is CategoryItem cat && 
+                        cat.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<TreeViewNode> GetOrCreateSubcategoryAsync(TreeViewNode parentCategory, string folderPath)
@@ -495,6 +470,53 @@ public sealed partial class MainWindow
                 $"Error adding bookmark: {bookmark.Name}", ex);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Adds bookmarks to a category, optionally organizing them into subcategories by folder.
+    /// </summary>
+    private async Task AddBookmarksToCategory(System.Collections.Generic.List<BookmarkItem> bookmarks, 
+        TreeViewNode targetCategory, bool organizeByFolder)
+    {
+        var categoryPath = _treeViewService!.GetCategoryPath(targetCategory);
+        var addedCount = 0;
+
+        if (organizeByFolder)
+        {
+            // Group bookmarks by folder path and create subcategories
+            var folderGroups = bookmarks.GroupBy(b => b.FolderPath);
+
+            foreach (var group in folderGroups)
+            {
+                var folderPath = group.Key;
+                
+                // Create subcategory for this folder (if it doesn't exist)
+                var subCategory = await GetOrCreateSubcategoryAsync(targetCategory, folderPath);
+
+                // Add bookmarks to subcategory
+                foreach (var bookmark in group)
+                {
+                    if (await AddBookmarkLinkAsync(subCategory, bookmark, categoryPath))
+                        addedCount++;
+                }
+            }
+        }
+        else
+        {
+            // Add all bookmarks to the target category
+            foreach (var bookmark in bookmarks)
+            {
+                if (await AddBookmarkLinkAsync(targetCategory, bookmark, categoryPath))
+                    addedCount++;
+            }
+        }
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(targetCategory);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+
+        LogUtilities.LogInfo("MainWindow.AddBookmarksToCategory", 
+            $"Added {addedCount} bookmarks to category '{categoryPath}'");
     }
 
     private async Task ShowSuccessDialogAsync(string title, string message)

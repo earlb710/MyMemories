@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     private CatalogService? _catalogService;
     private FileLauncherService? _fileLauncherService;
     private LinkSelectionService? _linkSelectionService;
+    private UrlStateCheckerService? _urlStateCheckerService;
 
     /// <summary>
     /// Gets or sets whether a URL is currently loading.
@@ -158,10 +159,13 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Set the refresh archive callback
             _catalogService.SetRefreshArchiveCallback(RefreshArchiveFromManifestAsync);
             
-            _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService);
+            _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService, _urlStateCheckerService);
             _linkSelectionService.SetUrlTextBox(UrlTextBox); // Wire up URL text box
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
             _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService);
+
+            // Initialize URL state checker service
+            _urlStateCheckerService = new UrlStateCheckerService();
 
             // Set up WebView2 navigation events to update URL bar
             WebViewer.CoreWebView2.NavigationStarting += (s, e) =>

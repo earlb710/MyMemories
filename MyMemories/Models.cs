@@ -97,6 +97,8 @@ public class LinkItem : INotifyPropertyChanged
     private DateTime? _lastCatalogUpdate;
     private bool _isZipPasswordProtected;
     private UrlStatus _urlStatus = UrlStatus.Unknown;
+    private DateTime? _urlLastChecked;
+    private string _urlStatusMessage = string.Empty;
 
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
@@ -113,7 +115,6 @@ public class LinkItem : INotifyPropertyChanged
     /// <summary>
     /// URL accessibility status (for bookmark categories).
     /// </summary>
-    [JsonIgnore]
     public UrlStatus UrlStatus
     {
         get => _urlStatus;
@@ -125,6 +126,38 @@ public class LinkItem : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ShowUrlStatusBadge));
                 OnPropertyChanged(nameof(UrlStatusColor));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Date and time when the URL status was last checked.
+    /// </summary>
+    public DateTime? UrlLastChecked
+    {
+        get => _urlLastChecked;
+        set
+        {
+            if (_urlLastChecked != value)
+            {
+                _urlLastChecked = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Detailed message from the last URL status check (e.g., HTTP status code, error message).
+    /// </summary>
+    public string UrlStatusMessage
+    {
+        get => _urlStatusMessage;
+        set
+        {
+            if (_urlStatusMessage != value)
+            {
+                _urlStatusMessage = value;
+                OnPropertyChanged();
             }
         }
     }
@@ -578,6 +611,24 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SortOption CatalogSortOrder { get; set; }
+
+    /// <summary>
+    /// URL accessibility status (for bookmark categories).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public UrlStatus UrlStatus { get; set; }
+
+    /// <summary>
+    /// Date and time when the URL status was last checked.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? UrlLastChecked { get; set; }
+
+    /// <summary>
+    /// Detailed message from the last URL status check.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UrlStatusMessage { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }

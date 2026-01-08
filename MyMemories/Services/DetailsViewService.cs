@@ -227,9 +227,106 @@ public class DetailsViewService
     }
 
     /// <summary>
+    /// Shows URL status banner at the top of the details panel for non-accessible URLs.
+    /// </summary>
+    public void ShowUrlStatusBanner(LinkItem linkItem)
+    {
+        if (linkItem.UrlStatus == UrlStatus.Unknown || linkItem.UrlStatus == UrlStatus.Accessible)
+        {
+            return; // Don't show banner for unknown or accessible URLs
+        }
+
+        // Determine banner color and icon based on status
+        var (backgroundColor, borderColor, icon, statusText) = linkItem.UrlStatus switch
+        {
+            UrlStatus.Error => (
+                Microsoft.UI.ColorHelper.FromArgb(40, 255, 193, 7), // Yellow background
+                Colors.Gold,
+                "\uE7BA", // Warning icon
+                "Error"
+            ),
+            UrlStatus.NotFound => (
+                Microsoft.UI.ColorHelper.FromArgb(40, 220, 53, 69), // Red background
+                Colors.Red,
+                "\uE711", // Error icon
+                "Not Found"
+            ),
+            _ => (
+                Microsoft.UI.ColorHelper.FromArgb(40, 108, 117, 125), // Gray background
+                Colors.Gray,
+                "\uE783", // Info icon
+                "Unknown"
+            )
+        };
+
+        var banner = new Border
+        {
+            Background = new SolidColorBrush(backgroundColor),
+            BorderBrush = new SolidColorBrush(borderColor),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
+        var bannerContent = new StackPanel { Spacing = 8 };
+
+        // Status header with icon
+        var headerPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+
+        headerPanel.Children.Add(new FontIcon
+        {
+            Glyph = icon,
+            FontSize = 16,
+            Foreground = new SolidColorBrush(borderColor)
+        });
+
+        headerPanel.Children.Add(new TextBlock
+        {
+            Text = $"URL Status: {statusText}",
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Colors.White)
+        });
+
+        bannerContent.Children.Add(headerPanel);
+
+        // Status message if available
+        if (!string.IsNullOrWhiteSpace(linkItem.UrlStatusMessage))
+        {
+            bannerContent.Children.Add(new TextBlock
+            {
+                Text = $"Message: {linkItem.UrlStatusMessage}",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Colors.White),
+                TextWrapping = TextWrapping.Wrap
+            });
+        }
+
+        // Last checked timestamp
+        if (linkItem.UrlLastChecked.HasValue)
+        {
+            bannerContent.Children.Add(new TextBlock
+            {
+                Text = $"Last checked: {linkItem.UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Colors.LightGray),
+                FontStyle = Windows.UI.Text.FontStyle.Italic
+            });
+        }
+
+        banner.Child = bannerContent;
+        _detailsPanel.Children.Insert(0, banner); // Insert at top of details panel
+    }
+
+    /// <summary>
     /// Shows category details.
     /// </summary>
-    public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, Func<Task>? onRefreshBookmarks = null)
+    public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null)
     {
         _detailsPanel.Children.Clear();
 
@@ -275,6 +372,41 @@ public class DetailsViewService
                 
                 _detailsPanel.Children.Add(refreshButton);
             }
+        }
+
+        // Show Refresh URL State button for bookmark categories
+        if (category.IsBookmarkCategory && onRefreshUrlState != null)
+        {
+            var refreshUrlStateButton = new Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new FontIcon { Glyph = "\uE895" }, // StatusCircleQuestionMark icon
+                        new TextBlock { Text = "Refresh URL State", VerticalAlignment = VerticalAlignment.Center }
+                    }
+                },
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+            
+            ToolTipService.SetToolTip(refreshUrlStateButton, "Checks accessibility of all URLs in this category and marks them with status indicators (green=accessible, yellow=error, red=not found)");
+            
+            refreshUrlStateButton.Click += async (s, e) =>
+            {
+                try
+                {
+                    await onRefreshUrlState();
+                }
+                catch
+                {
+                    // Silently handle errors
+                }
+            };
+            
+            _detailsPanel.Children.Add(refreshUrlStateButton);
         }
 
         // Add timestamps for category

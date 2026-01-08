@@ -17,6 +17,7 @@ public class LinkSelectionService
     private readonly CatalogService _catalogService;
     private readonly FileLauncherService _fileLauncherService;
     private readonly CategoryService _categoryService;
+    private readonly UrlStateCheckerService? _urlStateCheckerService;
     private TextBox? _urlTextBox;
 
     public LinkSelectionService(
@@ -25,7 +26,8 @@ public class LinkSelectionService
         TreeViewService treeViewService,
         CatalogService catalogService,
         FileLauncherService fileLauncherService,
-        CategoryService categoryService)
+        CategoryService categoryService,
+        UrlStateCheckerService? urlStateCheckerService = null)
     {
         _detailsViewService = detailsViewService;
         _fileViewerService = fileViewerService;
@@ -33,6 +35,7 @@ public class LinkSelectionService
         _catalogService = catalogService;
         _fileLauncherService = fileLauncherService;
         _categoryService = categoryService;
+        _urlStateCheckerService = urlStateCheckerService;
     }
 
     /// <summary>
@@ -161,11 +164,47 @@ public class LinkSelectionService
         }
         else
         {
+            // For web URLs, check the URL status if not accessible
+            if (_urlStateCheckerService != null && linkItem.UrlStatus != UrlStatus.Accessible)
+            {
+                setStatus($"Checking URL accessibility...");
+                
+                try
+                {
+                    var (status, message) = await _urlStateCheckerService.CheckSingleUrlAsync(linkItem.Url);
+                    linkItem.UrlStatus = status;
+                    linkItem.UrlStatusMessage = message;
+                    linkItem.UrlLastChecked = DateTime.Now;
+                    
+                    // Save the updated status if we have a node
+                    if (linkNode != null)
+                    {
+                        var rootNode = GetRootCategoryNode(linkNode);
+                        if (rootNode != null)
+                        {
+                            await _categoryService.SaveCategoryAsync(rootNode);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LinkSelectionService] Error checking URL: {ex.Message}");
+                    // Continue loading the URL even if the check fails
+                }
+            }
+            
             hideAllViewers();
+            
             await _fileViewerService.LoadUrlAsync(uri, _urlTextBox);
             
             // Show web viewer for URLs
             showViewer(FileViewerType.Web);
+            
+            // Show URL status banner if not accessible
+            if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
+            {
+                _detailsViewService.ShowUrlStatusBanner(linkItem);
+            }
             
             ShowLinkHeaderWithBadge(linkItem, setStatus);
             setStatus($"Loaded: {uri}");

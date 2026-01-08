@@ -413,6 +413,9 @@ public class CategoryService
                     AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null,
                     IsZipPasswordProtected = link.IsZipPasswordProtected ? true : null,
                     CatalogSortOrder = link.CatalogSortOrder,
+                    UrlStatus = link.UrlStatus,
+                    UrlLastChecked = link.UrlLastChecked,
+                    UrlStatusMessage = string.IsNullOrWhiteSpace(link.UrlStatusMessage) ? null : link.UrlStatusMessage,
                     CatalogEntries = null
                 };
 
@@ -585,7 +588,10 @@ public class CategoryService
                     FileSize = linkData.FileSize,
                     AutoRefreshCatalog = linkData.AutoRefreshCatalog ?? false,
                     IsZipPasswordProtected = linkData.IsZipPasswordProtected ?? false,
-                    CatalogSortOrder = linkData.CatalogSortOrder
+                    CatalogSortOrder = linkData.CatalogSortOrder,
+                    UrlStatus = linkData.UrlStatus,
+                    UrlLastChecked = linkData.UrlLastChecked,
+                    UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty
                 };
 
                 // Debug: Log zip file password protection status
