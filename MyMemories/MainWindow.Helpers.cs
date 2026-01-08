@@ -373,49 +373,79 @@ public sealed partial class MainWindow
             string? zipPassword = null;
             if (zipLinkItem.IsZipPasswordProtected)
             {
-                Debug.WriteLine("[RefreshArchiveFromManifestAsync] Zip is password-protected, prompting for password");
+                Debug.WriteLine("[RefreshArchiveFromManifestAsync] Zip is password-protected, attempting to get password");
                 
-                var passwordDialog = new ContentDialog
-                {
-                    Title = "Password Required",
-                    Content = new StackPanel
-                    {
-                        Spacing = 12,
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Text = $"The zip file '{Path.GetFileName(zipLinkItem.Url)}' is password-protected.\n\nPlease enter the password to read the manifest:",
-                                TextWrapping = TextWrapping.Wrap
-                            },
-                            new PasswordBox
-                            {
-                                Name = "ZipPasswordBox",
-                                PlaceholderText = "Enter zip password"
-                            }
-                        }
-                    },
-                    PrimaryButtonText = "OK",
-                    CloseButtonText = "Cancel",
-                    XamlRoot = Content.XamlRoot
-                };
-
-                var passwordBox = (passwordDialog.Content as StackPanel)?.Children[1] as PasswordBox;
+                // First try to get password from root category (global or category password)
+                var rootCategoryNode = GetRootCategoryNode(zipLinkNode);
+                var rootCategory = rootCategoryNode?.Content as CategoryItem;
                 
-                if (await passwordDialog.ShowAsync() == ContentDialogResult.Primary && passwordBox != null)
+                if (rootCategory?.PasswordProtection != PasswordProtectionType.None)
                 {
-                    zipPassword = passwordBox.Password;
+                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Root category has password protection: {rootCategory.PasswordProtection}");
                     
-                    if (string.IsNullOrEmpty(zipPassword))
+                    // Try to get the password from the service (which has it cached)
+                    var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!);
+                    zipPassword = await passwordService.GetCategoryPasswordAsync(rootCategory);
+                    
+                    if (!string.IsNullOrEmpty(zipPassword))
                     {
-                        StatusText.Text = "Password required to refresh archive";
+                        Debug.WriteLine("[RefreshArchiveFromManifestAsync] Successfully retrieved password from category");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("[RefreshArchiveFromManifestAsync] Failed to retrieve password from category");
+                        StatusText.Text = "Archive refresh cancelled - password required";
                         return;
                     }
                 }
                 else
                 {
-                    StatusText.Text = "Archive refresh cancelled";
-                    return;
+                    // Category has no password protection, but zip is password-protected
+                    // This means it has its own password - prompt for it
+                    Debug.WriteLine("[RefreshArchiveFromManifestAsync] Zip has own password, prompting user");
+                    
+                    var passwordDialog = new ContentDialog
+                    {
+                        Title = "Password Required",
+                        Content = new StackPanel
+                        {
+                            Spacing = 12,
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    Text = $"The zip file '{Path.GetFileName(zipLinkItem.Url)}' is password-protected.\n\nPlease enter the password to read the manifest:",
+                                    TextWrapping = TextWrapping.Wrap
+                                },
+                                new PasswordBox
+                                {
+                                    Name = "ZipPasswordBox",
+                                    PlaceholderText = "Enter zip password"
+                                }
+                            }
+                        },
+                        PrimaryButtonText = "OK",
+                        CloseButtonText = "Cancel",
+                        XamlRoot = Content.XamlRoot
+                    };
+
+                    var passwordBox = (passwordDialog.Content as StackPanel)?.Children[1] as PasswordBox;
+                    
+                    if (await passwordDialog.ShowAsync() == ContentDialogResult.Primary && passwordBox != null)
+                    {
+                        zipPassword = passwordBox.Password;
+                        
+                        if (string.IsNullOrEmpty(zipPassword))
+                        {
+                            StatusText.Text = "Password required to refresh archive";
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        StatusText.Text = "Archive refresh cancelled";
+                        return;
+                    }
                 }
             }
             

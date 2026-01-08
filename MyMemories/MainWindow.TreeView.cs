@@ -82,99 +82,86 @@ public sealed partial class MainWindow
             return;
         }
 
-        // Show progress dialog
-        var progressDialog = new ContentDialog
-        {
-            Title = "Checking URL Accessibility",
-            Content = new StackPanel
-            {
-                Spacing = 12,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Checking URLs in category...",
-                        TextWrapping = TextWrapping.Wrap
-                    },
-                    new ProgressBar
-                    {
-                        IsIndeterminate = false,
-                        Value = 0,
-                        Maximum = 100
-                    },
-                    new TextBlock
-                    {
-                        Name = "ProgressText",
-                        Text = "0 / 0",
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    }
-                }
-            },
-            CloseButtonText = "Cancel",
-            XamlRoot = Content.XamlRoot
-        };
+        // Show progress bar
+        UrlCheckProgressBar.Visibility = Visibility.Visible;
+        UrlCheckProgressText.Text = "Checking URL status...";
+        UrlCheckProgressCount.Text = "0 / 0";
+        StatusText.Text = "Checking URL accessibility...";
 
-        var progressBar = (progressDialog.Content as StackPanel)?.Children[1] as ProgressBar;
-        var progressText = (progressDialog.Content as StackPanel)?.Children[2] as TextBlock;
+        UrlCheckStatistics? stats = null;
+        string? errorMessage = null;
 
-        // Start checking in background (remove Task.Run wrapper - method is already async)
-        var checkTask = _urlStateCheckerService.CheckCategoryUrlsAsync(
-            categoryNode,
-            (current, total) =>
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    if (progressBar != null)
-                    {
-                        progressBar.Maximum = total;
-                        progressBar.Value = current;
-                    }
-                    if (progressText != null)
-                    {
-                        progressText.Text = $"{current} / {total}";
-                    }
-                });
-            });
-
-        // Show dialog (non-blocking)
-        var dialogTask = progressDialog.ShowAsync().AsTask();
-
-        // Wait for either completion or cancellation
-        var completedTask = await Task.WhenAny(checkTask, dialogTask);
-
-        if (completedTask == dialogTask)
-        {
-            // User cancelled - cancel the check and wait for it to finish
-            _urlStateCheckerService.CancelCheck();
-            try
-            {
-                await checkTask; // Wait for cancellation to complete
-            }
-            catch
-            {
-                // Ignore cancellation exceptions
-            }
-            StatusText.Text = "URL check cancelled";
-            return;
-        }
-
-        // Close dialog
-        progressDialog.Hide();
-
-        // Get results
-        UrlCheckStatistics stats;
         try
         {
-            stats = await checkTask;
+            // Start checking URLs
+            stats = await _urlStateCheckerService.CheckCategoryUrlsAsync(
+                categoryNode,
+                (current, total, url, node) =>
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        // Update progress display
+                        UrlCheckProgressCount.Text = $"{current} / {total}";
+
+                        // Truncate URL for display if too long
+                        var displayUrl = url.Length > 60 ? url.Substring(0, 57) + "..." : url;
+                        UrlCheckProgressText.Text = $"Checking: {displayUrl}";
+
+                        // Refresh node visual to show updated badge
+                        if (node != null)
+                        {
+                            RefreshNodeVisual(node);
+                        }
+                    });
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Node not found error - show immediately
+            errorMessage = ex.Message;
+
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UrlCheckProgressBar.Visibility = Visibility.Collapsed;
+                StatusText.Text = $"Error: {ex.Message}";
+            });
+
+            var errorDialog = new ContentDialog
+            {
+                Title = "URL Check Failed",
+                Content = $"The URL check was stopped because a tree node could not be found.\n\n{ex.Message}\n\nThis may happen if you modified the tree structure while checking URLs.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled
+            errorMessage = "URL check cancelled by user";
+            StatusText.Text = errorMessage;
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error checking URLs: {ex.Message}";
-            return;
+            // Other error
+            errorMessage = $"Error checking URLs: {ex.Message}";
+            StatusText.Text = errorMessage;
+        }
+        finally
+        {
+            // Hide progress bar
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                UrlCheckProgressBar.Visibility = Visibility.Collapsed;
+            });
         }
 
-        // Refresh tree view to show status badges by refreshing each link node
-        RefreshTreeNodesRecursively(categoryNode);
+        // If cancelled or error, stop here
+        if (errorMessage != null)
+        {
+            return;
+        }
 
         // Save the updated category to persist URL state changes
         try
@@ -189,20 +176,36 @@ public sealed partial class MainWindow
         }
 
         // Show results dialog
-        var resultsDialog = new ContentDialog
+        if (stats != null)
         {
-            Title = "URL Check Complete",
-            Content = $"Checked {stats.TotalUrls} URLs:\n\n" +
-                     $"? Accessible: {stats.AccessibleCount}\n" +
-                     $"? Error: {stats.ErrorCount}\n" +
-                     $"? Not Found: {stats.NotFoundCount}",
-            CloseButtonText = "OK",
-            XamlRoot = Content.XamlRoot
-        };
+            var resultsDialog = new ContentDialog
+            {
+                Title = "URL Check Complete",
+                Content = $"Checked {stats.TotalUrls} URLs:\n\n" +
+                         $"? Accessible: {stats.AccessibleCount}\n" +
+                         $"? Error: {stats.ErrorCount}\n" +
+                         $"? Not Found: {stats.NotFoundCount}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
 
-        await resultsDialog.ShowAsync();
+            await resultsDialog.ShowAsync();
 
-        StatusText.Text = $"URL check complete: {stats.AccessibleCount} accessible, {stats.ErrorCount} errors, {stats.NotFoundCount} not found";
+            StatusText.Text = $"URL check complete: {stats.AccessibleCount} accessible, {stats.ErrorCount} errors, {stats.NotFoundCount} not found";
+        }
+    }
+
+    /// <summary>
+    /// Handles the cancel button click for URL state checking.
+    /// </summary>
+    private void UrlCheckCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_urlStateCheckerService != null && _urlStateCheckerService.IsChecking)
+        {
+            _urlStateCheckerService.CancelCheck();
+            UrlCheckProgressText.Text = "Cancelling...";
+            UrlCheckCancelButton.IsEnabled = false;
+        }
     }
 
     private void RefreshTreeNodesRecursively(TreeViewNode node)

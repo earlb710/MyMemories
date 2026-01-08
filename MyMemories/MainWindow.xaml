@@ -13,6 +13,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Menu Bar -->
@@ -545,8 +546,66 @@
             </Grid>
         </Grid>
 
+        <!-- URL State Check Progress Bar -->
+        <Grid 
+            Grid.Row="2" 
+            x:Name="UrlCheckProgressBar"
+            Visibility="Collapsed"
+            Padding="12,8"
+            Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Progress Icon -->
+            <ProgressRing 
+                Grid.Column="0"
+                Width="20" 
+                Height="20" 
+                IsActive="True"
+                Margin="0,0,12,0"/>
+
+            <!-- Progress Message -->
+            <TextBlock 
+                Grid.Column="1"
+                x:Name="UrlCheckProgressText"
+                Text="Checking URL status..."
+                VerticalAlignment="Center"
+                TextWrapping="NoWrap"/>
+
+            <!-- Progress Count -->
+            <TextBlock 
+                Grid.Column="2"
+                x:Name="UrlCheckProgressCount"
+                Text="0 / 0"
+                VerticalAlignment="Center"
+                Margin="12,0,12,0"
+                FontWeight="SemiBold"/>
+
+            <!-- Cancel Button -->
+            <Button 
+                Grid.Column="3"
+                x:Name="UrlCheckCancelButton"
+                Click="UrlCheckCancelButton_Click"
+                Background="Transparent"
+                BorderThickness="0"
+                Width="32"
+                Height="32"
+                Padding="0">
+                <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                <ToolTipService.ToolTip>
+                    <ToolTip Content="Cancel URL check"/>
+                </ToolTipService.ToolTip>
+            </Button>
+        </Grid>
+
         <!-- Status Bar -->
-        <Grid Grid.Row="2" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+        <Grid Grid.Row="3" Padding="8,4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <TextBlock 
                 x:Name="StatusText"
                 Text="Ready"

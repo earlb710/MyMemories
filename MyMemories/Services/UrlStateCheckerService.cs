@@ -36,11 +36,11 @@ public class UrlStateCheckerService
     /// Checks all URLs in a category recursively and updates their status.
     /// </summary>
     /// <param name="categoryNode">The category node to check</param>
-    /// <param name="progressCallback">Optional callback for progress updates (current, total)</param>
+    /// <param name="progressCallback">Optional callback for progress updates (current, total, url, linkNode)</param>
     /// <returns>Statistics about the check</returns>
     public async Task<UrlCheckStatistics> CheckCategoryUrlsAsync(
         TreeViewNode categoryNode, 
-        Action<int, int>? progressCallback = null)
+        Action<int, int, string, TreeViewNode?>? progressCallback = null)
     {
         if (_isChecking)
         {
@@ -53,16 +53,16 @@ public class UrlStateCheckerService
         try
         {
             var stats = new UrlCheckStatistics();
-            var urlLinks = new List<LinkItem>();
+            var urlLinkPairs = new List<(LinkItem link, TreeViewNode node)>();
 
-            // Collect all URL links from the category
-            CollectUrlLinks(categoryNode, urlLinks);
-            stats.TotalUrls = urlLinks.Count;
+            // Collect all URL links from the category with their nodes
+            CollectUrlLinksWithNodes(categoryNode, urlLinkPairs);
+            stats.TotalUrls = urlLinkPairs.Count;
 
             Debug.WriteLine($"[UrlStateChecker] Found {stats.TotalUrls} URL links to check");
 
             // Check each URL
-            for (int i = 0; i < urlLinks.Count; i++)
+            for (int i = 0; i < urlLinkPairs.Count; i++)
             {
                 if (_cancellationTokenSource.Token.IsCancellationRequested)
                 {
@@ -70,8 +70,16 @@ public class UrlStateCheckerService
                     break;
                 }
 
-                var link = urlLinks[i];
-                progressCallback?.Invoke(i + 1, stats.TotalUrls);
+                var (link, node) = urlLinkPairs[i];
+                
+                // Validate node exists in tree before checking
+                if (node?.Content == null || node.Content != link)
+                {
+                    Debug.WriteLine($"[UrlStateChecker] Node not found for link: {link.Title}");
+                    throw new InvalidOperationException($"Tree node not found for link '{link.Title}'. Check cancelled.");
+                }
+                
+                progressCallback?.Invoke(i + 1, stats.TotalUrls, link.Url, node);
 
                 try
                 {
@@ -243,6 +251,31 @@ public class UrlStateCheckerService
         {
             // Other errors (invalid URL, etc.)
             return UrlStatus.Error;
+        }
+    }
+
+    /// <summary>
+    /// Recursively collects all URL links from a category node WITH their tree nodes.
+    /// </summary>
+    private void CollectUrlLinksWithNodes(TreeViewNode node, List<(LinkItem link, TreeViewNode node)> urlLinkPairs)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link)
+            {
+                // Only include web URLs (not directories or files)
+                if (!link.IsDirectory && 
+                    (link.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                     link.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                {
+                    urlLinkPairs.Add((link, child));
+                }
+            }
+            else if (child.Content is CategoryItem)
+            {
+                // Recursively check subcategories
+                CollectUrlLinksWithNodes(child, urlLinkPairs);
+            }
         }
     }
 
