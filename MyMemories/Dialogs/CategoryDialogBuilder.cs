@@ -25,7 +25,9 @@ public class CategoryDialogBuilder
         "🎨", "🎭", "🎪", "🎬", "🎮", "🎵", "🎸", "📷",
         "🖼️", "🌍", "🌐", "🔧", "🔨", "⚙️", "🔗", "📊",
         "📈", "📉", "💻", "⌨️", "🖥️", "📱", "☁️", "💾",
-        "🔒", "🔓", "🔑", "🏆", "🎓", "📚", "✏️", "📐"
+        "🔒", "🔓", "🔑", "🏆", "🎓", "📚", "✏️", "📐",
+        // Bookmark icons
+        "🔖", "📑", "🏷️", "📎", "💌", "📧", "📨", "📬"
     };
 
     public CategoryDialogBuilder(XamlRoot xamlRoot, ConfigurationService? configService = null)
@@ -44,7 +46,9 @@ public class CategoryDialogBuilder
         string? currentIcon = null,
         bool isRootCategory = true,
         PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
-        string? currentPasswordHash = null)
+        string? currentPasswordHash = null,
+        bool currentIsBookmarkCategory = false,
+        bool currentIsBookmarkLookup = false)
     {
         var (stackPanel, controls) = BuildCategoryDialogUI(
             currentName, 
@@ -52,7 +56,9 @@ public class CategoryDialogBuilder
             currentIcon, 
             isRootCategory,
             currentPasswordProtection,
-            currentPasswordHash);
+            currentPasswordHash,
+            currentIsBookmarkCategory,
+            currentIsBookmarkLookup);
 
         var dialog = new ContentDialog
         {
@@ -170,7 +176,9 @@ public class CategoryDialogBuilder
         string? currentIcon,
         bool isRootCategory,
         PasswordProtectionType currentPasswordProtection,
-        string? currentPasswordHash)
+        string? currentPasswordHash,
+        bool currentIsBookmarkCategory,
+        bool currentIsBookmarkLookup)
     {
         var categoryNameTextBox = new TextBox
         {
@@ -188,6 +196,57 @@ public class CategoryDialogBuilder
             Height = 80,
             Margin = new Thickness(0, 0, 0, 8)
         };
+
+        // URL Bookmarks checkbox - show for all categories, but disable for inherited
+        CheckBox? isBookmarkCategoryCheckBox = null;
+        CheckBox? isBookmarkLookupCheckBox = null;
+        TextBlock? inheritedNote = null;
+        
+        // Always create checkbox (for root and subcategories)
+        isBookmarkCategoryCheckBox = new CheckBox
+        {
+            Content = "\U0001F516 URL Bookmarks Only (restrict to web links)", // 🔖
+            IsChecked = currentIsBookmarkCategory,
+            IsEnabled = isRootCategory || !currentIsBookmarkCategory, // Enabled for root or non-inherited subcategories
+            Margin = new Thickness(0, 8, 0, 8)
+        };
+        
+        // Bookmark Lookup checkbox (shown only when bookmark category is checked)
+        isBookmarkLookupCheckBox = new CheckBox
+        {
+            Content = "\U0001F50D Use for bookmark lookup", // 🔍
+            IsChecked = currentIsBookmarkLookup,
+            IsEnabled = currentIsBookmarkCategory,
+            Visibility = currentIsBookmarkCategory ? Visibility.Visible : Visibility.Collapsed,
+            Margin = new Thickness(20, 0, 0, 8) // Indented to show relationship
+        };
+        
+        // Wire up the bookmark category checkbox to show/hide lookup checkbox
+        isBookmarkCategoryCheckBox.Checked += (s, e) =>
+        {
+            isBookmarkLookupCheckBox.IsEnabled = true;
+            isBookmarkLookupCheckBox.Visibility = Visibility.Visible;
+        };
+        
+        isBookmarkCategoryCheckBox.Unchecked += (s, e) =>
+        {
+            isBookmarkLookupCheckBox.IsEnabled = false;
+            isBookmarkLookupCheckBox.Visibility = Visibility.Collapsed;
+            isBookmarkLookupCheckBox.IsChecked = false;
+        };
+        
+        // Add helper text if it's inherited from bookmark parent
+        if (!isRootCategory && currentIsBookmarkCategory)
+        {
+            inheritedNote = new TextBlock
+            {
+                Text = "   (Inherited from parent category)",
+                FontSize = 11,
+                FontStyle = FontStyle.Italic,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, -4, 0, 8)
+            };
+        }
 
         var iconGridView = BuildIconPicker(currentIcon);
 
@@ -300,6 +359,24 @@ public class CategoryDialogBuilder
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryDescriptionTextBox);
 
+        // URL Bookmarks checkbox (always show for all categories)
+        if (isBookmarkCategoryCheckBox != null)
+        {
+            stackPanel.Children.Add(isBookmarkCategoryCheckBox);
+            
+            // Add helper text if it's inherited
+            if (inheritedNote != null)
+            {
+                stackPanel.Children.Add(inheritedNote);
+            }
+            
+            // Add bookmark lookup checkbox (shown conditionally)
+            if (isBookmarkLookupCheckBox != null)
+            {
+                stackPanel.Children.Add(isBookmarkLookupCheckBox);
+            }
+        }
+
         // Password Protection (only for root categories) - BEFORE ICON PICKER
         if (isRootCategory && passwordProtectionComboBox != null)
         {
@@ -341,6 +418,8 @@ public class CategoryDialogBuilder
             NameTextBox = categoryNameTextBox,
             DescriptionTextBox = categoryDescriptionTextBox,
             IconGridView = iconGridView,
+            IsBookmarkCategoryCheckBox = isBookmarkCategoryCheckBox,
+            IsBookmarkLookupCheckBox = isBookmarkLookupCheckBox,
             PasswordProtectionComboBox = passwordProtectionComboBox,
             OwnPasswordBox = ownPasswordBox,
             ConfirmPasswordBox = confirmPasswordBox
@@ -465,7 +544,9 @@ public class CategoryDialogBuilder
             Description = categoryDescription,
             Icon = selectedIcon,
             PasswordProtection = passwordProtection,
-            OwnPassword = ownPassword
+            OwnPassword = ownPassword,
+            IsBookmarkCategory = controls.IsBookmarkCategoryCheckBox?.IsChecked ?? false,
+            IsBookmarkLookup = controls.IsBookmarkLookupCheckBox?.IsChecked ?? false
         };
     }
 
@@ -474,6 +555,8 @@ public class CategoryDialogBuilder
         public TextBox NameTextBox { get; set; } = null!;
         public TextBox DescriptionTextBox { get; set; } = null!;
         public GridView IconGridView { get; set; } = null!;
+        public CheckBox? IsBookmarkCategoryCheckBox { get; set; }
+        public CheckBox? IsBookmarkLookupCheckBox { get; set; }
         public ComboBox? PasswordProtectionComboBox { get; set; }
         public PasswordBox? OwnPasswordBox { get; set; }
         public PasswordBox? ConfirmPasswordBox { get; set; }

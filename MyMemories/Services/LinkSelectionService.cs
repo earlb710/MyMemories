@@ -17,6 +17,7 @@ public class LinkSelectionService
     private readonly CatalogService _catalogService;
     private readonly FileLauncherService _fileLauncherService;
     private readonly CategoryService _categoryService;
+    private TextBox? _urlTextBox;
 
     public LinkSelectionService(
         DetailsViewService detailsViewService,
@@ -32,6 +33,14 @@ public class LinkSelectionService
         _catalogService = catalogService;
         _fileLauncherService = fileLauncherService;
         _categoryService = categoryService;
+    }
+
+    /// <summary>
+    /// Sets the URL text box for web navigation.
+    /// </summary>
+    public void SetUrlTextBox(TextBox urlTextBox)
+    {
+        _urlTextBox = urlTextBox;
     }
 
     public async Task HandleLinkSelectionAsync(LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
@@ -153,7 +162,7 @@ public class LinkSelectionService
         else
         {
             hideAllViewers();
-            await _fileViewerService.LoadUrlAsync(uri);
+            await _fileViewerService.LoadUrlAsync(uri, _urlTextBox);
             
             // Show web viewer for URLs
             showViewer(FileViewerType.Web);

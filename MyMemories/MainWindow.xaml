@@ -169,7 +169,7 @@
                                                 </Border.Visibility>
                                                 <FontIcon 
                                                     Glyph="&#xE72E;"
-                                                    FontSize="9"
+                                                    FontSize="7"
                                                     FontWeight="Black"
                                                     Foreground="#FFFFD700"/>
                                                 <ToolTipService.ToolTip>
@@ -202,7 +202,7 @@
                                                 FontSize="8"
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Bottom"
-                                                Foreground="{ThemeResource SystemFillColorAttentionBrush}"
+                                                Foreground="#FF0066CC"
                                                 Margin="0,0,-1,-1"
                                                 Visibility="{Binding Content.ShowLinkBadge, Mode=OneWay}">
                                                 <ToolTipService.ToolTip>
@@ -247,7 +247,7 @@
                                                 </Border.Visibility>
                                                 <FontIcon 
                                                     Glyph="&#xE72E;"
-                                                    FontSize="9"
+                                                    FontSize="7"
                                                     FontWeight="Black"
                                                     Foreground="#FFFFD700"/>
                                                 <ToolTipService.ToolTip>
@@ -393,6 +393,69 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                     <StackPanel x:Name="HeaderPanel" Spacing="4"/>
                 </ScrollViewer>
+
+                <!-- URL Bar for Web Viewing (above WebView2) -->
+                <Grid 
+                    Grid.Row="0"
+                    x:Name="UrlBarPanel"
+                    Visibility="Collapsed"
+                    Padding="12,8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    BorderThickness="0,0,0,1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBox 
+                        Grid.Column="0"
+                        x:Name="UrlTextBox"
+                        PlaceholderText="Enter URL..."
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        KeyDown="UrlTextBox_KeyDown"/>
+                    
+                    <Button 
+                        Grid.Column="1"
+                        x:Name="RefreshUrlButton"
+                        Click="RefreshUrlButton_Click"
+                        VerticalAlignment="Center"
+                        Padding="12,6">
+                        <Grid>
+                            <!-- Normal state: Go icon and text -->
+                            <StackPanel 
+                                x:Name="GoIconPanel"
+                                Orientation="Horizontal" 
+                                Spacing="8">
+                                <FontIcon 
+                                    x:Name="GoIcon"
+                                    Glyph="&#xE72C;" 
+                                    FontSize="16"/>
+                                <TextBlock 
+                                    x:Name="GoText"
+                                    Text="Go" 
+                                    VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Loading state: Spinner (initially collapsed) -->
+                            <StackPanel 
+                                x:Name="LoadingPanel"
+                                Orientation="Horizontal" 
+                                Spacing="8"
+                                Visibility="Collapsed">
+                                <ProgressRing 
+                                    Width="16" 
+                                    Height="16" 
+                                    IsActive="True"/>
+                                <TextBlock Text="Loading..." VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Load URL (Enter)"/>
+                        </ToolTipService.ToolTip>
+                    </Button>
+                </Grid>
 
                 <!-- Image Viewer -->
                 <Image 

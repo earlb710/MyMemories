@@ -4,8 +4,10 @@ using MyMemories.Services;
 using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using WinRT.Interop;
 using Microsoft.UI.Windowing;
@@ -16,7 +18,7 @@ namespace MyMemories;
 /// <summary>
 /// Main window for the MyMemories file viewer application.
 /// </summary>
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly string _dataFolder;
     private LinkDetailsDialog? _linkDialog;
@@ -25,6 +27,7 @@ public sealed partial class MainWindow : Window
     private List<SearchResult> _searchResults = new();
     private int _currentSearchIndex = -1;
     private string _lastSearchText = string.Empty;
+    private bool _isUrlLoading;
 
     // Services
     private CategoryService? _categoryService;
@@ -37,6 +40,43 @@ public sealed partial class MainWindow : Window
     private CatalogService? _catalogService;
     private FileLauncherService? _fileLauncherService;
     private LinkSelectionService? _linkSelectionService;
+
+    /// <summary>
+    /// Gets or sets whether a URL is currently loading.
+    /// </summary>
+    public bool IsUrlLoading
+    {
+        get => _isUrlLoading;
+        set
+        {
+            if (_isUrlLoading != value)
+            {
+                _isUrlLoading = value;
+                UpdateLoadingUI();
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates the loading UI state for the URL bar.
+    /// </summary>
+    private void UpdateLoadingUI()
+    {
+        if (GoIconPanel != null && LoadingPanel != null)
+        {
+            GoIconPanel.Visibility = _isUrlLoading ? Visibility.Collapsed : Visibility.Visible;
+            LoadingPanel.Visibility = _isUrlLoading ? Visibility.Visible : Visibility.Collapsed;
+            RefreshUrlButton.IsEnabled = !_isUrlLoading;
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 
     public MainWindow()
     {
@@ -115,8 +155,29 @@ public sealed partial class MainWindow : Window
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
                 new ZipCatalogService(_categoryService, _treeViewService));
             _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService);
+            _linkSelectionService.SetUrlTextBox(UrlTextBox); // Wire up URL text box
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
             _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService);
+
+            // Set up WebView2 navigation events to update URL bar
+            WebViewer.CoreWebView2.NavigationStarting += (s, e) =>
+            {
+                UrlTextBox.Text = e.Uri;
+                IsUrlLoading = true;
+            };
+            
+            WebViewer.CoreWebView2.NavigationCompleted += (s, e) =>
+            {
+                IsUrlLoading = false;
+            };
+            
+            WebViewer.CoreWebView2.SourceChanged += (s, e) =>
+            {
+                if (WebViewer.CoreWebView2.Source != null)
+                {
+                    UrlTextBox.Text = WebViewer.CoreWebView2.Source;
+                }
+            };
 
             // Check if any categories use global password and prompt BEFORE loading
             await PromptForGlobalPasswordIfNeededAsync();
@@ -431,5 +492,66 @@ public sealed partial class MainWindow : Window
         }
         
         return false;
+    }
+
+    /// <summary>
+    /// Handles Enter key in URL text box to load the URL.
+    /// </summary>
+    private void UrlTextBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            LoadUrlFromTextBox();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Handles the refresh/go button click to load the URL.
+    /// </summary>
+    private void RefreshUrlButton_Click(object sender, RoutedEventArgs e)
+    {
+        LoadUrlFromTextBox();
+    }
+
+    /// <summary>
+    /// Loads the URL from the text box into the WebView2.
+    /// </summary>
+    private async void LoadUrlFromTextBox()
+    {
+        var urlText = UrlTextBox.Text?.Trim();
+        
+        if (string.IsNullOrWhiteSpace(urlText))
+        {
+            StatusText.Text = "Please enter a URL";
+            return;
+        }
+
+        try
+        {
+            // Add http:// if no protocol specified
+            if (!urlText.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !urlText.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !urlText.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                urlText = "https://" + urlText;
+            }
+
+            if (Uri.TryCreate(urlText, UriKind.Absolute, out Uri? uri))
+            {
+                IsUrlLoading = true; // Start loading animation
+                await _fileViewerService!.LoadUrlAsync(uri);
+                StatusText.Text = $"Loaded: {uri}";
+            }
+            else
+            {
+                StatusText.Text = "Invalid URL format";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsUrlLoading = false; // Stop loading animation on error
+            StatusText.Text = $"Error loading URL: {ex.Message}";
+        }
     }
 }

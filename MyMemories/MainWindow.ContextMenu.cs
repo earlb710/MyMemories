@@ -79,7 +79,7 @@ public sealed partial class MainWindow
 
             if (LinksTreeView.SelectedNode == result.CategoryNode)
             {
-                _detailsViewService!.ShowCategoryDetails((CategoryItem)result.CategoryNode.Content, result.CategoryNode);
+                await _detailsViewService!.ShowCategoryDetailsAsync((CategoryItem)result.CategoryNode.Content, result.CategoryNode);
             }
         }
     }

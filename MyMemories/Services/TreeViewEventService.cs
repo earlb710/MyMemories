@@ -35,7 +35,11 @@ public class TreeViewEventService
     private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         hideAllViewers();
-        _detailsViewService.ShowCategoryDetails(category, node);
+        
+        // For bookmark import categories, we need to get the refresh callback from MainWindow
+        // Since we don't have direct access, we'll need to handle this differently
+        // The refresh functionality will be wired up separately when needed
+        await _detailsViewService.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks: null);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);

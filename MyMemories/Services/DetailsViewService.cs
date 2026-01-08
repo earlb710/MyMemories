@@ -229,9 +229,50 @@ public class DetailsViewService
     /// <summary>
     /// Shows category details.
     /// </summary>
-    public void ShowCategoryDetails(CategoryItem category, TreeViewNode node)
+    public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, Func<Task>? onRefreshBookmarks = null)
     {
         _detailsPanel.Children.Clear();
+
+        Button? refreshButton = null;
+
+        // Show bookmark import information if this is a bookmark import category
+        if (category.IsBookmarkImport)
+        {
+            await AddBookmarkImportInfoAsync(category);
+            
+            // Add refresh button if we have source path
+            if (!string.IsNullOrEmpty(category.SourceBookmarksPath) && onRefreshBookmarks != null)
+            {
+                refreshButton = new Button
+                {
+                    Content = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Children =
+                        {
+                            new FontIcon { Glyph = "\uE72C" }, // SyncIcon
+                            new TextBlock { Text = "Refresh Bookmarks", VerticalAlignment = VerticalAlignment.Center }
+                        }
+                    },
+                    Margin = new Thickness(0, 0, 0, 16)
+                };
+                
+                refreshButton.Click += async (s, e) =>
+                {
+                    try
+                    {
+                        await onRefreshBookmarks();
+                    }
+                    catch
+                    {
+                        // Silently handle errors
+                    }
+                };
+                
+                _detailsPanel.Children.Add(refreshButton);
+            }
+        }
 
         // Add timestamps for category
         AddCategoryTimestamps(category);
@@ -242,6 +283,132 @@ public class DetailsViewService
         {
             AddLinksList(node);
         }
+
+        return refreshButton;
+    }
+
+    /// <summary>
+    /// Displays bookmark import metadata in an info banner.
+    /// </summary>
+    private async Task AddBookmarkImportInfoAsync(CategoryItem category)
+    {
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Bookmark Import Information",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var importPanel = new Border
+        {
+            Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 120, 215)),
+            BorderBrush = new SolidColorBrush(Colors.DodgerBlue),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
+        var infoStack = new StackPanel { Spacing = 8 };
+
+        // Browser info with icon
+        if (category.SourceBrowserType.HasValue && !string.IsNullOrEmpty(category.SourceBrowserName))
+        {
+            var browserPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 12
+            };
+
+            browserPanel.Children.Add(new FontIcon
+            {
+                Glyph = GetBrowserGlyph(category.SourceBrowserType.Value),
+                FontSize = 24,
+                Foreground = new SolidColorBrush(Colors.White)
+            });
+
+            browserPanel.Children.Add(new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Source: {category.SourceBrowserName}",
+                        FontSize = 14,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Colors.White)
+                    }
+                }
+            });
+
+            infoStack.Children.Add(browserPanel);
+        }
+
+        // Import date
+        if (category.LastBookmarkImportDate.HasValue)
+        {
+            infoStack.Children.Add(new TextBlock
+            {
+                Text = $"📅 Last Import: {category.LastBookmarkImportDate.Value:yyyy-MM-dd HH:mm:ss}",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Colors.LightGray)
+            });
+        }
+
+        // Bookmark count
+        if (category.ImportedBookmarkCount.HasValue)
+        {
+            infoStack.Children.Add(new TextBlock
+            {
+                Text = $"🔖 Imported Bookmarks: {category.ImportedBookmarkCount.Value}",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Colors.LightGray)
+            });
+        }
+
+        // Source path
+        if (!string.IsNullOrEmpty(category.SourceBookmarksPath))
+        {
+            infoStack.Children.Add(new TextBlock
+            {
+                Text = $"📂 Source Path:",
+                FontSize = 13,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Colors.White),
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+
+            infoStack.Children.Add(new TextBlock
+            {
+                Text = category.SourceBookmarksPath,
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Colors.LightGray),
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            });
+        }
+
+        importPanel.Child = infoStack;
+        _detailsPanel.Children.Add(importPanel);
+    }
+
+    /// <summary>
+    /// Gets the browser glyph for a browser type.
+    /// </summary>
+    private string GetBrowserGlyph(BrowserType browserType)
+    {
+        return browserType switch
+        {
+            BrowserType.Chrome => "\uE774", // Globe icon
+            BrowserType.Edge => "\uE737",   // Edge icon
+            BrowserType.Brave => "\uE8A1",  // Shield icon  
+            BrowserType.Vivaldi => "\uE773", // Music note
+            BrowserType.Opera => "\uE8A5",   // World icon
+            BrowserType.Firefox => "\uE7E8", // Fire icon
+            _ => "\uE774" // Default globe
+        };
     }
 
     /// <summary>

@@ -25,6 +25,7 @@ public sealed partial class MainWindow
         DetailsViewerScroll.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
         HeaderViewerScroll.Visibility = Visibility.Collapsed;
+        UrlBarPanel.Visibility = Visibility.Collapsed;
     }
 
     private void ShowWelcome()
@@ -39,12 +40,15 @@ public sealed partial class MainWindow
         {
             case FileViewerType.Image:
                 ImageViewer.Visibility = Visibility.Visible;
+                UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Web:
                 WebViewer.Visibility = Visibility.Visible;
+                UrlBarPanel.Visibility = Visibility.Visible;
                 break;
             case FileViewerType.Text:
                 TextViewerScroll.Visibility = Visibility.Visible;
+                UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
         }
     }

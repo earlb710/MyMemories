@@ -58,7 +58,8 @@ public sealed partial class MainWindow
                     PasswordProtection = result.PasswordProtection,
                     OwnPasswordHash = result.OwnPassword != null 
                         ? PasswordUtilities.HashPassword(result.OwnPassword) 
-                        : null
+                        : null,
+                    IsBookmarkCategory = result.IsBookmarkCategory
                 }
             };
 
@@ -72,6 +73,10 @@ public sealed partial class MainWindow
     private async Task CreateSubCategoryAsync(TreeViewNode parentNode)
     {
         var parentCategoryPath = _treeViewService!.GetCategoryPath(parentNode);
+        var parentCategory = parentNode.Content as CategoryItem;
+        
+        // Check if parent is a bookmark category - if so, inherit the flag
+        bool parentIsBookmarkCategory = parentCategory?.IsBookmarkCategory ?? false;
         
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
@@ -84,7 +89,10 @@ public sealed partial class MainWindow
             currentName: null,
             currentDescription: null,
             currentIcon: null,
-            isRootCategory: false);
+            isRootCategory: false,
+            currentPasswordProtection: PasswordProtectionType.None,
+            currentPasswordHash: null,
+            currentIsBookmarkCategory: parentIsBookmarkCategory);
 
         if (result != null)
         {
@@ -96,7 +104,8 @@ public sealed partial class MainWindow
                     Description = result.Description,
                     Icon = result.Icon,
                     CreatedDate = DateTime.Now,
-                    ModifiedDate = DateTime.Now
+                    ModifiedDate = DateTime.Now,
+                    IsBookmarkCategory = result.IsBookmarkCategory // Inherit from parent
                 }
             };
 
@@ -146,7 +155,8 @@ public sealed partial class MainWindow
             currentIcon: category.Icon,
             isRootCategory: isRootCategory,
             currentPasswordProtection: category.PasswordProtection,
-            currentPasswordHash: category.OwnPasswordHash);
+            currentPasswordHash: category.OwnPasswordHash,
+            currentIsBookmarkCategory: category.IsBookmarkCategory);
 
         if (result != null)
         {
@@ -244,7 +254,8 @@ public sealed partial class MainWindow
                 PasswordProtection = result.PasswordProtection,
                 OwnPasswordHash = result.OwnPassword != null
                     ? PasswordUtilities.HashPassword(result.OwnPassword)
-                    : category.OwnPasswordHash
+                    : category.OwnPasswordHash,
+                IsBookmarkCategory = result.IsBookmarkCategory
             };
 
             var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
@@ -260,7 +271,7 @@ public sealed partial class MainWindow
 
             if (LinksTreeView.SelectedNode == newNode)
             {
-                _detailsViewService!.ShowCategoryDetails(updatedCategory, newNode);
+                await _detailsViewService!.ShowCategoryDetailsAsync(updatedCategory, newNode);
                 _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
                 HeaderViewerScroll.Visibility = Visibility.Visible;
             }

@@ -161,6 +161,25 @@ public class FileViewerService
         _webViewer.Source = uri;
     }
 
+    /// <summary>
+    /// Loads a URL in the web viewer with URL bar support.
+    /// </summary>
+    public async Task LoadUrlAsync(Uri uri, TextBox? urlTextBox)
+    {
+        if (_webViewer.CoreWebView2 == null)
+        {
+            await _webViewer.EnsureCoreWebView2Async();
+        }
+
+        _webViewer.Source = uri;
+        
+        // Update URL text box if provided
+        if (urlTextBox != null)
+        {
+            urlTextBox.Text = uri.ToString();
+        }
+    }
+
     private async Task<BitmapImage> LoadImageAsync(StorageFile file)
     {
         using var stream = await file.OpenReadAsync();

@@ -112,6 +112,17 @@ public class LinkDialogBuilder
 
         selectedIndex = PopulateCategoryComboBox(categoryComboBox, categories, selectedCategory);
 
+        // Link Type ComboBox
+        var linkTypeComboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F310 URL", Tag = "URL" }); // ??
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C4 File", Tag = "File" }); // ??
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C1 Folder", Tag = "Folder" }); // ??
+        linkTypeComboBox.SelectedIndex = 0; // Default to URL
+
         var titleTextBox = new TextBox
         {
             PlaceholderText = "Enter link title (required)",
@@ -120,7 +131,7 @@ public class LinkDialogBuilder
 
         var urlTextBox = new TextBox
         {
-            PlaceholderText = "Enter file path, directory, or URL",
+            PlaceholderText = "Enter URL",
             Margin = new Thickness(0, 0, 0, 8)
         };
 
@@ -133,19 +144,42 @@ public class LinkDialogBuilder
             Margin = new Thickness(0, 0, 0, 8)
         };
 
-        var (folderControls, buttonPanel) = BuildFolderControls();
+        // Bookmark category info text (initially hidden)
+        var bookmarkInfoText = new TextBlock
+        {
+            Text = "\U0001F516 This is a URL Bookmarks category - only web links (http:// or https://) are allowed.", // ??
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+
+        // Browse button (initially hidden, shown only for File/Folder)
+        var browseButton = new Button 
+        { 
+            Content = "Browse...",
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+
+        var (folderControls, _) = BuildFolderControls();
 
         var stackPanel = new StackPanel();
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Category: *", 
             new Thickness(0, 0, 0, 4)));
         stackPanel.Children.Add(categoryComboBox);
+        stackPanel.Children.Add(bookmarkInfoText);
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Link Type: *", 
+            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(linkTypeComboBox);
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Location: *", 
+            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(urlTextBox);
+        stackPanel.Children.Add(browseButton);
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Title: *", 
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(titleTextBox);
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("File Path, Directory, or URL:", 
-            new Thickness(0, 8, 0, 4)));
-        stackPanel.Children.Add(urlTextBox);
-        stackPanel.Children.Add(buttonPanel);
         
         stackPanel.Children.Add(folderControls.TypeLabel);
         stackPanel.Children.Add(folderControls.TypeComboBox);
@@ -159,6 +193,7 @@ public class LinkDialogBuilder
         var controls = new LinkDialogControls
         {
             CategoryComboBox = categoryComboBox,
+            LinkTypeComboBox = linkTypeComboBox,
             TitleTextBox = titleTextBox,
             UrlTextBox = urlTextBox,
             DescriptionTextBox = descriptionTextBox,
@@ -166,8 +201,8 @@ public class LinkDialogBuilder
             FileFiltersTextBox = folderControls.FiltersTextBox,
             FolderTypeLabel = folderControls.TypeLabel,
             FileFiltersLabel = folderControls.FiltersLabel,
-            BrowseFileButton = buttonPanel.Children[0] as Button,
-            BrowseFolderButton = buttonPanel.Children[1] as Button
+            BrowseButton = browseButton,
+            BookmarkInfoText = bookmarkInfoText
         };
 
         return (stackPanel, controls);
@@ -232,7 +267,7 @@ public class LinkDialogBuilder
         return (stackPanel, controls);
     }
 
-    private (FolderControlsGroup, StackPanel) BuildFolderControls(
+    private (FolderControlsGroup, StackPanel?) BuildFolderControls(
         bool initiallyVisible = false,
         FolderLinkType folderType = FolderLinkType.LinkOnly,
         string? fileFilters = null)
@@ -277,22 +312,13 @@ public class LinkDialogBuilder
             FontStyle = FontStyle.Italic
         };
 
-        var buttonPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-        buttonPanel.Children.Add(new Button { Content = "Browse File..." });
-        buttonPanel.Children.Add(new Button { Content = "Browse Folder..." });
-
         return (new FolderControlsGroup
         {
             TypeComboBox = folderTypeComboBox,
             FiltersTextBox = fileFiltersTextBox,
             TypeLabel = folderTypeLabel,
             FiltersLabel = fileFiltersLabel
-        }, buttonPanel);
+        }, null);
     }
 
     private int PopulateCategoryComboBox(
@@ -335,8 +361,80 @@ public class LinkDialogBuilder
             dialog.IsPrimaryButtonEnabled = hasCategory && hasTitle;
         }
 
+        void UpdateUIForCategoryAndLinkType()
+        {
+            // Check if selected category is a bookmark category
+            bool isBookmarkCategory = false;
+            if (controls.CategoryComboBox?.SelectedItem is ComboBoxItem categoryItem &&
+                categoryItem.Tag is TreeViewNode categoryNode &&
+                categoryNode.Content is CategoryItem category)
+            {
+                isBookmarkCategory = category.IsBookmarkCategory;
+            }
+
+            // Get selected link type
+            string linkType = "URL";
+            if (controls.LinkTypeComboBox?.SelectedItem is ComboBoxItem linkTypeItem)
+            {
+                linkType = linkTypeItem.Tag?.ToString() ?? "URL";
+            }
+
+            // Lock link type to URL for bookmark categories
+            if (isBookmarkCategory)
+            {
+                controls.LinkTypeComboBox.SelectedIndex = 0; // URL
+                controls.LinkTypeComboBox.IsEnabled = false;
+                controls.UrlTextBox.PlaceholderText = "Enter URL (http:// or https://)";
+                controls.BookmarkInfoText.Visibility = Visibility.Visible;
+                controls.BrowseButton.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                controls.LinkTypeComboBox.IsEnabled = true;
+                controls.BookmarkInfoText.Visibility = Visibility.Collapsed;
+                
+                // Update UI based on link type
+                switch (linkType)
+                {
+                    case "URL":
+                        controls.UrlTextBox.PlaceholderText = "Enter URL (e.g., https://example.com)";
+                        controls.BrowseButton.Visibility = Visibility.Collapsed;
+                        break;
+                    case "File":
+                        controls.UrlTextBox.PlaceholderText = "Enter file path or click Browse";
+                        controls.BrowseButton.Visibility = Visibility.Visible;
+                        controls.BrowseButton.Content = "Browse File...";
+                        break;
+                    case "Folder":
+                        controls.UrlTextBox.PlaceholderText = "Enter folder path or click Browse";
+                        controls.BrowseButton.Visibility = Visibility.Visible;
+                        controls.BrowseButton.Content = "Browse Folder...";
+                        break;
+                }
+            }
+        }
+
         void CheckDirectoryAndUpdateUI()
         {
+            // Check if selected category is a bookmark category
+            bool isBookmarkCategory = false;
+            if (controls.CategoryComboBox?.SelectedItem is ComboBoxItem categoryItem &&
+                categoryItem.Tag is TreeViewNode categoryNode &&
+                categoryNode.Content is CategoryItem category)
+            {
+                isBookmarkCategory = category.IsBookmarkCategory;
+            }
+
+            // Don't show folder controls for bookmark categories
+            if (isBookmarkCategory)
+            {
+                controls.FolderTypeLabel.Visibility = Visibility.Collapsed;
+                controls.FolderTypeComboBox.Visibility = Visibility.Collapsed;
+                controls.FileFiltersLabel.Visibility = Visibility.Collapsed;
+                controls.FileFiltersTextBox.Visibility = Visibility.Collapsed;
+                return;
+            }
+
             bool isDirectory = false;
             try
             {
@@ -362,16 +460,38 @@ public class LinkDialogBuilder
             }
         }
 
-        controls.CategoryComboBox!.SelectionChanged += (s, args) => ValidateForm();
+        controls.CategoryComboBox!.SelectionChanged += (s, args) =>
+        {
+            ValidateForm();
+            UpdateUIForCategoryAndLinkType();
+            CheckDirectoryAndUpdateUI();
+        };
+        
+        controls.LinkTypeComboBox!.SelectionChanged += (s, args) =>
+        {
+            UpdateUIForCategoryAndLinkType();
+        };
+        
         controls.TitleTextBox.TextChanged += (s, args) => ValidateForm();
         controls.UrlTextBox.TextChanged += (s, args) => CheckDirectoryAndUpdateUI();
         controls.FolderTypeComboBox.SelectionChanged += (s, args) => CheckDirectoryAndUpdateUI();
 
-        controls.BrowseFileButton!.Click += async (s, args) => 
-            await BrowseForFileAsync(controls.UrlTextBox, controls.TitleTextBox);
-        
-        controls.BrowseFolderButton!.Click += (s, args) => 
-            BrowseForFolder(controls.UrlTextBox, controls.TitleTextBox, CheckDirectoryAndUpdateUI);
+        controls.BrowseButton!.Click += async (s, args) =>
+        {
+            var linkType = (controls.LinkTypeComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "URL";
+            
+            if (linkType == "File")
+            {
+                await BrowseForFileAsync(controls.UrlTextBox, controls.TitleTextBox);
+            }
+            else if (linkType == "Folder")
+            {
+                BrowseForFolder(controls.UrlTextBox, controls.TitleTextBox, CheckDirectoryAndUpdateUI);
+            }
+        };
+
+        UpdateUIForCategoryAndLinkType();
+        CheckDirectoryAndUpdateUI();
     }
 
     private void SetupEditLinkEventHandlers(LinkDialogControls controls)
@@ -465,6 +585,34 @@ public class LinkDialogBuilder
             return null;
         }
 
+        var categoryItem = controls.CategoryComboBox.SelectedItem as ComboBoxItem;
+        var targetCategory = categoryItem?.Tag as TreeViewNode;
+
+        if (targetCategory == null)
+            return null;
+
+        // Check if target category is a URL Bookmarks category
+        var targetCategoryItem = targetCategory.Content as CategoryItem;
+        if (targetCategoryItem?.IsBookmarkCategory == true)
+        {
+            // Validate that the URL is a web link (http:// or https://)
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                // Show error via ContentDialog
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Invalid URL",
+                    Content = "URL Bookmarks categories only allow web links.\n\n" +
+                             "Please enter a URL starting with http:// or https://",
+                    CloseButtonText = "OK",
+                    XamlRoot = _xamlRoot
+                };
+                _ = errorDialog.ShowAsync(); // Fire and forget
+                return null;
+            }
+        }
+
         bool isDirectory = false;
         try { isDirectory = Directory.Exists(url); } catch { }
 
@@ -480,12 +628,6 @@ public class LinkDialogBuilder
                 fileFilters = controls.FileFiltersTextBox.Text.Trim();
             }
         }
-
-        var categoryItem = controls.CategoryComboBox.SelectedItem as ComboBoxItem;
-        var targetCategory = categoryItem?.Tag as TreeViewNode;
-
-        if (targetCategory == null)
-            return null;
 
         return new AddLinkResult
         {
@@ -540,6 +682,7 @@ public class LinkDialogBuilder
     private class LinkDialogControls
     {
         public ComboBox? CategoryComboBox { get; set; }
+        public ComboBox? LinkTypeComboBox { get; set; }
         public TextBox TitleTextBox { get; set; } = null!;
         public TextBox UrlTextBox { get; set; } = null!;
         public TextBox DescriptionTextBox { get; set; } = null!;
@@ -547,8 +690,8 @@ public class LinkDialogBuilder
         public TextBox FileFiltersTextBox { get; set; } = null!;
         public TextBlock FolderTypeLabel { get; set; } = null!;
         public TextBlock FileFiltersLabel { get; set; } = null!;
-        public Button? BrowseFileButton { get; set; }
-        public Button? BrowseFolderButton { get; set; }
+        public Button? BrowseButton { get; set; }
+        public TextBlock BookmarkInfoText { get; set; } = null!;
     }
 
     private class FolderControlsGroup

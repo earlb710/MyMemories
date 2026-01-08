@@ -376,6 +376,7 @@ public class CategoryService
             SourceBookmarksPath = category.SourceBookmarksPath,
             LastBookmarkImportDate = category.LastBookmarkImportDate,
             ImportedBookmarkCount = category.ImportedBookmarkCount,
+            IsBookmarkCategory = category.IsBookmarkCategory,
             Links = null,
             SubCategories = null
         };
@@ -546,7 +547,8 @@ public class CategoryService
                 SourceBrowserName = categoryData.SourceBrowserName,
                 SourceBookmarksPath = categoryData.SourceBookmarksPath,
                 LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
-                ImportedBookmarkCount = categoryData.ImportedBookmarkCount
+                ImportedBookmarkCount = categoryData.ImportedBookmarkCount,
+                IsBookmarkCategory = categoryData.IsBookmarkCategory
             }
         };
 

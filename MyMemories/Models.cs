@@ -67,6 +67,12 @@ public class CategoryItem
     public string? SourceBookmarksPath { get; set; }
     public DateTime? LastBookmarkImportDate { get; set; }
     public int? ImportedBookmarkCount { get; set; }
+    
+    // URL Bookmarks category - restricts to URLs only
+    public bool IsBookmarkCategory { get; set; } = false;
+    
+    // Bookmark lookup - makes this category available for bookmark search
+    public bool IsBookmarkLookup { get; set; } = false;
 
     public override string ToString() => $"{Icon} {Name}";
 }
@@ -460,6 +466,14 @@ public class CategoryData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? ImportedBookmarkCount { get; set; }
+    
+    // URL Bookmarks category restriction
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsBookmarkCategory { get; set; }
+    
+    // Bookmark lookup availability
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsBookmarkLookup { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }
@@ -569,6 +583,8 @@ public class CategoryEditResult
     public string Icon { get; set; } = "📁";
     public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
     public string? OwnPassword { get; set; }
+    public bool IsBookmarkCategory { get; set; } = false;
+    public bool IsBookmarkLookup { get; set; } = false;
 }
 
 /// <summary>
