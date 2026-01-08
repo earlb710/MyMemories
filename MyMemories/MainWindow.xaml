@@ -134,9 +134,14 @@
                     Grid.Row="2"
                     x:Name="LinksTreeView"
                     Margin="8,0,8,8"
+                    CanReorderItems="True"
+                    CanDragItems="True"
+                    AllowDrop="True"
                     SelectionChanged="LinksTreeView_SelectionChanged"
                     RightTapped="LinksTreeView_RightTapped"
-                    DoubleTapped="LinksTreeView_DoubleTapped">
+                    DoubleTapped="LinksTreeView_DoubleTapped"
+                    DragItemsStarting="LinksTreeView_DragItemsStarting"
+                    DragItemsCompleted="LinksTreeView_DragItemsCompleted">
                     
                     <!-- Item Template Selector -->
                     <TreeView.ItemTemplateSelector>
