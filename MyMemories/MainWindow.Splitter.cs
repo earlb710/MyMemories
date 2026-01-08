@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Input;
+using MyMemories.Controls;
 
 namespace MyMemories;
 
@@ -12,7 +13,7 @@ public sealed partial class MainWindow
 
     private void Splitter_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Border splitter)
+        if (sender is SplitterBorder splitter)
         {
             _isDraggingSplitter = true;
             
@@ -45,7 +46,7 @@ public sealed partial class MainWindow
 
     private void Splitter_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        if (_isDraggingSplitter && sender is Border splitter)
+        if (_isDraggingSplitter && sender is SplitterBorder splitter)
         {
             _isDraggingSplitter = false;
             splitter.ReleasePointerCapture(e.Pointer);
@@ -55,19 +56,27 @@ public sealed partial class MainWindow
 
     private void Splitter_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Border splitter)
+        if (sender is SplitterBorder splitter)
         {
+            // Change background to highlight the splitter
             splitter.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                Microsoft.UI.Colors.LightGray) { Opacity = 0.3 };
+                Microsoft.UI.Colors.LightGray) { Opacity = 0.5 };
+            
+            // Change cursor to horizontal resize arrows
+            splitter.ChangeCursor(InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast));
         }
     }
 
     private void Splitter_PointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is Border splitter && !_isDraggingSplitter)
+        if (sender is SplitterBorder splitter && !_isDraggingSplitter)
         {
+            // Restore transparent background
             splitter.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                 Microsoft.UI.Colors.Transparent);
+            
+            // Restore default arrow cursor
+            splitter.ChangeCursor(InputSystemCursor.Create(InputSystemCursorShape.Arrow));
         }
     }
 }

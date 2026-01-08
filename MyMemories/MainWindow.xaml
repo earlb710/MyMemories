@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:local="using:MyMemories"
+    xmlns:controls="using:MyMemories.Controls"
     mc:Ignorable="d"
     Title="My Memories - File Viewer">
 
@@ -48,13 +49,13 @@
         <!-- Main Content Area with TreeView and Viewer -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250" MinWidth="150" MaxWidth="600" x:Name="TreeViewColumn"/>
+                <ColumnDefinition Width="350" MinWidth="150" MaxWidth="600" x:Name="TreeViewColumn"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left Panel: TreeView with Search and Add Buttons -->
-            <Grid Grid.Column="0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+            <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -407,7 +408,8 @@
             </Grid>
 
             <!-- Draggable Splitter -->
-            <Border 
+            <controls:SplitterBorder 
+                x:Name="SplitterBorder"
                 Grid.Column="1" 
                 Width="6" 
                 Background="Transparent"
@@ -419,13 +421,11 @@
                 PointerCaptureLost="Splitter_PointerReleased"
                 PointerEntered="Splitter_PointerEntered"
                 PointerExited="Splitter_PointerExited">
-                <Grid>
-                    <Rectangle 
-                        Width="1" 
-                        Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
-                        HorizontalAlignment="Center"/>
-                </Grid>
-            </Border>
+                <Rectangle 
+                    Width="1" 
+                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    HorizontalAlignment="Left"/>
+            </controls:SplitterBorder>
 
             <!-- Content Viewer Area -->
             <Grid Grid.Column="2" x:Name="ContentGrid">
