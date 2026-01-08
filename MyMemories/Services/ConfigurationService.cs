@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using MyMemories.Utilities;
 
 namespace MyMemories.Services;
 
@@ -45,8 +46,12 @@ public class ConfigurationService
                 
                 // DO NOT set a default log directory - it should remain null/empty unless explicitly set
             }
-            catch
+            catch (Exception ex)
             {
+                LogUtilities.LogError(
+                    "ConfigurationService.LoadConfigurationAsync",
+                    $"Failed to load configuration from '{_configFilePath}'",
+                    ex);
                 _config = CreateDefaultConfiguration();
             }
         }
@@ -128,6 +133,15 @@ public class ConfigurationService
 
     public Dictionary<string, string> CategoryPasswords => _config.CategoryPasswords;
 
+    /// <summary>
+    /// Gets or sets the zip compression level (0-9). Default is 2.
+    /// </summary>
+    public int ZipCompressionLevel
+    {
+        get => _config.ZipCompressionLevel;
+        set => _config.ZipCompressionLevel = Math.Clamp(value, 0, 9);
+    }
+
     public void SetCategoryPassword(string categoryPath, string passwordHash)
     {
         _config.CategoryPasswords[categoryPath] = passwordHash;
@@ -170,14 +184,17 @@ public class ConfigurationService
             
             await File.AppendAllTextAsync(logFilePath, logEntry);
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently fail - don't interrupt operations due to logging errors
+            LogUtilities.LogError(
+                "ConfigurationService.LogCategoryChangeAsync",
+                $"Failed to write category log for '{categoryName}', action: '{action}'",
+                ex);
         }
     }
 
     /// <summary>
-    /// Logs an error.
+    /// Logs an error with enhanced context information.
     /// </summary>
     public async Task LogErrorAsync(string errorMessage, Exception? exception = null)
     {
@@ -188,23 +205,49 @@ public class ConfigurationService
         {
             var logFilePath = Path.Combine(_config.LogDirectory, "errors.log");
             
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var logEntry = $"[{timestamp}] ERROR: {errorMessage}";
             
             if (exception != null)
             {
-                logEntry += $"\nException: {exception.GetType().Name}";
+                logEntry += $"\nException Type: {exception.GetType().FullName}";
                 logEntry += $"\nMessage: {exception.Message}";
-                logEntry += $"\nStack Trace:\n{exception.StackTrace}";
+                logEntry += $"\nSource: {exception.Source}";
+                logEntry += $"\nHResult: 0x{exception.HResult:X8}";
+                
+                if (exception.InnerException != null)
+                {
+                    logEntry += $"\n\nInner Exception Type: {exception.InnerException.GetType().FullName}";
+                    logEntry += $"\nInner Message: {exception.InnerException.Message}";
+                }
+                
+                if (exception.Data != null && exception.Data.Count > 0)
+                {
+                    logEntry += "\n\nAdditional Data:";
+                    foreach (var key in exception.Data.Keys)
+                    {
+                        logEntry += $"\n  {key}: {exception.Data[key]}";
+                    }
+                }
+                
+                logEntry += $"\n\nStack Trace:\n{exception.StackTrace}";
+                
+                if (exception.InnerException?.StackTrace != null)
+                {
+                    logEntry += $"\n\nInner Stack Trace:\n{exception.InnerException.StackTrace}";
+                }
             }
             
             logEntry += Environment.NewLine + new string('-', 80) + Environment.NewLine;
             
             await File.AppendAllTextAsync(logFilePath, logEntry);
         }
-        catch
+        catch (Exception ex)
         {
-            // Silently fail - don't interrupt operations due to logging errors
+            LogUtilities.LogError(
+                "ConfigurationService.LogErrorAsync",
+                "Failed to write to error log file",
+                ex);
         }
     }
 
@@ -224,4 +267,10 @@ public class AppConfiguration
     public string LogDirectory { get; set; } = string.Empty;
     public string GlobalPasswordHash { get; set; } = string.Empty;
     public Dictionary<string, string> CategoryPasswords { get; set; } = new();
+    
+    /// <summary>
+    /// Zip compression level (0-9). Default is 2 (fast).
+    /// 0 = No compression, 1-3 = Fast, 4-6 = Balanced, 7-9 = Maximum compression.
+    /// </summary>
+    public int ZipCompressionLevel { get; set; } = 2;
 }

@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Dialogs;
 using MyMemories.Services;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -58,6 +59,14 @@ public class LinkDetailsDialog
     public Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath) => 
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPath);
 
+    public Task<ZipFolderResult?> ShowZipFolderDialogAsync(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string sourceFolderPath,
+        Func<string, (bool isValid, string? errorMessage)>? validateZipName,
+        TreeViewNode? parentCategoryNode) => 
+        _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPath, validateZipName, parentCategoryNode);
+
     public Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string[] sourceFolderPaths) => 
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths, false, null);
 
@@ -68,4 +77,14 @@ public class LinkDetailsDialog
         bool categoryHasPassword,
         string? categoryPassword) => 
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword, categoryPassword);
+
+    public Task<ZipFolderResult?> ShowZipFolderDialogAsync(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string[] sourceFolderPaths,
+        bool categoryHasPassword,
+        string? categoryPassword,
+        Func<string, (bool isValid, string? errorMessage)>? validateZipName,
+        TreeViewNode? parentCategoryNode) => 
+        _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword, categoryPassword, validateZipName, parentCategoryNode);
 }

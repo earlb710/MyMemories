@@ -165,8 +165,24 @@ public class LinkSelectionService
 
     private async Task HandleSelectionErrorAsync(LinkItem linkItem, TreeViewNode? linkNode, Exception ex, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
-        var errorMsg = $"Error: {ex.Message}";
-        setStatus(errorMsg);
+        // Special handling for file not found during operations
+        if (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+        {
+            // Check if this is a temporary state (URL is empty means operation in progress)
+            if (string.IsNullOrEmpty(linkItem.Url))
+            {
+                setStatus("? Operation in progress - please wait...");
+            }
+            else
+            {
+                setStatus($"Error: File or directory not found - {linkItem.Url}");
+            }
+        }
+        else
+        {
+            setStatus($"Error: {ex.Message}");
+        }
+        
         hideAllViewers();
 
         await ShowLinkDetailsWithCatalogActions(linkItem, linkNode, setStatus);

@@ -14,6 +14,12 @@ public class DoubleTapHandlerService
 
     public async Task HandleDoubleTapAsync(LinkItem linkItem, Microsoft.UI.Xaml.Controls.TreeViewNode? selectedNode, Action<string> setStatus)
     {
+        // Don't do anything if URL is empty (e.g., temporary "busy creating" nodes)
+        if (string.IsNullOrEmpty(linkItem.Url))
+        {
+            return;
+        }
+
         // Check if this is a zip entry (URL contains "::")
         if (linkItem.Url.Contains("::"))
         {

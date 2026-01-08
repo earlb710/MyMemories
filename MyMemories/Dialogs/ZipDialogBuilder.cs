@@ -32,7 +32,7 @@ public class ZipDialogBuilder
         bool categoryHasPassword = false,
         string? categoryPassword = null)
     {
-        var (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox) = 
+        var (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox, errorTextBlock) = 
             BuildZipDialogUI(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword);
 
         // Calculate and display folder statistics
@@ -71,10 +71,10 @@ public class ZipDialogBuilder
     public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath)
     {
         // For single source, wrap in array
-        return await ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, new[] { sourceFolderPath }, false, null);
+        return await ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, new[] { sourceFolderPath }, false, null, null, null);
     }
 
-    private (StackPanel, TextBox, TextBox, TextBlock, TextBlock, CheckBox, CheckBox?) BuildZipDialogUI(
+    private (StackPanel, TextBox, TextBox, TextBlock, TextBlock, CheckBox, CheckBox?, TextBlock) BuildZipDialogUI(
         string folderTitle, 
         string defaultTargetDirectory, 
         string[] sourceFolderPaths,
@@ -96,6 +96,16 @@ public class ZipDialogBuilder
             PlaceholderText = "Enter target directory path",
             IsReadOnly = true,
             Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        // Error text block (initially hidden)
+        var errorTextBlock = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red),
+            FontSize = 12,
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed
         };
 
         // Statistics text block
@@ -210,6 +220,9 @@ public class ZipDialogBuilder
             new Thickness(0, 0, 0, 4)));
         stackPanel.Children.Add(zipFileNameTextBox);
         
+        // Error message (shown when validation fails)
+        stackPanel.Children.Add(errorTextBlock);
+        
         // Target directory
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Target Directory: *", 
             new Thickness(0, 8, 0, 4)));
@@ -228,7 +241,7 @@ public class ZipDialogBuilder
             stackPanel.Children.Add(usePasswordCheckBox);
         }
 
-        return (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox);
+        return (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox, errorTextBlock);
     }
 
     /// <summary>
@@ -436,5 +449,92 @@ public class ZipDialogBuilder
             UsePassword = usePassword,
             Password = usePassword ? categoryPassword : null
         };
+    }
+
+    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(
+        string folderTitle, 
+        string defaultTargetDirectory, 
+        string[] sourceFolderPaths,
+        bool categoryHasPassword = false,
+        string? categoryPassword = null,
+        Func<string, (bool isValid, string? errorMessage)>? validateZipName = null,
+        Microsoft.UI.Xaml.Controls.TreeViewNode? parentCategoryNode = null)
+    {
+        string? previousErrorMessage = null;
+        
+        while (true) // Loop until validation passes or user cancels
+        {
+            var (stackPanel, zipFileNameTextBox, targetDirectoryTextBox, statsTextBlock, availableSpaceTextBlock, linkToCategoryCheckBox, usePasswordCheckBox, errorTextBlock) = 
+                BuildZipDialogUI(folderTitle, defaultTargetDirectory, sourceFolderPaths, categoryHasPassword);
+
+            // Show previous error message if any
+            if (!string.IsNullOrEmpty(previousErrorMessage))
+            {
+                errorTextBlock.Text = $"⚠️ {previousErrorMessage}";
+                errorTextBlock.Visibility = Visibility.Visible;
+            }
+
+            // Calculate and display folder statistics
+            await UpdateFolderStatisticsAsync(sourceFolderPaths, statsTextBlock);
+            
+            // Update available space for target directory
+            await UpdateAvailableSpaceAsync(defaultTargetDirectory, availableSpaceTextBlock);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Create Zip Archive",
+                Content = new ScrollViewer 
+                { 
+                    Content = stackPanel,
+                    MaxHeight = 600
+                },
+                PrimaryButtonText = "Create Zip",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = _xamlRoot,
+                IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(zipFileNameTextBox.Text) && 
+                                        !string.IsNullOrWhiteSpace(targetDirectoryTextBox.Text)
+            };
+
+            var result = await dialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary)
+            {
+                var zipResult = await CreateZipResult(zipFileNameTextBox, targetDirectoryTextBox, 
+                    linkToCategoryCheckBox, usePasswordCheckBox, categoryPassword);
+                
+                if (zipResult == null)
+                {
+                    continue; // Invalid result, show dialog again
+                }
+
+                // Validate zip name if linking to category and validator provided
+                if (zipResult.LinkToCategory && validateZipName != null && parentCategoryNode != null)
+                {
+                    var zipLinkTitle = Path.GetFileNameWithoutExtension(zipResult.ZipFileName);
+                    var validation = validateZipName(zipLinkTitle);
+                    
+                    if (!validation.isValid)
+                    {
+                        // Show error and redisplay dialog
+                        folderTitle = zipResult.ZipFileName; // Keep user's input
+                        previousErrorMessage = validation.errorMessage;
+                        continue;
+                    }
+                }
+                
+                return zipResult;
+            }
+            else
+            {
+                return null; // User cancelled
+            }
+        }
+    }
+
+    public async Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath, Func<string, (bool isValid, string? errorMessage)>? validateZipName = null, Microsoft.UI.Xaml.Controls.TreeViewNode? parentCategoryNode = null)
+    {
+        // For single source, wrap in array
+        return await ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, new[] { sourceFolderPath }, false, null, validateZipName, parentCategoryNode);
     }
 }

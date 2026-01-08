@@ -442,4 +442,64 @@ public static class ZipUtilities
             return false;
         }
     }
+
+    /// <summary>
+    /// Creates a password-protected zip file from multiple folders using SharpZipLib.
+    /// Note: This method does NOT include manifest generation.
+    /// </summary>
+    public static async Task CreatePasswordProtectedMultiFolderZipAsync(
+        string[] folderPaths, 
+        string zipFilePath, 
+        string password,
+        int compressionLevel = 6)
+    {
+        await Task.Run(() =>
+        {
+            using var outputStream = new FileStream(zipFilePath, FileMode.Create);
+            using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
+
+            zipStream.SetLevel(Math.Clamp(compressionLevel, 0, 9));
+            zipStream.Password = password;
+            zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+
+            foreach (var folderPath in folderPaths)
+            {
+                if (!Directory.Exists(folderPath))
+                    continue;
+
+                var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                var folderName = new DirectoryInfo(folderPath).Name;
+
+                foreach (var filePath in files)
+                {
+                    try
+                    {
+                        var relativePath = Path.GetRelativePath(folderPath, filePath);
+                        var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
+
+                        var fileInfo = new FileInfo(filePath);
+                        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
+                        {
+                            DateTime = fileInfo.LastWriteTime,
+                            Size = fileInfo.Length,
+                            AESKeySize = 256
+                        };
+
+                        zipStream.PutNextEntry(entry);
+
+                        using var fileStream = File.OpenRead(filePath);
+                        fileStream.CopyTo(zipStream);
+
+                        zipStream.CloseEntry();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtilities.LogError("ZipUtilities.CreatePasswordProtectedMultiFolderZipAsync", $"Error adding file {filePath}", ex);
+                    }
+                }
+            }
+
+            zipStream.Finish();
+        });
+    }
 }

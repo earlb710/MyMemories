@@ -274,6 +274,24 @@ public class LinkItem : INotifyPropertyChanged
     /// </summary>
     public string GetIconWithoutBadge()
     {
+        // Special case: If title starts with an emoji or unicode symbol, don't show an icon
+        if (!string.IsNullOrEmpty(Title) && Title.Length > 0)
+        {
+            // Check for high surrogate (emoji) or common symbol characters
+            char firstChar = Title[0];
+            if (char.IsHighSurrogate(firstChar) || 
+                firstChar == '⏳' || 
+                firstChar == '⚠' || 
+                firstChar == '✓' || 
+                firstChar == '❌' ||
+                (firstChar >= 0x2600 && firstChar <= 0x26FF) || // Miscellaneous Symbols
+                (firstChar >= 0x2700 && firstChar <= 0x27BF) || // Dingbats
+                (firstChar >= 0x1F300 && firstChar <= 0x1F9FF))  // Emoticons and symbols
+            {
+                return string.Empty;
+            }
+        }
+
         // Check if this is a zip archive (directory with .zip URL)
         bool isZipArchive = IsDirectory && Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
 

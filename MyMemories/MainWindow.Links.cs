@@ -159,32 +159,140 @@ public sealed partial class MainWindow
 
     private async Task DeleteLinkAsync(LinkItem link, TreeViewNode node)
     {
-        var confirmDialog = new ContentDialog
+        // Check if this is a zip file
+        bool isZipFile = link.IsDirectory && link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+                        System.IO.File.Exists(link.Url);
+
+        ContentDialog confirmDialog;
+
+        if (isZipFile)
         {
-            Title = "Remove Link",
-            Content = $"Remove link '{link.Title}'?",
-            PrimaryButtonText = "Remove",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await confirmDialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary && node.Parent != null)
-        {
-            var parentCategory = node.Parent;
-            parentCategory.Children.Remove(node);
-
-            // Update parent categories' ModifiedDate and save
-            await UpdateParentCategoriesAndSaveAsync(parentCategory);
-
-            if (LinksTreeView.SelectedNode == node)
+            // Create dialog with checkbox for zip files
+            var stackPanel = new StackPanel { Spacing = 12 };
+            
+            stackPanel.Children.Add(new TextBlock
             {
-                ShowWelcome();
+                Text = $"Remove link '{link.Title}'?",
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            var deleteFileCheckBox = new CheckBox
+            {
+                Content = "Also delete the zip file from disk",
+                IsChecked = true,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            stackPanel.Children.Add(deleteFileCheckBox);
+
+            // Show file path info
+            var filePathInfo = new TextBlock
+            {
+                Text = $"?? {link.Url}",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            stackPanel.Children.Add(filePathInfo);
+
+            // Show file size if available
+            if (link.FileSize.HasValue)
+            {
+                var fileSizeInfo = new TextBlock
+                {
+                    Text = $"Size: {MyMemories.Services.FileViewerService.FormatFileSize(link.FileSize.Value)}",
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                    Margin = new Thickness(0, 4, 0, 0)
+                };
+                stackPanel.Children.Add(fileSizeInfo);
             }
 
-            StatusText.Text = $"Removed link: {link.Title}";
+            confirmDialog = new ContentDialog
+            {
+                Title = "Remove Zip Link",
+                Content = stackPanel,
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await confirmDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary && node.Parent != null)
+            {
+                var parentCategory = node.Parent;
+                
+                // Delete the physical file if checkbox is checked
+                if (deleteFileCheckBox.IsChecked == true)
+                {
+                    try
+                    {
+                        System.IO.File.Delete(link.Url);
+                        StatusText.Text = $"Removed link and deleted zip file: {link.Title}";
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusText.Text = $"Removed link but failed to delete zip file: {ex.Message}";
+                        
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "File Deletion Failed",
+                            Content = $"The link was removed, but the zip file could not be deleted:\n\n{ex.Message}",
+                            CloseButtonText = "OK",
+                            XamlRoot = Content.XamlRoot
+                        };
+                        await errorDialog.ShowAsync();
+                    }
+                }
+                else
+                {
+                    StatusText.Text = $"Removed link (zip file kept): {link.Title}";
+                }
+
+                // Remove the link from the tree
+                parentCategory.Children.Remove(node);
+
+                // Update parent categories' ModifiedDate and save
+                await UpdateParentCategoriesAndSaveAsync(parentCategory);
+
+                if (LinksTreeView.SelectedNode == node)
+                {
+                    ShowWelcome();
+                }
+            }
+        }
+        else
+        {
+            // Standard dialog for non-zip files
+            confirmDialog = new ContentDialog
+            {
+                Title = "Remove Link",
+                Content = $"Remove link '{link.Title}'?",
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await confirmDialog.ShowAsync();
+
+            if (result == ContentDialogResult.Primary && node.Parent != null)
+            {
+                var parentCategory = node.Parent;
+                parentCategory.Children.Remove(node);
+
+                // Update parent categories' ModifiedDate and save
+                await UpdateParentCategoriesAndSaveAsync(parentCategory);
+
+                if (LinksTreeView.SelectedNode == node)
+                {
+                    ShowWelcome();
+                }
+
+                StatusText.Text = $"Removed link: {link.Title}";
+            }
         }
     }
 }

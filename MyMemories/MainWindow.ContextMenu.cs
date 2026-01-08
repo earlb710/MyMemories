@@ -100,13 +100,36 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void CategoryMenu_ChangePassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        // Only allow for root categories
+        if (_contextMenuNode.Parent != null)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Not a Root Category",
+                Content = "Password protection can only be changed for root categories.\n\nSubcategories inherit their parent's password protection.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        await ShowChangePasswordDialogAsync(category, _contextMenuNode);
+    }
+
     private async void CategoryMenu_ZipCategory_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
-        // Collect all folder links (not catalog entries) from the category recursively
-        var folderPaths = CollectFolderPathsFromCategory(_contextMenuNode);
+        // Use CategoryStatisticsService to collect folder paths
+        var statisticsService = new CategoryStatisticsService();
+        var folderPaths = statisticsService.CollectFolderPathsFromCategory(_contextMenuNode);
 
         if (folderPaths.Count == 0)
         {
@@ -162,7 +185,16 @@ public sealed partial class MainWindow
             defaultTargetDirectory,
             folderPaths.ToArray(),
             categoryHasPassword,
-            categoryPassword
+            categoryPassword,
+            (zipTitle) => {
+                if (LinkExistsInCategory(_contextMenuNode, zipTitle))
+                {
+                    var categoryPath = _treeViewService!.GetCategoryPath(_contextMenuNode);
+                    return (false, $"A link named '{zipTitle}' already exists in '{categoryPath}'. Please choose a different name.");
+                }
+                return (true, null);
+            },
+            _contextMenuNode
         );
 
         if (result == null)
@@ -217,23 +249,169 @@ public sealed partial class MainWindow
             }
         }
 
+        // Create temporary zip node with "busy creating" indicator if linking to category
+        TreeViewNode? zipLinkNode = null;
+        TreeViewNode? busyNode = null;
+
+        if (result.LinkToCategory)
+        {
+            var categoryPath = _treeViewService!.GetCategoryPath(_contextMenuNode);
+
+            // Create the zip link item (but with temporary status)
+            var zipLinkItem = new LinkItem
+            {
+                Title = Path.GetFileNameWithoutExtension(zipFileName),
+                Url = zipFilePath,
+                Description = "Creating zip archive...",
+                IsDirectory = true,
+                CategoryPath = categoryPath,
+                CreatedDate = DateTime.Now,
+                ModifiedDate = DateTime.Now,
+                FolderType = FolderLinkType.CatalogueFiles
+            };
+
+            zipLinkNode = new TreeViewNode { Content = zipLinkItem };
+
+            // Create busy indicator child node
+            var busyLinkItem = new LinkItem
+            {
+                Title = "⏳ Busy creating...",
+                Url = string.Empty,
+                Description = "Zip archive is being created",
+                IsDirectory = false,
+                CategoryPath = categoryPath,
+                CreatedDate = DateTime.Now,
+                ModifiedDate = DateTime.Now
+            };
+
+            busyNode = new TreeViewNode { Content = busyLinkItem };
+            zipLinkNode.Children.Add(busyNode);
+            zipLinkNode.IsExpanded = true;
+
+            // Add the zip node to the category
+            _contextMenuNode.Children.Add(zipLinkNode);
+            _contextMenuNode.IsExpanded = true;
+
+            // Navigate to the newly created zip node
+            LinksTreeView.SelectedNode = zipLinkNode;
+        }
+
         // Create zip file from all folders
         try
         {
             StatusText.Text = $"Creating{(result.UsePassword ? " password-protected" : "")} zip file '{zipFileName}' from {folderPaths.Count} folder(s)...";
 
+            // Start timing
+            var startTime = DateTime.Now;
+
+            // CRITICAL: Collect folder info on UI thread BEFORE entering background thread
+            var folderInfoList = CollectFolderInfoFromCategory(_contextMenuNode, category.Name);
+            var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
+
+            // Calculate original size for compression ratio
+            ulong originalSize = await Task.Run(() =>
+            {
+                ulong totalSize = 0;
+                foreach (var folderPath in folderPaths)
+                {
+                    if (!Directory.Exists(folderPath))
+                        continue;
+
+                    var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            totalSize += (ulong)new FileInfo(file).Length;
+                        }
+                        catch { }
+                    }
+                }
+                return totalSize;
+            });
+
             if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
             {
-                // Use password-protected zip creation
-                await CreatePasswordProtectedMultiFolderZipAsync(folderPaths.ToArray(), zipFilePath, result.Password);
+                // Use password-protected zip creation WITH MANIFEST (pass pre-collected data)
+                await Task.Run(() =>
+                {
+                    using var outputStream = new FileStream(zipFilePath, FileMode.Create);
+                    using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
+
+                    zipStream.SetLevel(6); // Compression level 0-9
+                    zipStream.Password = result.Password;
+                    zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+
+                    // Create and add the manifest file FIRST
+                    var manifestBytes = System.Text.Encoding.UTF8.GetBytes(manifestContent);
+
+                    var manifestEntry = new ICSharpCode.SharpZipLib.Zip.ZipEntry("_MANIFEST.txt")
+                    {
+                        DateTime = DateTime.Now,
+                        Size = manifestBytes.Length,
+                        AESKeySize = 256
+                    };
+
+                    zipStream.PutNextEntry(manifestEntry);
+                    zipStream.Write(manifestBytes, 0, manifestBytes.Length);
+                    zipStream.CloseEntry();
+
+                    // Then add all folder contents
+                    foreach (var folderPath in folderPaths)
+                    {
+                        if (!Directory.Exists(folderPath))
+                            continue;
+
+                        var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                        var folderName = new DirectoryInfo(folderPath).Name;
+
+                        foreach (var filePath in files)
+                        {
+                            try
+                            {
+                                var relativePath = Path.GetRelativePath(folderPath, filePath);
+                                var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
+
+                                var fileInfo = new FileInfo(filePath);
+                                var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
+                                {
+                                    DateTime = fileInfo.LastWriteTime,
+                                    Size = fileInfo.Length,
+                                    AESKeySize = 256
+                                };
+
+                                zipStream.PutNextEntry(entry);
+
+                                using var fileStream = File.OpenRead(filePath);
+                                fileStream.CopyTo(zipStream);
+
+                                zipStream.CloseEntry();
+                            }
+                            catch (Exception ex)
+                            {
+                                LogUtilities.LogError("MainWindow.CategoryMenu_ZipCategory_Click", $"Error adding file {filePath}", ex);
+                            }
+                        }
+                    }
+
+                    zipStream.Finish();
+                });
             }
             else
             {
-                // Standard zip creation (existing code)
+                // Standard zip creation WITH MANIFEST (use pre-collected data)
                 await Task.Run(() =>
                 {
                     using (var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create))
                     {
+                        // Create and add the manifest file FIRST
+                        var manifestEntry = archive.CreateEntry("_MANIFEST.txt", CompressionLevel.Optimal);
+                        using (var writer = new StreamWriter(manifestEntry.Open(), System.Text.Encoding.UTF8))
+                        {
+                            writer.Write(manifestContent);
+                        }
+
+                        // Then add all folder contents
                         foreach (var folderPath in folderPaths)
                         {
                             if (!Directory.Exists(folderPath))
@@ -256,12 +434,54 @@ public sealed partial class MainWindow
 
             StatusText.Text = $"Successfully created '{zipFileName}'";
 
+            // Calculate compression statistics
+            var endTime = DateTime.Now;
+            var duration = endTime - startTime;
+            var compressedSize = (ulong)new FileInfo(zipFilePath).Length;
+            var compressionRatio = originalSize > 0 ? (1.0 - ((double)compressedSize / originalSize)) * 100.0 : 0.0;
+
+            // Remove busy node and update the zip node with catalog contents
+            if (result.LinkToCategory && zipLinkNode != null)
+            {
+                // Remove the busy indicator
+                if (busyNode != null)
+                {
+                    zipLinkNode.Children.Remove(busyNode);
+                }
+
+                // Update the zip link item with final information
+                var finalZipLinkItem = zipLinkNode.Content as LinkItem;
+                if (finalZipLinkItem != null)
+                {
+                    finalZipLinkItem.Description = $"Zip archive of folders from '{category.Name}'"
+                        + (result.UsePassword ? " (password-protected)" : "");
+                    finalZipLinkItem.FileSize = (ulong)new FileInfo(zipFilePath).Length;
+                    finalZipLinkItem.LastCatalogUpdate = DateTime.Now;
+                    finalZipLinkItem.IsZipPasswordProtected = result.UsePassword;
+                }
+
+                // Catalog the zip file contents
+                await _catalogService!.CreateCatalogAsync(finalZipLinkItem!, zipLinkNode);
+
+                // Save the updated category
+                var rootNode = GetRootCategoryNode(_contextMenuNode);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                var categoryPath = _treeViewService!.GetCategoryPath(_contextMenuNode);
+                StatusText.Text = $"Created '{zipFileName}' and linked to '{categoryPath}'";
+            }
+
             // Show success dialog
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
-                    + (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
+                Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\n" +
+                         $"📊 Statistics:\n" +
+                         $"   • Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
+                         $"   • Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
+                         $"   • Compression: {compressionRatio:F1}% reduction\n" +
+                         $"   • Time Taken: {duration.TotalSeconds:F1} seconds" +
+                         (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
@@ -270,6 +490,12 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             StatusText.Text = $"Error creating zip file: {ex.Message}";
+
+            // Remove the temporary zip node if it was created
+            if (zipLinkNode != null)
+            {
+                _contextMenuNode.Children.Remove(zipLinkNode);
+            }
 
             var errorDialog = new ContentDialog
             {
@@ -287,13 +513,14 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
-        // Collect all folder links (not catalog entries) from the category recursively
-        var folderPaths = CollectFolderPathsFromCategory(_contextMenuNode);
+        // Use CategoryStatisticsService to collect folder paths
+        var statisticsService = new CategoryStatisticsService();
+        var folderPaths = statisticsService.CollectFolderPathsFromCategory(_contextMenuNode);
 
         // Calculate statistics
         StatusText.Text = "Calculating category statistics...";
 
-        var stats = await Task.Run(() => CalculateMultipleFoldersStatistics(folderPaths.ToArray()));
+        var stats = await Task.Run(() => statisticsService.CalculateMultipleFoldersStatistics(folderPaths.ToArray()));
 
         // Build statistics UI
         var stackPanel = new StackPanel { Spacing = 16 };
@@ -392,100 +619,12 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Calculates statistics for multiple folders.
-    /// </summary>
-    private (int FolderCount, int SubdirectoryCount, int FileCount, ulong TotalSize) CalculateMultipleFoldersStatistics(string[] folderPaths)
-    {
-        int folderCount = 0;
-        int subdirectoryCount = 0;
-        int fileCount = 0;
-        ulong totalSize = 0;
-
-        foreach (var folderPath in folderPaths)
-        {
-            if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
-                continue;
-
-            folderCount++;
-            var stats = CalculateFolderStatistics(folderPath);
-            subdirectoryCount += stats.SubdirectoryCount;
-            fileCount += stats.FileCount;
-            totalSize += stats.TotalSize;
-        }
-
-        return (folderCount, subdirectoryCount, fileCount, totalSize);
-    }
-
-    /// <summary>
-    /// Calculates folder statistics recursively.
-    /// </summary>
-    private (int SubdirectoryCount, int FileCount, ulong TotalSize) CalculateFolderStatistics(string folderPath)
-    {
-        int subdirectoryCount = 0;
-        int fileCount = 0;
-        ulong totalSize = 0;
-
-        try
-        {
-            // Get all subdirectories recursively
-            var directories = Directory.GetDirectories(folderPath, "*", SearchOption.AllDirectories);
-            subdirectoryCount = directories.Length;
-
-            // Get all files recursively
-            var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-            fileCount = files.Length;
-
-            // Calculate total size
-            foreach (var file in files)
-            {
-                try
-                {
-                    var fileInfo = new FileInfo(file);
-                    totalSize += (ulong)fileInfo.Length;
-                }
-                catch
-                {
-                    // Skip files that can't be accessed
-                }
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            LogUtilities.LogWarning("MainWindow.CalculateFolderStatistics", $"Access denied to some folders in: {folderPath}");
-        }
-        catch (Exception ex)
-        {
-            LogUtilities.LogError("MainWindow.CalculateFolderStatistics", "Error during statistics calculation", ex);
-        }
-
-        return (subdirectoryCount, fileCount, totalSize);
-    }
-
-    /// <summary>
     /// Recursively collects all folder paths from a category node (excluding catalog entries).
     /// </summary>
     private List<string> CollectFolderPathsFromCategory(TreeViewNode categoryNode)
     {
-        var folderPaths = new List<string>();
-
-        foreach (var child in categoryNode.Children)
-        {
-            if (child.Content is LinkItem link)
-            {
-                // Only include directory links that are not catalog entries
-                if (link.IsDirectory && !link.IsCatalogEntry && Directory.Exists(link.Url))
-                {
-                    folderPaths.Add(link.Url);
-                }
-            }
-            else if (child.Content is CategoryItem)
-            {
-                // Recursively collect from subcategories
-                folderPaths.AddRange(CollectFolderPathsFromCategory(child));
-            }
-        }
-
-        return folderPaths;
+        var statisticsService = new CategoryStatisticsService();
+        return statisticsService.CollectFolderPathsFromCategory(categoryNode);
     }
 
     private async void CategoryMenu_Remove_Click(object sender, RoutedEventArgs e)
@@ -525,10 +664,50 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void LinkMenu_ChangePassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Only allow for zip files
+        bool isZipFile = link.IsDirectory && link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isZipFile)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Not a Zip File",
+                Content = "Password protection can only be changed for zip archive files.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        await ShowChangeZipPasswordDialogAsync(link, _contextMenuNode);
+    }
+
     private async void LinkMenu_ZipFolder_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is LinkItem link)
         {
+            // Check if this is already a zip archive
+            bool isZipArchive = link.IsDirectory && link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+            
+            if (isZipArchive)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Already a Zip Archive",
+                    Content = "This is already a zip archive. You cannot zip a zip file.\n\nUse 'Explore Here' to open the zip file location if needed.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+                return;
+            }
+
             if (!link.IsDirectory)
             {
                 var errorDialog = new ContentDialog
@@ -667,139 +846,8 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<string?> GetCategoryPasswordAsync(CategoryItem category)
     {
-        if (category.PasswordProtection == PasswordProtectionType.GlobalPassword)
-        {
-            // Use global password from category service
-            var globalPassword = _categoryService!.GetCachedGlobalPassword();
-            if (!string.IsNullOrEmpty(globalPassword))
-            {
-                return globalPassword;
-            }
-
-            // Global password not cached, this shouldn't happen but handle it
-            StatusText.Text = "Global password not available";
-            return null;
-        }
-        else if (category.PasswordProtection == PasswordProtectionType.OwnPassword)
-        {
-            // Prompt user for category's own password
-            var passwordDialog = new ContentDialog
-            {
-                Title = "Category Password Required",
-                Content = new StackPanel
-                {
-                    Spacing = 8,
-                    Children =
-                    {
-                        new TextBlock
-                        {
-                            Text = $"Enter the password for category '{category.Name}':",
-                            TextWrapping = TextWrapping.Wrap,
-                            Margin = new Thickness(0, 0, 0, 8)
-                        },
-                        new PasswordBox
-                        {
-                            Name = "CategoryPasswordInput",
-                            PlaceholderText = "Enter category password"
-                        }
-                    }
-                },
-                PrimaryButtonText = "OK",
-                CloseButtonText = "Cancel",
-                DefaultButton = ContentDialogButton.Primary,
-                XamlRoot = Content.XamlRoot
-            };
-
-            var result = await passwordDialog.ShowAsync();
-
-            if (result == ContentDialogResult.Primary)
-            {
-                var passwordBox = (passwordDialog.Content as StackPanel)
-                    ?.Children.OfType<PasswordBox>()
-                    .FirstOrDefault();
-
-                if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
-                {
-                    // Verify password
-                    var enteredHash = PasswordUtilities.HashPassword(passwordBox.Password);
-                    if (enteredHash == category.OwnPasswordHash)
-                    {
-                        return passwordBox.Password;
-                    }
-                    else
-                    {
-                        var errorDialog = new ContentDialog
-                        {
-                            Title = "Incorrect Password",
-                            Content = "The password you entered is incorrect.",
-                            CloseButtonText = "OK",
-                            XamlRoot = Content.XamlRoot
-                        };
-                        await errorDialog.ShowAsync();
-                        return null;
-                    }
-                }
-            }
-            
-            return null; // User cancelled
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Creates a password-protected zip file from multiple folders using SharpZipLib.
-    /// </summary>
-    private async Task CreatePasswordProtectedMultiFolderZipAsync(string[] folderPaths, string zipFilePath, string password)
-    {
-        await Task.Run(() =>
-        {
-            using var outputStream = new FileStream(zipFilePath, FileMode.Create);
-            using var zipStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(outputStream);
-
-            zipStream.SetLevel(6); // Compression level 0-9
-            zipStream.Password = password;
-            zipStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
-
-            foreach (var folderPath in folderPaths)
-            {
-                if (!Directory.Exists(folderPath))
-                    continue;
-
-                var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-                var folderName = new DirectoryInfo(folderPath).Name;
-
-                foreach (var filePath in files)
-                {
-                    try
-                    {
-                        var relativePath = Path.GetRelativePath(folderPath, filePath);
-                        var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
-
-                        var fileInfo = new FileInfo(filePath);
-                        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
-                        {
-                            DateTime = fileInfo.LastWriteTime,
-                            Size = fileInfo.Length,
-                            AESKeySize = 256
-                        };
-
-                        zipStream.PutNextEntry(entry);
-
-                        using var fileStream = File.OpenRead(filePath);
-                        fileStream.CopyTo(zipStream);
-
-                        zipStream.CloseEntry();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogUtilities.LogError("MainWindow.CreatePasswordProtectedMultiFolderZipAsync", $"Error adding file {filePath}", ex);
-                    }
-                }
-            }
-
-            zipStream.Finish();
-        });
+        var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!);
+        return await passwordService.GetCategoryPasswordAsync(category);
     }
 
     private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
@@ -940,5 +988,389 @@ public sealed partial class MainWindow
             var recursiveText = recursive ? " (including subdirectories)" : "";
             StatusText.Text = $"Sorted catalog '{link.Title}' by {SortingService.GetSortOptionDisplayName(sortOption)}{recursiveText}";
         }
+    }
+
+    private async Task ShowChangePasswordDialogAsync(CategoryItem category, TreeViewNode categoryNode)
+    {
+        var stackPanel = new StackPanel { Spacing = 16 };
+
+        // Current status
+        var currentStatus = new TextBlock
+        {
+            Text = $"Current: {GetPasswordStatusText(category.PasswordProtection)}",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+        };
+        stackPanel.Children.Add(currentStatus);
+
+        // Radio buttons for password options
+        var noneRadio = new RadioButton
+        {
+            Content = "⭕ No Password Protection",
+            GroupName = "PasswordType",
+            IsChecked = category.PasswordProtection == PasswordProtectionType.None
+        };
+        stackPanel.Children.Add(noneRadio);
+
+        var globalRadio = new RadioButton
+        {
+            Content = "⬛ Use Global Password",
+            GroupName = "PasswordType",
+            IsChecked = category.PasswordProtection == PasswordProtectionType.GlobalPassword,
+            IsEnabled = _configService?.HasGlobalPassword() ?? false
+        };
+        stackPanel.Children.Add(globalRadio);
+
+        if (!globalRadio.IsEnabled)
+        {
+            var globalNote = new TextBlock
+            {
+                Text = "   (Set global password in Config → Security Setup first)",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, -8, 0, 0)
+            };
+            stackPanel.Children.Add(globalNote);
+        }
+
+        var ownRadio = new RadioButton
+        {
+            Content = "🟥 Use Own Password",
+            GroupName = "PasswordType",
+            IsChecked = category.PasswordProtection == PasswordProtectionType.OwnPassword
+        };
+        stackPanel.Children.Add(ownRadio);
+
+        // Password input for own password
+        var passwordPanel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(24, 8, 0, 0),
+            Visibility = ownRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        var passwordBox = new PasswordBox
+        {
+            PlaceholderText = "Enter password",
+            Width = 250,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        passwordPanel.Children.Add(passwordBox);
+
+        var confirmPasswordBox = new PasswordBox
+        {
+            PlaceholderText = "Confirm password",
+            Width = 250,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        passwordPanel.Children.Add(confirmPasswordBox);
+
+        stackPanel.Children.Add(passwordPanel);
+
+        // Toggle password panel visibility
+        ownRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Visible;
+        noneRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
+        globalRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
+
+        // Info
+        var infoText = new TextBlock
+        {
+            Text = "⚠️ Changing password protection will re-encrypt this category file.\n\n" +
+                   "• No Password: Category data is stored as plain JSON\n" +
+                   "• Global Password: Encrypted with shared password (⬛ black badge)\n" +
+                   "• Own Password: Encrypted with unique password (🟥 red badge)",
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        stackPanel.Children.Add(infoText);
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Change Password Protection - {category.Name}",
+            Content = new ScrollViewer
+            {
+                Content = stackPanel,
+                MaxHeight = 500
+            },
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            PasswordProtectionType newType;
+            string? newPassword = null;
+
+            if (noneRadio.IsChecked == true)
+            {
+                newType = PasswordProtectionType.None;
+            }
+            else if (globalRadio.IsChecked == true)
+            {
+                newType = PasswordProtectionType.GlobalPassword;
+            }
+            else if (ownRadio.IsChecked == true)
+            {
+                newType = PasswordProtectionType.OwnPassword;
+                
+                if (string.IsNullOrEmpty(passwordBox.Password))
+                {
+                    await ShowErrorDialogAsync("Password Required", "Please enter a password for 'Own Password' protection.");
+                    return;
+                }
+
+                if (passwordBox.Password != confirmPasswordBox.Password)
+                {
+                    await ShowErrorDialogAsync("Password Mismatch", "The passwords do not match.");
+                    return;
+                }
+
+                newPassword = passwordBox.Password;
+            }
+            else
+            {
+                return;
+            }
+
+            // Apply the change
+            var oldType = category.PasswordProtection;
+            category.PasswordProtection = newType;
+
+            if (newType == PasswordProtectionType.OwnPassword && newPassword != null)
+            {
+                category.OwnPasswordHash = PasswordUtilities.HashPassword(newPassword);
+                _categoryService?.CacheCategoryPassword(_treeViewService!.GetCategoryPath(categoryNode), newPassword);
+            }
+            else
+            {
+                category.OwnPasswordHash = null;
+            }
+
+            // Save the category (will encrypt/decrypt based on new settings)
+            try
+            {
+                await _categoryService!.SaveCategoryAsync(categoryNode);
+                StatusText.Text = $"Changed password protection for '{category.Name}' from {GetPasswordStatusText(oldType)} to {GetPasswordStatusText(newType)}";
+
+                // Refresh the node visual to update badge color
+                RefreshNodeVisual(categoryNode);
+            }
+            catch (Exception ex)
+            {
+                // Revert on error
+                category.PasswordProtection = oldType;
+                await ShowErrorDialogAsync("Error Changing Password", $"Failed to change password protection:\n\n{ex.Message}");
+            }
+        }
+    }
+
+    private async Task ShowChangeZipPasswordDialogAsync(LinkItem zipLink, TreeViewNode zipNode)
+    {
+        var stackPanel = new StackPanel { Spacing = 16 };
+
+        // Current status
+        var currentStatus = new TextBlock
+        {
+            Text = $"Current: {(zipLink.IsZipPasswordProtected ? "🔒 Password Protected" : "⭕ No Password")}",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+        };
+        stackPanel.Children.Add(currentStatus);
+
+        // Get parent category for context
+        var parentCategory = zipNode.Parent?.Content as CategoryItem;
+        var rootCategoryNode = GetRootCategoryNode(zipNode);
+        var rootCategory = rootCategoryNode?.Content as CategoryItem;
+
+        // Radio buttons for password options
+        var noneRadio = new RadioButton
+        {
+            Content = "⭕ Remove Password Protection",
+            GroupName = "ZipPasswordType",
+            IsChecked = !zipLink.IsZipPasswordProtected
+        };
+        stackPanel.Children.Add(noneRadio);
+
+        var categoryRadio = new RadioButton
+        {
+            Content = $"Use Category Password ({rootCategory?.Name ?? "Unknown"})",
+            GroupName = "ZipPasswordType",
+            IsEnabled = rootCategory?.PasswordProtection != PasswordProtectionType.None
+        };
+        stackPanel.Children.Add(categoryRadio);
+
+        if (!categoryRadio.IsEnabled)
+        {
+            var categoryNote = new TextBlock
+            {
+                Text = "   (Root category has no password protection)",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, -8, 0, 0)
+            };
+            stackPanel.Children.Add(categoryNote);
+        }
+
+        var globalRadio = new RadioButton
+        {
+            Content = "⬛ Use Global Password",
+            GroupName = "ZipPasswordType",
+            IsEnabled = _configService?.HasGlobalPassword() ?? false
+        };
+        stackPanel.Children.Add(globalRadio);
+
+        if (!globalRadio.IsEnabled)
+        {
+            var globalNote = new TextBlock
+            {
+                Text = "   (Set global password in Config → Security Setup first)",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, -8, 0, 0)
+            };
+            stackPanel.Children.Add(globalNote);
+        }
+
+        var ownRadio = new RadioButton
+        {
+            Content = "🔐 Use Own Password",
+            GroupName = "ZipPasswordType",
+            IsChecked = zipLink.IsZipPasswordProtected
+        };
+        stackPanel.Children.Add(ownRadio);
+
+        // Password input for own password
+        var passwordPanel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(24, 8, 0, 0),
+            Visibility = ownRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        var passwordBox = new PasswordBox
+        {
+            PlaceholderText = "Enter password",
+            Width = 250,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        passwordPanel.Children.Add(passwordBox);
+
+        var confirmPasswordBox = new PasswordBox
+        {
+            PlaceholderText = "Confirm password",
+            Width = 250,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        passwordPanel.Children.Add(confirmPasswordBox);
+
+        stackPanel.Children.Add(passwordPanel);
+
+        // Toggle password panel visibility
+        ownRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Visible;
+        noneRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
+        globalRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
+        categoryRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
+
+        // Keep backup checkbox
+        var keepBackupCheckBox = new CheckBox
+        {
+            Content = "Keep backup of original zip file (*.backup.zip)",
+            IsChecked = false,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        stackPanel.Children.Add(keepBackupCheckBox);
+
+        // Warning
+        var warningText = new TextBlock
+        {
+            Text = "⚠️ Changing zip password will:\n" +
+                   "1. Rename original to *.backup.zip\n" +
+                   "2. Extract and re-compress with new password\n" +
+                   "3. Delete backup (unless 'Keep backup' is checked)\n\n" +
+                   "If an error occurs, the original will be restored.",
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange),
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        stackPanel.Children.Add(warningText);
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Change Zip Password - {zipLink.Title}",
+            Content = new ScrollViewer
+            {
+                Content = stackPanel,
+                MaxHeight = 500
+            },
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            // Determine new password settings
+            string? newPassword = null;
+            bool usePassword = false;
+
+            if (noneRadio.IsChecked == true)
+            {
+                usePassword = false;
+            }
+            else if (globalRadio.IsChecked == true)
+            {
+                usePassword = true;
+                newPassword = _categoryService?.GetCachedGlobalPassword();
+                if (string.IsNullOrEmpty(newPassword))
+                {
+                    await ShowErrorDialogAsync("Global Password Not Available", "Please set the global password in Config → Security Setup first.");
+                    return;
+                }
+            }
+            else if (categoryRadio.IsChecked == true)
+            {
+                usePassword = true;
+                newPassword = await GetCategoryPasswordAsync(rootCategory!);
+                if (string.IsNullOrEmpty(newPassword))
+                {
+                    return; // User cancelled or error
+                }
+            }
+            else if (ownRadio.IsChecked == true)
+            {
+                if (string.IsNullOrEmpty(passwordBox.Password))
+                {
+                    await ShowErrorDialogAsync("Password Required", "Please enter a password.");
+                    return;
+                }
+
+                if (passwordBox.Password != confirmPasswordBox.Password)
+                {
+                    await ShowErrorDialogAsync("Password Mismatch", "The passwords do not match.");
+                    return;
+                }
+
+                usePassword = true;
+                newPassword = passwordBox.Password;
+            }
+
+            // Execute the password change
+            await ChangeZipPasswordAsync(zipLink, zipNode, usePassword, newPassword, keepBackupCheckBox.IsChecked == true);
+        }
+    }
+
+    private string GetPasswordStatusText(PasswordProtectionType type)
+    {
+        return PasswordDialogService.GetPasswordStatusText(type);
     }
 }

@@ -38,7 +38,7 @@ public sealed partial class MainWindow
         // Get the ROOT category to check for password protection
         var rootCategoryNode = GetRootCategoryNode(linkNode);
         var rootCategory = rootCategoryNode?.Content as CategoryItem;
-        
+
         // Check if ROOT category has password protection
         bool categoryHasPassword = rootCategory?.PasswordProtection != PasswordProtectionType.None;
         string? categoryPassword = null;
@@ -60,7 +60,17 @@ public sealed partial class MainWindow
             parentDirectory,
             new[] { linkItem.Url },
             categoryHasPassword,
-            categoryPassword
+            categoryPassword,
+            (zipTitle) => {
+                var parentCategoryNode = _treeViewService!.GetParentCategoryNode(linkNode);
+                if (parentCategoryNode != null && LinkExistsInCategory(parentCategoryNode, zipTitle))
+                {
+                    var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNode);
+                    return (false, $"A link named '{zipTitle}' already exists in '{categoryPath}'. Please choose a different name.");
+                }
+                return (true, null);
+            },
+            _treeViewService!.GetParentCategoryNode(linkNode)
         );
 
         if (result == null)
@@ -115,19 +125,90 @@ public sealed partial class MainWindow
             }
         }
 
+        // Create temporary zip node with "busy creating" indicator if linking to category
+        TreeViewNode? zipLinkNode = null;
+        TreeViewNode? busyNode = null;
+        TreeViewNode? parentCategoryNodeForLink = null;
+
+        if (result.LinkToCategory && linkNode.Parent != null)
+        {
+            parentCategoryNodeForLink = _treeViewService!.GetParentCategoryNode(linkNode);
+            if (parentCategoryNodeForLink != null)
+            {
+                var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNodeForLink);
+
+                // Create the zip link item (but with temporary status)
+                var zipLinkItem = new LinkItem
+                {
+                    Title = Path.GetFileNameWithoutExtension(zipFileName),
+                    Url = zipFilePath,
+                    Description = "Creating zip archive...",
+                    IsDirectory = true,
+                    CategoryPath = categoryPath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    FolderType = FolderLinkType.CatalogueFiles
+                };
+
+                zipLinkNode = new TreeViewNode { Content = zipLinkItem };
+
+                // Create busy indicator child node
+                var busyLinkItem = new LinkItem
+                {
+                    Title = "⏳ Busy creating...",
+                    Url = string.Empty,
+                    Description = "Zip archive is being created",
+                    IsDirectory = false,
+                    CategoryPath = categoryPath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now
+                };
+
+                busyNode = new TreeViewNode { Content = busyLinkItem };
+                zipLinkNode.Children.Add(busyNode);
+                zipLinkNode.IsExpanded = true;
+
+                // Add the zip node to the parent category
+                parentCategoryNodeForLink.Children.Add(zipLinkNode);
+                parentCategoryNodeForLink.IsExpanded = true;
+
+                // Navigate to the newly created zip node
+                LinksTreeView.SelectedNode = zipLinkNode;
+            }
+        }
+
         // Create zip file
         try
         {
             StatusText.Text = $"Creating{(result.UsePassword ? " password-protected" : "")} zip file '{zipFileName}'...";
 
+            // Start timing
+            var startTime = DateTime.Now;
+
             // Check if this is a catalog folder
-            bool isCatalogFolder = linkItem.FolderType == FolderLinkType.CatalogueFiles || 
+            bool isCatalogFolder = linkItem.FolderType == FolderLinkType.CatalogueFiles ||
                                    linkItem.FolderType == FolderLinkType.FilteredCatalogue;
+
+            // Calculate original size for compression ratio
+            ulong originalSize = 0;
 
             if (isCatalogFolder)
             {
                 // Collect file paths on UI thread BEFORE entering background thread
                 var filesToZip = CollectCatalogedFilePaths(linkNode, linkItem.Url);
+
+                // Calculate original size from cataloged files
+                foreach (var (filePath, _) in filesToZip)
+                {
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            originalSize += (ulong)new FileInfo(filePath).Length;
+                        }
+                    }
+                    catch { }
+                }
 
                 if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
                 {
@@ -156,13 +237,33 @@ public sealed partial class MainWindow
             }
             else
             {
+                // Calculate original size for entire folder
+                originalSize = await Task.Run(() =>
+                {
+                    ulong totalSize = 0;
+                    try
+                    {
+                        var files = Directory.GetFiles(linkItem.Url, "*", SearchOption.AllDirectories);
+                        foreach (var file in files)
+                        {
+                            try
+                            {
+                                totalSize += (ulong)new FileInfo(file).Length;
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+                    return totalSize;
+                });
+
                 // Zip entire folder contents
                 if (result.UsePassword && !string.IsNullOrEmpty(result.Password))
                 {
                     // Use password-protected zip creation from ZipUtilities
                     var success = await ZipUtilities.CreatePasswordProtectedZipAsync(
-                        linkItem.Url, 
-                        zipFilePath, 
+                        linkItem.Url,
+                        zipFilePath,
                         result.Password
                     );
 
@@ -183,56 +284,57 @@ public sealed partial class MainWindow
                 StatusText.Text = $"Successfully created '{zipFileName}'";
             }
 
-            // If user wants to link the zip to the parent category
-            if (result.LinkToCategory && linkNode.Parent != null)
+            // Calculate compression statistics
+            var endTime = DateTime.Now;
+            var duration = endTime - startTime;
+            var compressedSize = (ulong)new FileInfo(zipFilePath).Length;
+            var compressionRatio = originalSize > 0 ? (1.0 - ((double)compressedSize / originalSize)) * 100.0 : 0.0;
+
+            // Remove busy node and update the zip node with catalog contents
+            if (result.LinkToCategory && zipLinkNode != null && parentCategoryNodeForLink != null)
             {
-                var parentCategoryNodeForLink = _treeViewService!.GetParentCategoryNode(linkNode);
-                if (parentCategoryNodeForLink != null)
+                // Remove the busy indicator
+                if (busyNode != null)
                 {
-                    var categoryPath = _treeViewService.GetCategoryPath(parentCategoryNodeForLink);
-
-                    // Create a new link for the zip file AS A CATALOG FOLDER
-                    var zipLinkItem = new LinkItem
-                    {
-                        Title = Path.GetFileNameWithoutExtension(zipFileName),
-                        Url = zipFilePath,
-                        Description = (isCatalogFolder 
-                            ? $"Zip archive of cataloged files from '{linkItem.Title}'"
-                            : $"Zip archive of '{linkItem.Title}'")
-                            + (result.UsePassword ? " (password-protected)" : ""),
-                        IsDirectory = true, // Treat zip as a directory/catalog folder
-                        CategoryPath = categoryPath,
-                        CreatedDate = DateTime.Now,
-                        ModifiedDate = DateTime.Now,
-                        FolderType = FolderLinkType.CatalogueFiles, // Make it a catalog folder
-                        FileSize = (ulong)new FileInfo(zipFilePath).Length,
-                        LastCatalogUpdate = DateTime.Now,
-                        IsZipPasswordProtected = result.UsePassword // Set password protection flag
-                    };
-
-                    var zipLinkNode = new TreeViewNode { Content = zipLinkItem };
-
-                    // Catalog the zip file contents immediately using CatalogService
-                    await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
-
-                    // Add the zip link to the parent category
-                    parentCategoryNodeForLink.Children.Add(zipLinkNode);
-
-                    // Save the updated category
-                    var rootNode = GetRootCategoryNode(parentCategoryNodeForLink);
-                    await _categoryService!.SaveCategoryAsync(rootNode);
-
-                    StatusText.Text = $"Created '{zipFileName}' and linked to '{categoryPath}'";
+                    zipLinkNode.Children.Remove(busyNode);
                 }
+
+                // Update the zip link item with final information
+                var finalZipLinkItem = zipLinkNode.Content as LinkItem;
+                if (finalZipLinkItem != null)
+                {
+                    finalZipLinkItem.Description = (isCatalogFolder
+                        ? $"Zip archive of cataloged files from '{linkItem.Title}'"
+                        : $"Zip archive of '{linkItem.Title}'")
+                        + (result.UsePassword ? " (password-protected)" : "");
+                    finalZipLinkItem.FileSize = (ulong)new FileInfo(zipFilePath).Length;
+                    finalZipLinkItem.LastCatalogUpdate = DateTime.Now;
+                    finalZipLinkItem.IsZipPasswordProtected = result.UsePassword;
+                }
+
+                // Catalog the zip file contents
+                await _catalogService!.CreateCatalogAsync(finalZipLinkItem!, zipLinkNode);
+
+                // Save the updated category
+                var rootNode = GetRootCategoryNode(parentCategoryNodeForLink);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                var categoryPath = _treeViewService!.GetCategoryPath(parentCategoryNodeForLink);
+                StatusText.Text = $"Created '{zipFileName}' and linked to '{categoryPath}'";
             }
 
             // Show success dialog
             var successDialog = new ContentDialog
             {
                 Title = "Zip Created Successfully",
-                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\nSize: {FileViewerService.FormatFileSize((ulong)new FileInfo(zipFilePath).Length)}"
-                    + (isCatalogFolder ? "\n\nNote: Only cataloged files were included." : "")
-                    + (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
+                Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\n" +
+                         $"📊 Statistics:\n" +
+                         $"   • Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
+                         $"   • Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
+                         $"   • Compression: {compressionRatio:F1}% reduction\n" +
+                         $"   • Time Taken: {duration.TotalSeconds:F1} seconds" +
+                         (isCatalogFolder ? "\n\n💡 Only cataloged files were included." : "") +
+                         (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
@@ -241,6 +343,12 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             StatusText.Text = $"Error creating zip file: {ex.Message}";
+
+            // Remove the temporary zip node if it was created
+            if (zipLinkNode != null && parentCategoryNodeForLink != null)
+            {
+                parentCategoryNodeForLink.Children.Remove(zipLinkNode);
+            }
 
             var errorDialog = new ContentDialog
             {
@@ -325,8 +433,8 @@ public sealed partial class MainWindow
     {
         // Find the TreeViewNode for this directory entry
         var dirNode = parentLinkNode.Children
-            .FirstOrDefault(child => child.Content is LinkItem link && 
-                                     link.Url == directoryEntry.Url && 
+            .FirstOrDefault(child => child.Content is LinkItem link &&
+                                     link.Url == directoryEntry.Url &&
                                      link.IsDirectory);
 
         if (dirNode == null || !Directory.Exists(directoryEntry.Url))
@@ -360,5 +468,23 @@ public sealed partial class MainWindow
                 archive.CreateEntryFromFile(catalogEntry.Url, relativePath, CompressionLevel.Optimal);
             }
         }
+    }
+
+    /// <summary>
+    /// Checks if a link with the given title already exists in the category (excluding catalog entries).
+    /// </summary>
+    private bool LinkExistsInCategory(TreeViewNode categoryNode, string linkTitle)
+    {
+        foreach (var child in categoryNode.Children)
+        {
+            if (child.Content is LinkItem link && !link.IsCatalogEntry)
+            {
+                if (string.Equals(link.Title, linkTitle, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }
