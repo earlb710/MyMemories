@@ -178,13 +178,81 @@ public sealed partial class MainWindow
         // Show results dialog
         if (stats != null)
         {
+            // Build content with proper icon rendering
+            var resultsPanel = new StackPanel { Spacing = 8 };
+            
+            resultsPanel.Children.Add(new TextBlock
+            {
+                Text = $"Checked {stats.TotalUrls} URLs:",
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            
+            // Accessible count with green icon
+            var accessiblePanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+            accessiblePanel.Children.Add(new FontIcon
+            {
+                Glyph = "\uE73E", // CheckMark icon
+                FontSize = 16,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen)
+            });
+            accessiblePanel.Children.Add(new TextBlock
+            {
+                Text = $"Accessible: {stats.AccessibleCount}",
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            resultsPanel.Children.Add(accessiblePanel);
+            
+            // Error count with yellow icon
+            var errorPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+            errorPanel.Children.Add(new FontIcon
+            {
+                Glyph = "\uE7BA", // Warning icon
+                FontSize = 16,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Yellow)
+            });
+            errorPanel.Children.Add(new TextBlock
+            {
+                Text = $"Error: {stats.ErrorCount}",
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            resultsPanel.Children.Add(errorPanel);
+            
+            // Not found count with red icon
+            var notFoundPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+            notFoundPanel.Children.Add(new FontIcon
+            {
+                Glyph = "\uE711", // Cancel/X icon
+                FontSize = 16,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red)
+            });
+            notFoundPanel.Children.Add(new TextBlock
+            {
+                Text = $"Not Found: {stats.NotFoundCount}",
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            resultsPanel.Children.Add(notFoundPanel);
+            
             var resultsDialog = new ContentDialog
             {
                 Title = "URL Check Complete",
-                Content = $"Checked {stats.TotalUrls} URLs:\n\n" +
-                         $"? Accessible: {stats.AccessibleCount}\n" +
-                         $"? Error: {stats.ErrorCount}\n" +
-                         $"? Not Found: {stats.NotFoundCount}",
+                Content = resultsPanel,
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };

@@ -467,29 +467,47 @@ public sealed partial class MainWindow
                 return;
             }
 
-            // Find the root category node
-            var rootCategoryNode = LinksTreeView.RootNodes
-                .FirstOrDefault(n => n.Content is CategoryItem cat && cat.Name == rootCategoryName);
+            // The manifest stores the name of the category that was zipped
+            // We need to find that category node in the tree (could be at any level)
+            // Start by searching from the parent of this zip link
+            TreeViewNode? manifestCategoryNode = null;
+            
+            // First check if the zip link's parent category matches
+            if (zipLinkNode.Parent?.Content is CategoryItem zipParentCategory && zipParentCategory.Name == rootCategoryName)
+            {
+                manifestCategoryNode = zipLinkNode.Parent;
+                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Found manifest category as parent: {zipParentCategory.Name}");
+            }
+            else
+            {
+                // Search the entire tree for the category
+                manifestCategoryNode = FindCategoryByName(rootCategoryName);
+                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Searched tree for category '{rootCategoryName}': {(manifestCategoryNode != null ? "Found" : "Not Found")}");
+            }
 
-            if (rootCategoryNode == null)
+            if (manifestCategoryNode == null)
             {
                 var errorDialog = new ContentDialog
                 {
                     Title = "Category Not Found",
-                    Content = $"The root category '{rootCategoryName}' specified in the manifest was not found in the tree.",
+                    Content = $"The manifest specifies that this zip was created from category '{rootCategoryName}', but that category no longer exists in the tree.\n\n" +
+                             $"The category may have been renamed or deleted.\n\n" +
+                             $"Please create or rename a category to '{rootCategoryName}' and try again.",
                     CloseButtonText = "OK",
                     XamlRoot = Content.XamlRoot
                 };
                 await errorDialog.ShowAsync();
                 return;
             }
+            
+            var manifestCategory = manifestCategoryNode.Content as CategoryItem;
 
             // Confirm with user
             var confirmDialog = new ContentDialog
             {
                 Title = "Refresh Archive",
                 Content = $"This will re-create the zip archive from the current state of the category:\n\n" +
-                         $"?? {rootCategoryName}\n\n" +
+                         $"?? {manifestCategory!.Name}\n\n" +
                          $"The existing zip file will be overwritten with a fresh archive containing all current folders in the category.\n\n" +
                          $"Do you want to continue?",
                 PrimaryButtonText = "Refresh Archive",
@@ -506,19 +524,41 @@ public sealed partial class MainWindow
             var zipFileName = zipFileInfo.Name;
             var targetDirectory = zipFileInfo.DirectoryName ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+            // Navigate to the zip node and show busy indicator
+            LinksTreeView.SelectedNode = zipLinkNode;
+            
+            // Add busy indicator as a temporary child
+            var busyLinkItem = new LinkItem
+            {
+                Title = "? Refreshing archive...",
+                Url = string.Empty,
+                Description = "Please wait while the archive is being refreshed",
+                IsDirectory = false,
+                CategoryPath = zipLinkItem.CategoryPath,
+                CreatedDate = DateTime.Now,
+                ModifiedDate = DateTime.Now,
+                IsCatalogEntry = true
+            };
+            
+            var busyNode = new TreeViewNode { Content = busyLinkItem };
+            zipLinkNode.Children.Clear(); // Remove existing catalog entries
+            zipLinkNode.Children.Add(busyNode);
+            zipLinkNode.IsExpanded = true;
+
             // Call the category zipping method
             StatusText.Text = $"Refreshing archive '{zipFileName}'...";
 
             // Re-zip the category (this will overwrite the existing zip)
             // Use the same password if the original was password-protected
-            await ReZipCategoryAsync(rootCategoryNode, zipFileName, targetDirectory, zipPassword);
+            await ReZipCategoryAsync(manifestCategoryNode, zipFileName, targetDirectory, zipPassword);
 
             // Small delay to ensure file is fully written and released
             await Task.Delay(100);
 
+            // Remove busy indicator
+            zipLinkNode.Children.Remove(busyNode);
+
             // Re-catalog the updated zip
-            _categoryService!.RemoveCatalogEntries(zipLinkNode);
-            
             try
             {
                 await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
@@ -576,7 +616,7 @@ public sealed partial class MainWindow
             var successDialog = new ContentDialog
             {
                 Title = "Archive Refreshed",
-                Content = $"The zip archive has been successfully refreshed from the current state of category '{rootCategoryName}'.\n\n" +
+                Content = $"The zip archive has been successfully refreshed from the current state of category '{manifestCategory.Name}'.\n\n" +
                          $"Location: {zipLinkItem.Url}\n" +
                          $"Size: {FileViewerService.FormatFileSize(zipLinkItem.FileSize ?? 0)}",
                 CloseButtonText = "OK",
@@ -810,5 +850,51 @@ public sealed partial class MainWindow
         sb.AppendLine("================================================================================");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Finds a category node by name in the entire tree (searches recursively).
+    /// </summary>
+    private TreeViewNode? FindCategoryByName(string categoryName)
+    {
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            if (rootNode.Content is CategoryItem rootCategory && rootCategory.Name == categoryName)
+            {
+                return rootNode;
+            }
+            
+            // Search recursively in children
+            var found = FindCategoryByNameRecursive(rootNode, categoryName);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Recursively searches for a category by name in a tree node's children.
+    /// </summary>
+    private TreeViewNode? FindCategoryByNameRecursive(TreeViewNode node, string categoryName)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Content is CategoryItem category && category.Name == categoryName)
+            {
+                return child;
+            }
+            
+            // Recursively search in subcategories
+            var found = FindCategoryByNameRecursive(child, categoryName);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        
+        return null;
     }
 }
