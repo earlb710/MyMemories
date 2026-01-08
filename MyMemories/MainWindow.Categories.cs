@@ -284,16 +284,54 @@ public sealed partial class MainWindow
 
         if (result == ContentDialogResult.Primary)
         {
-            if (node.Parent == null)
+            // Check if this is a root category by checking the RootNodes collection
+            bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
+
+            if (isRootCategory)
             {
+                // Remove from RootNodes and delete the category file
                 await _categoryService!.DeleteCategoryAsync(category.Name);
                 LinksTreeView.RootNodes.Remove(node);
             }
             else
             {
-                node.Parent.Children.Remove(node);
-                var rootNode = GetRootCategoryNode(node.Parent);
-                await _categoryService!.SaveCategoryAsync(rootNode);
+                // It's a subcategory - GET ROOT BEFORE REMOVING
+                if (node.Parent != null)
+                {
+                    TreeViewNode? rootNode = null;
+                    
+                    try
+                    {
+                        // CRITICAL: Get root node BEFORE removing the child
+                        rootNode = GetRootCategoryNode(node.Parent);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtilities.LogError("MainWindow.DeleteCategoryAsync", 
+                            $"Error getting root node for subcategory '{category.Name}'", ex);
+                        await ShowErrorDialogAsync("Delete Error", 
+                            $"Cannot find root category: {ex.Message}");
+                        return;
+                    }
+                    
+                    // Now remove the child from parent
+                    node.Parent.Children.Remove(node);
+                    
+                    // Save using the root node we got earlier
+                    if (rootNode != null)
+                    {
+                        await _categoryService!.SaveCategoryAsync(rootNode);
+                    }
+                }
+                else
+                {
+                    // Safety fallback - shouldn't happen but handle it
+                    LogUtilities.LogError("MainWindow.DeleteCategoryAsync", 
+                        $"Subcategory '{category.Name}' has no parent - cannot delete safely");
+                    await ShowErrorDialogAsync("Delete Error", 
+                        "Cannot delete category: Invalid category structure.");
+                    return;
+                }
             }
 
             if (_lastUsedCategory == node)

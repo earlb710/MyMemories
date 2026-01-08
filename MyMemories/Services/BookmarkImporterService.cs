@@ -30,8 +30,7 @@ public class BookmarkImporterService
             {
                 Name = "Google Chrome",
                 BrowserType = BrowserType.Chrome,
-                BookmarksPath = chromePath,
-                Icon = "??"
+                BookmarksPath = chromePath
             });
         }
 
@@ -43,8 +42,7 @@ public class BookmarkImporterService
             {
                 Name = "Microsoft Edge",
                 BrowserType = BrowserType.Edge,
-                BookmarksPath = edgePath,
-                Icon = "??"
+                BookmarksPath = edgePath
             });
         }
 
@@ -56,8 +54,7 @@ public class BookmarkImporterService
             {
                 Name = "Brave Browser",
                 BrowserType = BrowserType.Brave,
-                BookmarksPath = bravePath,
-                Icon = "??"
+                BookmarksPath = bravePath
             });
         }
 
@@ -69,8 +66,7 @@ public class BookmarkImporterService
             {
                 Name = "Vivaldi",
                 BrowserType = BrowserType.Vivaldi,
-                BookmarksPath = vivaldiPath,
-                Icon = "??"
+                BookmarksPath = vivaldiPath
             });
         }
 
@@ -83,8 +79,7 @@ public class BookmarkImporterService
             {
                 Name = "Opera",
                 BrowserType = BrowserType.Opera,
-                BookmarksPath = operaPath,
-                Icon = "??"
+                BookmarksPath = operaPath
             });
         }
 
@@ -184,11 +179,11 @@ public class BookmarkImporterService
                     Name = child.name ?? "Untitled",
                     Url = child.url ?? string.Empty,
                     FolderPath = parentPath,
-                    DateAdded = child.date_added.HasValue 
-                        ? DateTimeOffset.FromUnixTimeMilliseconds(child.date_added.Value / 1000).DateTime 
+                    DateAdded = child.date_added_value.HasValue 
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(child.date_added_value.Value / 1000).DateTime 
                         : DateTime.Now,
-                    DateModified = child.date_modified.HasValue
-                        ? DateTimeOffset.FromUnixTimeMilliseconds(child.date_modified.Value / 1000).DateTime
+                    DateModified = child.date_modified_value.HasValue
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(child.date_modified_value.Value / 1000).DateTime
                         : DateTime.Now
                 });
             }
@@ -260,8 +255,8 @@ public class BookmarkImporterService
             // Create a new folder for MyMemories exports
             var myMemoriesFolder = new ChromeBookmarkNode
             {
-                date_added = DateTimeOffset.Now.ToUnixTimeMilliseconds() * 1000,
-                date_modified = DateTimeOffset.Now.ToUnixTimeMilliseconds() * 1000,
+                date_added_str = (DateTimeOffset.Now.ToUnixTimeMilliseconds() * 1000).ToString(),
+                date_modified_str = (DateTimeOffset.Now.ToUnixTimeMilliseconds() * 1000).ToString(),
                 id = GenerateUniqueId(),
                 name = "MyMemories Export",
                 type = "folder",
@@ -273,8 +268,8 @@ public class BookmarkImporterService
             {
                 myMemoriesFolder.children.Add(new ChromeBookmarkNode
                 {
-                    date_added = new DateTimeOffset(bookmark.DateAdded).ToUnixTimeMilliseconds() * 1000,
-                    date_modified = new DateTimeOffset(bookmark.DateModified).ToUnixTimeMilliseconds() * 1000,
+                    date_added_str = (new DateTimeOffset(bookmark.DateAdded).ToUnixTimeMilliseconds() * 1000).ToString(),
+                    date_modified_str = (new DateTimeOffset(bookmark.DateModified).ToUnixTimeMilliseconds() * 1000).ToString(),
                     id = GenerateUniqueId(),
                     name = bookmark.Name,
                     type = "url",
@@ -341,20 +336,8 @@ public class BrowserInfo
     public string Name { get; set; } = string.Empty;
     public BrowserType BrowserType { get; set; }
     public string BookmarksPath { get; set; } = string.Empty;
-    public string Icon { get; set; } = "??";
-}
 
-/// <summary>
-/// Browser types.
-/// </summary>
-public enum BrowserType
-{
-    Chrome,
-    Edge,
-    Brave,
-    Vivaldi,
-    Opera,
-    Firefox
+    public override string ToString() => Name;
 }
 
 /// <summary>
@@ -408,8 +391,19 @@ public class ChromeBookmarkRoots
 
 public class ChromeBookmarkNode
 {
-    public long? date_added { get; set; }
-    public long? date_modified { get; set; }
+    [JsonPropertyName("date_added")]
+    public string? date_added_str { get; set; }
+    
+    [JsonPropertyName("date_modified")]
+    public string? date_modified_str { get; set; }
+    
+    // Computed property that converts string to long for reading
+    [JsonIgnore]
+    public long? date_added_value => long.TryParse(date_added_str, out var val) ? val : null;
+    
+    [JsonIgnore]
+    public long? date_modified_value => long.TryParse(date_modified_str, out var val) ? val : null;
+    
     public string? id { get; set; }
     public string? name { get; set; }
     public string? type { get; set; }

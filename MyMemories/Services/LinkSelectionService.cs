@@ -225,7 +225,10 @@ public class LinkSelectionService
     private TreeViewNode? GetRootCategoryNode(TreeViewNode node)
     {
         var current = node;
-        while (current.Parent != null)
+        int safetyCounter = 0;
+        const int maxDepth = 100; // Prevent infinite loops
+        
+        while (current?.Parent != null && safetyCounter < maxDepth)
         {
             if (current.Content is CategoryItem)
             {
@@ -240,7 +243,21 @@ public class LinkSelectionService
             {
                 current = current.Parent;
             }
+            safetyCounter++;
         }
+        
+        // Safety check: current should not be null
+        if (current == null)
+        {
+            return null; // Return null instead of crashing
+        }
+        
+        // If we hit max depth, return null
+        if (safetyCounter >= maxDepth)
+        {
+            return null;
+        }
+        
         return current.Content is CategoryItem ? current : null;
     }
 

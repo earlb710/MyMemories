@@ -17,6 +17,13 @@
 
         <!-- Menu Bar -->
         <MenuBar Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+            <MenuBarItem Title="File">
+                <MenuFlyoutItem Text="Import Browser Bookmarks..." Click="MenuFile_ImportBookmarks_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8A7;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+            </MenuBarItem>
             <MenuBarItem Title="Config">
                 <MenuFlyoutItem Text="Directory Setup" Click="MenuConfig_DirectorySetup_Click">
                     <MenuFlyoutItem.Icon>
@@ -26,6 +33,12 @@
                 <MenuFlyoutItem Text="Security Setup" Click="MenuConfig_SecuritySetup_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE72E;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Options" Click="MenuConfig_Options_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE713;"/>
                     </MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
             </MenuBarItem>
@@ -278,6 +291,11 @@
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Edit Category" Icon="Edit" Click="CategoryMenu_Edit_Click"/>
+                            <MenuFlyoutItem Text="Change Password" Click="CategoryMenu_ChangePassword_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE72E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Zip Category" Click="CategoryMenu_ZipCategory_Click">
                                 <MenuFlyoutItem.Icon>
@@ -308,6 +326,11 @@
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
+                            <MenuFlyoutItem Text="Change Password" Click="LinkMenu_ChangePassword_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE72E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Explore Here" Click="LinkMenu_ExploreHere_Click">
                                 <MenuFlyoutItem.Icon>

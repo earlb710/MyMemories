@@ -11,6 +11,19 @@ using Microsoft.UI.Xaml.Controls;
 namespace MyMemories;
 
 /// <summary>
+/// Browser types for bookmark import.
+/// </summary>
+public enum BrowserType
+{
+    Chrome,
+    Edge,
+    Brave,
+    Vivaldi,
+    Opera,
+    Firefox
+}
+
+/// <summary>
 /// Password protection type for categories.
 /// </summary>
 public enum PasswordProtectionType
@@ -46,6 +59,14 @@ public class CategoryItem
     public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
     public string? OwnPasswordHash { get; set; }
     public SortOption SortOrder { get; set; } = SortOption.NameAscending;
+    
+    // Bookmark import metadata
+    public bool IsBookmarkImport { get; set; } = false;
+    public BrowserType? SourceBrowserType { get; set; }
+    public string? SourceBrowserName { get; set; }
+    public string? SourceBookmarksPath { get; set; }
+    public DateTime? LastBookmarkImportDate { get; set; }
+    public int? ImportedBookmarkCount { get; set; }
 
     public override string ToString() => $"{Icon} {Name}";
 }
@@ -420,6 +441,25 @@ public class CategoryData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SortOption SortOrder { get; set; }
+
+    // Bookmark import metadata
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsBookmarkImport { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BrowserType? SourceBrowserType { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceBrowserName { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceBookmarksPath { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? LastBookmarkImportDate { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ImportedBookmarkCount { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }

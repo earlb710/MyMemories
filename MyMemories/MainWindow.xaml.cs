@@ -369,18 +369,30 @@ public sealed partial class MainWindow : Window
 
     private TreeViewNode GetRootCategoryNode(TreeViewNode node)
     {
+        // First, check if this node itself is already a root category
+        if (LinksTreeView.RootNodes.Contains(node))
+        {
+            return node;
+        }
+
         var current = node;
         int safetyCounter = 0;
         const int maxDepth = 100; // Prevent infinite loops
         
-        // Navigate up until we find a root category node (one without a parent)
-        while (current.Parent != null && safetyCounter < maxDepth)
+        // Navigate up until we find a root category node
+        while (current?.Parent != null && safetyCounter < maxDepth)
         {
             current = current.Parent;
             safetyCounter++;
         }
         
-        // If we still have a parent after max depth, something is wrong
+        // Safety check: current should not be null
+        if (current == null)
+        {
+            throw new InvalidOperationException($"Node traversal resulted in null. Cannot find root category.");
+        }
+        
+        // If we hit max depth, something is wrong
         if (safetyCounter >= maxDepth)
         {
             throw new InvalidOperationException($"Node hierarchy too deep (>{maxDepth} levels). Possible circular reference.");

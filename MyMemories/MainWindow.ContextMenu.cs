@@ -105,8 +105,10 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
-        // Only allow for root categories
-        if (_contextMenuNode.Parent != null)
+        // Check if this node is a root category by verifying it's in the RootNodes collection
+        bool isRootCategory = LinksTreeView.RootNodes.Contains(_contextMenuNode);
+        
+        if (!isRootCategory)
         {
             var errorDialog = new ContentDialog
             {

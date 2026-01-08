@@ -61,7 +61,7 @@ public sealed partial class MainWindow
             }
 
             // Select target category
-            var targetCategory = await SelectTargetCategoryAsync(createNewCategory);
+            var targetCategory = await SelectTargetCategoryAsync(createNewCategory, selectedBrowser);
             if (targetCategory == null)
             {
                 StatusText.Text = "Import cancelled";
@@ -70,6 +70,13 @@ public sealed partial class MainWindow
 
             // Add bookmarks to category
             await AddBookmarksToCategory(result.Bookmarks, targetCategory, organizeByFolder);
+
+            // Update bookmark count if it's a new import category
+            if (createNewCategory && targetCategory.Content is CategoryItem catItem)
+            {
+                catItem.ImportedBookmarkCount = result.Bookmarks.Count;
+                await _categoryService!.SaveCategoryAsync(targetCategory);
+            }
 
             StatusText.Text = $"Successfully imported {result.Bookmarks.Count} bookmarks";
 
@@ -98,57 +105,48 @@ public sealed partial class MainWindow
 
         var listView = new ListView
         {
-            ItemsSource = browsers,
             SelectionMode = ListViewSelectionMode.Single,
             SelectedIndex = 0
         };
 
-        // Custom item template
-        listView.ItemTemplate = new DataTemplate
-        {
-            // This would need to be defined in XAML for proper templating
-            // For now, we'll use ToString() override
-        };
-
+        // Add browsers directly to Items collection with custom visual layout
         foreach (var browser in browsers)
         {
-            var item = new ListViewItem
+            var item = new StackPanel
             {
-                Content = new StackPanel
+                Orientation = Orientation.Horizontal,
+                Spacing = 12,
+                Tag = browser,
+                Children =
                 {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 12,
-                    Children =
+                    new FontIcon
                     {
-                        new TextBlock 
-                        { 
-                            Text = browser.Icon, 
-                            FontSize = 24,
-                            VerticalAlignment = VerticalAlignment.Center
-                        },
-                        new StackPanel
+                        Glyph = GetBrowserGlyph(browser.BrowserType),
+                        FontSize = 24,
+                        VerticalAlignment = VerticalAlignment.Center
+                    },
+                    new StackPanel
+                    {
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Children =
                         {
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Children =
-                            {
-                                new TextBlock 
-                                { 
-                                    Text = browser.Name,
-                                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-                                },
-                                new TextBlock 
-                                { 
-                                    Text = browser.BookmarksPath,
-                                    FontSize = 11,
-                                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                                    TextWrapping = TextWrapping.Wrap
-                                }
+                            new TextBlock 
+                            { 
+                                Text = browser.Name,
+                                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                            },
+                            new TextBlock 
+                            { 
+                                Text = browser.BookmarksPath,
+                                FontSize = 11,
+                                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                                TextWrapping = TextWrapping.Wrap
                             }
                         }
                     }
-                },
-                Tag = browser
+                }
             };
+            
             listView.Items.Add(item);
         }
 
@@ -170,9 +168,9 @@ public sealed partial class MainWindow
 
         var result = await dialog.ShowAsync();
 
-        if (result == ContentDialogResult.Primary && listView.SelectedItem is ListViewItem selectedItem)
+        if (result == ContentDialogResult.Primary && listView.SelectedItem is StackPanel selectedPanel)
         {
-            return selectedItem.Tag as BrowserInfo;
+            return selectedPanel.Tag as BrowserInfo;
         }
 
         return null;
@@ -297,11 +295,11 @@ public sealed partial class MainWindow
         return null;
     }
 
-    private async Task<TreeViewNode?> SelectTargetCategoryAsync(bool createNew)
+    private async Task<TreeViewNode?> SelectTargetCategoryAsync(bool createNew, BrowserInfo? browserInfo = null)
     {
         if (createNew)
         {
-            // Create a new category for bookmarks
+            // Create a new category for bookmarks with import metadata
             var categoryName = $"Imported Bookmarks - {DateTime.Now:yyyy-MM-dd}";
             
             var categoryNode = new TreeViewNode
@@ -309,10 +307,18 @@ public sealed partial class MainWindow
                 Content = new CategoryItem
                 {
                     Name = categoryName,
-                    Description = "Imported from browser bookmarks",
-                    Icon = "??",
+                    Description = browserInfo != null 
+                        ? $"Imported from {browserInfo.Name} on {DateTime.Now:yyyy-MM-dd HH:mm}"
+                        : $"Imported bookmarks on {DateTime.Now:yyyy-MM-dd HH:mm}",
+                    Icon = "\U0001F516", // ?? Bookmark emoji (proper Unicode escape)
                     CreatedDate = DateTime.Now,
-                    ModifiedDate = DateTime.Now
+                    ModifiedDate = DateTime.Now,
+                    IsBookmarkImport = browserInfo != null,
+                    SourceBrowserType = browserInfo?.BrowserType,
+                    SourceBrowserName = browserInfo?.Name,
+                    SourceBookmarksPath = browserInfo?.BookmarksPath,
+                    LastBookmarkImportDate = DateTime.Now,
+                    ImportedBookmarkCount = 0 // Will be set after adding bookmarks
                 }
             };
 
@@ -429,14 +435,14 @@ public sealed partial class MainWindow
         if (existingSubcat != null)
             return existingSubcat;
 
-        // Create new subcategory
+        // Create new subcategory with proper Unicode emoji
         var subCategoryNode = new TreeViewNode
         {
             Content = new CategoryItem
             {
                 Name = folderPath,
                 Description = $"Bookmarks from {folderPath}",
-                Icon = "??",
+                Icon = "\U0001F4D1", // ?? Bookmark tabs emoji (proper Unicode escape)
                 CreatedDate = DateTime.Now,
                 ModifiedDate = DateTime.Now
             }
@@ -502,5 +508,19 @@ public sealed partial class MainWindow
         if (categoryNode.Content is CategoryItem category)
             return category.Name;
         return "Unknown";
+    }
+
+    private string GetBrowserGlyph(BrowserType browserType)
+    {
+        return browserType switch
+        {
+            BrowserType.Chrome => "\uE774", // Globe icon
+            BrowserType.Edge => "\uE737",   // Edge icon
+            BrowserType.Brave => "\uE8A1",  // Shield icon  
+            BrowserType.Vivaldi => "\uE773", // Music note
+            BrowserType.Opera => "\uE8A5",   // World icon
+            BrowserType.Firefox => "\uE7E8", // Fire icon
+            _ => "\uE774" // Default globe
+        };
     }
 }

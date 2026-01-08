@@ -370,6 +370,12 @@ public class CategoryService
             PasswordProtection = category.PasswordProtection,
             OwnPasswordHash = category.OwnPasswordHash,
             SortOrder = category.SortOrder,
+            IsBookmarkImport = category.IsBookmarkImport,
+            SourceBrowserType = category.SourceBrowserType,
+            SourceBrowserName = category.SourceBrowserName,
+            SourceBookmarksPath = category.SourceBookmarksPath,
+            LastBookmarkImportDate = category.LastBookmarkImportDate,
+            ImportedBookmarkCount = category.ImportedBookmarkCount,
             Links = null,
             SubCategories = null
         };
@@ -534,7 +540,13 @@ public class CategoryService
                 ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
                 PasswordProtection = categoryData.PasswordProtection,
                 OwnPasswordHash = categoryData.OwnPasswordHash,
-                SortOrder = categoryData.SortOrder
+                SortOrder = categoryData.SortOrder,
+                IsBookmarkImport = categoryData.IsBookmarkImport,
+                SourceBrowserType = categoryData.SourceBrowserType,
+                SourceBrowserName = categoryData.SourceBrowserName,
+                SourceBookmarksPath = categoryData.SourceBookmarksPath,
+                LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
+                ImportedBookmarkCount = categoryData.ImportedBookmarkCount
             }
         };
 
