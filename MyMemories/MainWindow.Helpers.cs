@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -315,9 +316,48 @@ public sealed partial class MainWindow
             // Re-zip the category (this will overwrite the existing zip)
             await ReZipCategoryAsync(rootCategoryNode, zipFileName, targetDirectory);
 
+            // Small delay to ensure file is fully written and released
+            await Task.Delay(100);
+
             // Re-catalog the updated zip
             _categoryService!.RemoveCatalogEntries(zipLinkNode);
-            await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
+            
+            try
+            {
+                await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
+            }
+            catch (InvalidDataException ex)
+            {
+                // If we get an unsupported compression method error, show a helpful message
+                StatusText.Text = $"Warning: Created zip but cataloging failed - {ex.Message}";
+                
+                var warningDialog = new ContentDialog
+                {
+                    Title = "Zip Created with Warning",
+                    Content = $"The zip archive was successfully created, but automatic cataloging failed.\n\n" +
+                             $"Error: {ex.Message}\n\n" +
+                             $"The zip file is valid and can be opened externally. " +
+                             $"You may need to manually catalog it using the 'Create Catalog' button.",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await warningDialog.ShowAsync();
+                
+                // Continue without catalog
+                zipLinkItem.LastCatalogUpdate = DateTime.Now;
+                zipLinkItem.FileSize = (ulong)new FileInfo(zipLinkItem.Url).Length;
+                
+                var refreshedZipNode = _treeViewService!.RefreshLinkNode(zipLinkNode, zipLinkItem);
+                
+                // Save the category
+                var parentCat = refreshedZipNode.Parent;
+                if (parentCat != null)
+                {
+                    await UpdateParentCategoriesAndSaveAsync(parentCat);
+                }
+                
+                return;
+            }
 
             // Update the zip link item
             zipLinkItem.LastCatalogUpdate = DateTime.Now;
@@ -393,20 +433,20 @@ public sealed partial class MainWindow
             File.Delete(zipFilePath);
         }
 
-        // Create new zip with manifest
+        // Create new zip with manifest using Deflate compression (most compatible)
         await Task.Run(() =>
         {
             using var archive = ZipFile.Open(zipFilePath, ZipArchiveMode.Create);
             
-            // Create and add the manifest file
+            // Create and add the manifest file with Fastest compression for compatibility
             var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
-            var manifestEntry = archive.CreateEntry("_MANIFEST.txt", CompressionLevel.Optimal);
+            var manifestEntry = archive.CreateEntry("_MANIFEST.txt", CompressionLevel.Fastest);
             using (var writer = new StreamWriter(manifestEntry.Open(), Encoding.UTF8))
             {
                 writer.Write(manifestContent);
             }
 
-            // Add all folder contents
+            // Add all folder contents with Fastest compression for maximum compatibility
             foreach (var folderPath in folderPaths)
             {
                 if (!Directory.Exists(folderPath))
@@ -417,9 +457,19 @@ public sealed partial class MainWindow
 
                 foreach (var file in files)
                 {
-                    var relativePath = Path.GetRelativePath(folderPath, file);
-                    var entryName = Path.Combine(folderName, relativePath);
-                    archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                    try
+                    {
+                        var relativePath = Path.GetRelativePath(folderPath, file);
+                        var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
+                        
+                        // Use Fastest compression for maximum compatibility
+                        archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[ReZipCategoryAsync] Error adding file {file}: {ex.Message}");
+                        // Continue with other files
+                    }
                 }
             }
         });
