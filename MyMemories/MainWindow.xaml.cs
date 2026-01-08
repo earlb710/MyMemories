@@ -154,6 +154,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _fileLauncherService = new FileLauncherService();
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
                 new ZipCatalogService(_categoryService, _treeViewService));
+            
+            // Set the refresh archive callback
+            _catalogService.SetRefreshArchiveCallback(RefreshArchiveFromManifestAsync);
+            
             _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService);
             _linkSelectionService.SetUrlTextBox(UrlTextBox); // Wire up URL text box
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
@@ -316,20 +320,8 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 _treeViewService!.InsertCategoryNode(category);
             }
             
-            // Collect bookmark lookup categories
-            var bookmarkLookupCategories = new List<TreeViewNode>();
-            foreach (var categoryNode in LinksTreeView.RootNodes)
-            {
-                if (categoryNode.Content is CategoryItem category && 
-                    category.IsBookmarkCategory && 
-                    category.IsBookmarkLookup)
-                {
-                    bookmarkLookupCategories.Add(categoryNode);
-                }
-            }
-            
-            // Pass bookmark lookup categories to link dialog
-            _linkDialog?.SetBookmarkLookupCategories(bookmarkLookupCategories);
+            // Update bookmark lookup categories
+            UpdateBookmarkLookupCategories();
             
             // Check for folder changes and auto-refresh if enabled
             foreach (var category in LinksTreeView.RootNodes)
@@ -344,6 +336,47 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
         catch (Exception ex)
         {
             StatusText.Text = $"Error loading categories: {ex.Message}";
+        }
+    }
+    
+    /// <summary>
+    /// Updates the bookmark lookup categories list from all categories (including subcategories).
+    /// </summary>
+    private void UpdateBookmarkLookupCategories()
+    {
+        var bookmarkLookupCategories = new List<TreeViewNode>();
+        
+        // Recursively collect all bookmark lookup categories
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            CollectBookmarkLookupCategories(rootNode, bookmarkLookupCategories);
+        }
+        
+        // Pass to link dialog
+        _linkDialog?.SetBookmarkLookupCategories(bookmarkLookupCategories);
+        
+        System.Diagnostics.Debug.WriteLine($"[UpdateBookmarkLookupCategories] Found {bookmarkLookupCategories.Count} bookmark lookup categories");
+    }
+    
+    /// <summary>
+    /// Recursively collects bookmark lookup categories from a tree node and its children.
+    /// </summary>
+    private void CollectBookmarkLookupCategories(TreeViewNode node, List<TreeViewNode> bookmarkCategories)
+    {
+        if (node.Content is CategoryItem category)
+        {
+            // Add this category if it's a bookmark lookup category
+            if (category.IsBookmarkCategory && category.IsBookmarkLookup)
+            {
+                bookmarkCategories.Add(node);
+                System.Diagnostics.Debug.WriteLine($"[CollectBookmarkLookupCategories] Added category: {category.Name}");
+            }
+            
+            // Recursively check subcategories
+            foreach (var child in node.Children)
+            {
+                CollectBookmarkLookupCategories(child, bookmarkCategories);
+            }
         }
     }
 

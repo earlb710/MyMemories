@@ -11,6 +11,17 @@ using Microsoft.UI.Xaml.Controls;
 namespace MyMemories;
 
 /// <summary>
+/// URL accessibility status for bookmark links.
+/// </summary>
+public enum UrlStatus
+{
+    Unknown = 0,     // Not checked yet
+    Accessible = 1,  // Green - URL is accessible
+    Error = 2,       // Yellow - URL returned an error
+    NotFound = 3     // Red - URL does not exist (404, DNS failure, etc.)
+}
+
+/// <summary>
 /// Browser types for bookmark import.
 /// </summary>
 public enum BrowserType
@@ -85,6 +96,7 @@ public class LinkItem : INotifyPropertyChanged
     private int _catalogFileCount;
     private DateTime? _lastCatalogUpdate;
     private bool _isZipPasswordProtected;
+    private UrlStatus _urlStatus = UrlStatus.Unknown;
 
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
@@ -97,6 +109,49 @@ public class LinkItem : INotifyPropertyChanged
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
     public SortOption CatalogSortOrder { get; set; } = SortOption.NameAscending;
+    
+    /// <summary>
+    /// URL accessibility status (for bookmark categories).
+    /// </summary>
+    [JsonIgnore]
+    public UrlStatus UrlStatus
+    {
+        get => _urlStatus;
+        set
+        {
+            if (_urlStatus != value)
+            {
+                _urlStatus = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ShowUrlStatusBadge));
+                OnPropertyChanged(nameof(UrlStatusColor));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the visibility of the URL status badge.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility ShowUrlStatusBadge => UrlStatus != UrlStatus.Unknown ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// Gets the color for the URL status badge.
+    /// </summary>
+    [JsonIgnore]
+    public Windows.UI.Color UrlStatusColor
+    {
+        get
+        {
+            return UrlStatus switch
+            {
+                UrlStatus.Accessible => Microsoft.UI.Colors.LimeGreen,
+                UrlStatus.Error => Microsoft.UI.Colors.Yellow,
+                UrlStatus.NotFound => Microsoft.UI.Colors.Red,
+                _ => Microsoft.UI.Colors.Gray
+            };
+        }
+    }
 
     public DateTime? LastCatalogUpdate
     {

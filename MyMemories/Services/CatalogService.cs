@@ -13,6 +13,7 @@ public class CatalogService
     private readonly TreeViewService _treeViewService;
     private readonly DetailsViewService _detailsViewService;
     private readonly ZipCatalogService _zipCatalogService;
+    private Func<LinkItem, TreeViewNode, Task>? _refreshArchiveCallback;
 
     public CatalogService(
         CategoryService categoryService,
@@ -24,6 +25,15 @@ public class CatalogService
         _treeViewService = treeViewService;
         _detailsViewService = detailsViewService;
         _zipCatalogService = zipCatalogService;
+    }
+
+    /// <summary>
+    /// Sets the callback for refreshing an archive from its manifest.
+    /// This should be called from MainWindow during initialization.
+    /// </summary>
+    public void SetRefreshArchiveCallback(Func<LinkItem, TreeViewNode, Task> callback)
+    {
+        _refreshArchiveCallback = callback;
     }
 
     public async Task CreateCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
@@ -157,10 +167,13 @@ public class CatalogService
         var refreshedNode = _treeViewService.RefreshLinkNode(linkNode, linkItem);
 
         refreshedNode.IsExpanded = true;
+        
+        // Only pass RefreshArchiveFromManifestAsync for zip files
+        bool isZipFile = IsZipFile(linkItem.Url);
         await _detailsViewService.ShowLinkDetailsAsync(linkItem, refreshedNode,
             async () => await CreateCatalogAsync(linkItem, refreshedNode),
             async () => await RefreshCatalogAsync(linkItem, refreshedNode),
-            async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode));
+            isZipFile ? async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode) : null);
 
         var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
         Debug.WriteLine($"[CatalogService] Successfully cataloged '{linkItem.Title}' with {count} entries");
@@ -177,9 +190,15 @@ public class CatalogService
         // Don't throw here - let the caller handle it
     }
 
-    public Task RefreshArchiveFromManifestAsync(LinkItem linkItem, TreeViewNode linkNode)
+    public async Task RefreshArchiveFromManifestAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
-        // TODO: Implement zip archive refresh from manifest
-        return Task.CompletedTask;
+        if (_refreshArchiveCallback != null)
+        {
+            await _refreshArchiveCallback(linkItem, linkNode);
+        }
+        else
+        {
+            Debug.WriteLine("[CatalogService] RefreshArchiveCallback not set - cannot refresh archive");
+        }
     }
 }

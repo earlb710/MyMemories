@@ -258,6 +258,9 @@ public class DetailsViewService
                     Margin = new Thickness(0, 0, 0, 16)
                 };
                 
+                // Add tooltip
+                ToolTipService.SetToolTip(refreshButton, $"Re-imports bookmarks from {category.SourceBrowserName ?? "browser"} to update this category with the latest bookmarks");
+                
                 refreshButton.Click += async (s, e) =>
                 {
                     try
@@ -463,6 +466,10 @@ public class DetailsViewService
                         }
                     }
                 };
+                
+                // Add tooltip
+                ToolTipService.SetToolTip(createButton, "Scans the " + (isZipFile ? "zip archive" : "directory") + " and creates a searchable catalog of all files and subdirectories");
+                
                 createButton.Click += async (s, e) =>
                 {
                     try
@@ -491,6 +498,10 @@ public class DetailsViewService
                         }
                     }
                 };
+                
+                // Add tooltip
+                ToolTipService.SetToolTip(refreshButton, "Re-scans the " + (isZipFile ? "zip archive" : "directory") + " contents to update the catalog tree");
+                
                 refreshButton.Click += async (s, e) =>
                 {
                     try
@@ -504,8 +515,8 @@ public class DetailsViewService
                 };
                 buttonPanel.Children.Add(refreshButton);
 
-                // Add "Refresh Archive" button for zip files with manifest
-                if (isZipFile && hasCatalog && onRefreshArchive != null)
+                // Add "Refresh Archive" button for zip files with manifest (INSTEAD of regular refresh)
+                if (isZipFile && onRefreshArchive != null)
                 {
                     // Check if this zip has a manifest
                     var hasManifest = await CheckZipHasManifestAsync(linkItem.Url);
@@ -525,6 +536,9 @@ public class DetailsViewService
                                 }
                             }
                         };
+                        
+                        // Add tooltip
+                        ToolTipService.SetToolTip(refreshArchiveButton, "Re-creates the zip archive from the source category's current state (as specified in the manifest)");
                         
                         refreshArchiveButton.Click += async (s, e) =>
                         {

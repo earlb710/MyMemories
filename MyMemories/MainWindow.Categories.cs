@@ -68,6 +68,9 @@ public sealed partial class MainWindow
             await _categoryService!.SaveCategoryAsync(categoryNode);
 
             StatusText.Text = $"Created category: {result.Name}";
+            
+            // Update bookmark lookup categories in case new category has lookup enabled
+            UpdateBookmarkLookupCategories();
         }
     }
 
@@ -116,6 +119,9 @@ public sealed partial class MainWindow
 
             var fullPath = _treeViewService.GetCategoryPath(subCategoryNode);
             StatusText.Text = $"Created sub category: {fullPath}";
+            
+            // Update bookmark lookup categories in case new subcategory has lookup enabled
+            UpdateBookmarkLookupCategories();
         }
     }
 
@@ -272,6 +278,9 @@ public sealed partial class MainWindow
             var rootNode = GetRootCategoryNode(newNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
             StatusText.Text = $"Updated category: {result.Name}";
+            
+            // Update bookmark lookup categories in case IsBookmarkLookup changed
+            UpdateBookmarkLookupCategories();
 
             if (LinksTreeView.SelectedNode == newNode)
             {

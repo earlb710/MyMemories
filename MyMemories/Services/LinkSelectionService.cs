@@ -220,14 +220,16 @@ public class LinkSelectionService
     {
         if (linkNode != null)
         {
+            // Only pass RefreshArchiveFromManifestAsync for zip files
+            bool isZipFile = IsZipFile(linkItem.Url);
             await _detailsViewService.ShowLinkDetailsAsync(linkItem, linkNode,
                 async () => await _catalogService.CreateCatalogAsync(linkItem, linkNode),
                 async () => await _catalogService.RefreshCatalogAsync(linkItem, linkNode),
-                async () => await _catalogService.RefreshArchiveFromManifestAsync(linkItem, linkNode));
+                isZipFile ? async () => await _catalogService.RefreshArchiveFromManifestAsync(linkItem, linkNode) : null);
         }
         else
         {
-            await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, async () => { });
+            await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, null);
         }
     }
 

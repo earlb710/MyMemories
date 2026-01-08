@@ -630,10 +630,14 @@ public class LinkDialogBuilder
             Width = 500
         };
 
-        // Populate tree with bookmark lookup categories
+        // Keep reference to original categories for search reset
+        var originalCategories = new List<TreeViewNode>();
         foreach (var categoryNode in _bookmarkLookupCategories)
         {
-            treeView.RootNodes.Add(CloneTreeNode(categoryNode));
+            var clonedNode = CloneTreeNode(categoryNode);
+            clonedNode.IsExpanded = true; // Expand root nodes by default
+            treeView.RootNodes.Add(clonedNode);
+            originalCategories.Add(clonedNode);
         }
 
         var searchBox = new TextBox
@@ -647,8 +651,26 @@ public class LinkDialogBuilder
             Content = "Select",
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0),
-            IsEnabled = false
+            IsEnabled = false,
+            Style = (Style)Application.Current.Resources["AccentButtonStyle"]
         };
+
+        var cancelButton = new Button
+        {
+            Content = "Cancel",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 8, 0)
+        };
+
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        buttonPanel.Children.Add(cancelButton);
+        buttonPanel.Children.Add(selectButton);
 
         var stackPanel = new StackPanel
         {
@@ -665,9 +687,10 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(new ScrollViewer
         {
             Content = treeView,
-            MaxHeight = 400
+            MaxHeight = 400,
+            Margin = new Thickness(0, 0, 0, 8)
         });
-        stackPanel.Children.Add(selectButton);
+        stackPanel.Children.Add(buttonPanel);
 
         // Create flyout
         var flyout = new Flyout
@@ -679,6 +702,21 @@ public class LinkDialogBuilder
         // Track selected node
         TreeViewNode? selectedNode = null;
 
+        // Function to select and populate a link
+        Action<LinkItem> SelectLink = (LinkItem selectedLink) =>
+        {
+            urlTextBox.Text = selectedLink.Url;
+            if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+            {
+                titleTextBox.Text = selectedLink.Title;
+            }
+            if (string.IsNullOrWhiteSpace(descriptionTextBox.Text) && !string.IsNullOrWhiteSpace(selectedLink.Description))
+            {
+                descriptionTextBox.Text = selectedLink.Description;
+            }
+            flyout.Hide();
+        };
+
         // Enable select button when a link is selected
         treeView.SelectionChanged += (s, e) =>
         {
@@ -687,26 +725,50 @@ public class LinkDialogBuilder
                 selectedNode = node;
                 selectButton.IsEnabled = node.Content is LinkItem;
             }
+            else
+            {
+                selectedNode = null;
+                selectButton.IsEnabled = false;
+            }
+        };
+
+        // Handle double-click/double-tap on tree items
+        treeView.ItemInvoked += (s, e) =>
+        {
+            if (e.InvokedItem is TreeViewNode node && node.Content is LinkItem link)
+            {
+                SelectLink(link);
+            }
         };
 
         // Implement search filtering
         searchBox.TextChanged += (s, e) =>
         {
-            var searchText = searchBox.Text.ToLowerInvariant();
+            var searchText = searchBox.Text.Trim().ToLowerInvariant();
+            
+            // Clear and rebuild tree based on search
+            treeView.RootNodes.Clear();
+            
             if (string.IsNullOrWhiteSpace(searchText))
             {
-                // Show all
-                foreach (var node in treeView.RootNodes)
+                // Show all - restore original
+                foreach (var node in originalCategories)
                 {
-                    ShowAllNodes(node);
+                    treeView.RootNodes.Add(node);
                 }
             }
             else
             {
-                // Filter by search text
-                foreach (var node in treeView.RootNodes)
+                // Filter and show only matching nodes
+                foreach (var originalNode in originalCategories)
                 {
-                    FilterNodes(node, searchText);
+                    var filteredNode = BuildFilteredTree(originalNode, searchText);
+                    if (filteredNode != null)
+                    {
+                        filteredNode.IsExpanded = true; // Expand matching categories
+                        treeView.RootNodes.Add(filteredNode);
+                        ExpandAllChildren(filteredNode); // Expand all children to show matches
+                    }
                 }
             }
         };
@@ -716,91 +778,81 @@ public class LinkDialogBuilder
         {
             if (selectedNode != null && selectedNode.Content is LinkItem selectedLink)
             {
-                urlTextBox.Text = selectedLink.Url;
-                if (string.IsNullOrWhiteSpace(titleTextBox.Text))
-                {
-                    titleTextBox.Text = selectedLink.Title;
-                }
-                if (string.IsNullOrWhiteSpace(descriptionTextBox.Text) && !string.IsNullOrWhiteSpace(selectedLink.Description))
-                {
-                    descriptionTextBox.Text = selectedLink.Description;
-                }
+                SelectLink(selectedLink);
             }
+        };
+
+        // Handle cancel button click
+        cancelButton.Click += (s, e) =>
+        {
             flyout.Hide();
         };
 
-        // Show flyout attached to the URL textbox
+        // Show flyout attached to the browse button instead of URL textbox for better positioning
         flyout.ShowAt(urlTextBox);
     }
 
     /// <summary>
-    /// Clones a tree node for display in bookmark browser.
+    /// Builds a filtered tree containing only matching nodes.
+    /// Returns null if no matches found in this branch.
     /// </summary>
-    private TreeViewNode CloneTreeNode(TreeViewNode source)
+    private TreeViewNode? BuildFilteredTree(TreeViewNode source, string searchText)
     {
-        var clone = new TreeViewNode
-        {
-            Content = source.Content,
-            IsExpanded = false
-        };
-
-        foreach (var child in source.Children)
-        {
-            clone.Children.Add(CloneTreeNode(child));
-        }
-
-        return clone;
-    }
-
-    /// <summary>
-    /// Shows all nodes in the tree (clears filtering).
-    /// </summary>
-    private void ShowAllNodes(TreeViewNode node)
-    {
-        // TreeView doesn't support hiding nodes directly, so we need to rebuild
-        // For simplicity, we'll just expand all for now
-        node.IsExpanded = true;
-        foreach (var child in node.Children)
-        {
-            ShowAllNodes(child);
-        }
-    }
-
-    /// <summary>
-    /// Filters nodes based on search text (simple contains match).
-    /// </summary>
-    private bool FilterNodes(TreeViewNode node, string searchText)
-    {
-        bool hasMatch = false;
+        bool currentNodeMatches = false;
 
         // Check if current node matches
-        if (node.Content is LinkItem link)
+        if (source.Content is LinkItem link)
         {
-            hasMatch = link.Title.ToLowerInvariant().Contains(searchText) ||
-                      link.Url.ToLowerInvariant().Contains(searchText) ||
-                      (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText));
+            currentNodeMatches = link.Title.ToLowerInvariant().Contains(searchText) ||
+                                link.Url.ToLowerInvariant().Contains(searchText) ||
+                                (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText));
         }
-        else if (node.Content is CategoryItem category)
+        else if (source.Content is CategoryItem category)
         {
-            hasMatch = category.Name.ToLowerInvariant().Contains(searchText);
+            currentNodeMatches = category.Name.ToLowerInvariant().Contains(searchText);
         }
 
-        // Check children
-        foreach (var child in node.Children)
+        // Recursively filter children
+        var matchingChildren = new List<TreeViewNode>();
+        foreach (var child in source.Children)
         {
-            if (FilterNodes(child, searchText))
+            var filteredChild = BuildFilteredTree(child, searchText);
+            if (filteredChild != null)
             {
-                hasMatch = true;
+                matchingChildren.Add(filteredChild);
             }
         }
 
-        // Expand if has match
-        if (hasMatch)
+        // If current node matches OR any children match, include this node
+        if (currentNodeMatches || matchingChildren.Count > 0)
         {
-            node.IsExpanded = true;
+            var filteredNode = new TreeViewNode
+            {
+                Content = source.Content,
+                IsExpanded = false // Will be expanded by caller if needed
+            };
+
+            foreach (var child in matchingChildren)
+            {
+                filteredNode.Children.Add(child);
+            }
+
+            return filteredNode;
         }
 
-        return hasMatch;
+        return null; // No matches in this branch
+    }
+
+    /// <summary>
+    /// Expands all children recursively.
+    /// </summary>
+    private void ExpandAllChildren(TreeViewNode node)
+    {
+        node.IsExpanded = true;
+        foreach (var child in node.Children)
+        {
+            ExpandAllChildren(child);
+        }
     }
 
     private AddLinkResult? CreateAddLinkResult(LinkDialogControls controls)
@@ -931,5 +983,24 @@ public class LinkDialogBuilder
         public TextBox FiltersTextBox { get; set; } = null!;
         public TextBlock TypeLabel { get; set; } = null!;
         public TextBlock FiltersLabel { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// Clones a tree node for display in bookmark browser.
+    /// </summary>
+    private TreeViewNode CloneTreeNode(TreeViewNode source)
+    {
+        var clone = new TreeViewNode
+        {
+            Content = source.Content,
+            IsExpanded = false
+        };
+
+        foreach (var child in source.Children)
+        {
+            clone.Children.Add(CloneTreeNode(child));
+        }
+
+        return clone;
     }
 }
