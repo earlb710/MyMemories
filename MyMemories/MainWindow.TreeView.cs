@@ -33,13 +33,14 @@ public sealed partial class MainWindow
         }
         else
         {
-            // Handle link selection through service
+            // Handle link selection through service with refresh callback
             await _treeViewEventService!.HandleSelectionChangedAsync(
                 node,
                 HideAllViewers,
                 ShowDetailsViewers,
                 ShowViewer,
-                status => StatusText.Text = status);
+                status => StatusText.Text = status,
+                RefreshBookmarksAsync);
         }
     }
 

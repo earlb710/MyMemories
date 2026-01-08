@@ -377,6 +377,7 @@ public class CategoryService
             LastBookmarkImportDate = category.LastBookmarkImportDate,
             ImportedBookmarkCount = category.ImportedBookmarkCount,
             IsBookmarkCategory = category.IsBookmarkCategory,
+            IsBookmarkLookup = category.IsBookmarkLookup,
             Links = null,
             SubCategories = null
         };
@@ -548,7 +549,8 @@ public class CategoryService
                 SourceBookmarksPath = categoryData.SourceBookmarksPath,
                 LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
                 ImportedBookmarkCount = categoryData.ImportedBookmarkCount,
-                IsBookmarkCategory = categoryData.IsBookmarkCategory
+                IsBookmarkCategory = categoryData.IsBookmarkCategory,
+                IsBookmarkLookup = categoryData.IsBookmarkLookup
             }
         };
 

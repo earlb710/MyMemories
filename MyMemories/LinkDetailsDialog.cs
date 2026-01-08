@@ -26,6 +26,14 @@ public class LinkDetailsDialog
         _categoryDialogBuilder = new CategoryDialogBuilder(xamlRoot, configService);
         _zipDialogBuilder = new ZipDialogBuilder(parentWindow, xamlRoot);
     }
+    
+    /// <summary>
+    /// Sets the bookmark lookup categories for the link dialog builder.
+    /// </summary>
+    public void SetBookmarkLookupCategories(List<TreeViewNode> categories)
+    {
+        _linkDialogBuilder.SetBookmarkLookupCategories(categories);
+    }
 
     public Task<bool> ShowAsync(LinkItem link) => 
         _detailsViewer.ShowAsync(link);

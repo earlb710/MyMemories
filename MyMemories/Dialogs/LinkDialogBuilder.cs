@@ -21,12 +21,21 @@ public class LinkDialogBuilder
     private readonly Window _parentWindow;
     private readonly XamlRoot _xamlRoot;
     private readonly FolderPickerService _folderPickerService;
+    private List<TreeViewNode>? _bookmarkLookupCategories;
 
     public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
         _folderPickerService = new FolderPickerService(parentWindow);
+    }
+    
+    /// <summary>
+    /// Sets the bookmark lookup categories for bookmark browsing.
+    /// </summary>
+    public void SetBookmarkLookupCategories(List<TreeViewNode> categories)
+    {
+        _bookmarkLookupCategories = categories;
     }
 
     /// <summary>
@@ -398,7 +407,17 @@ public class LinkDialogBuilder
                 {
                     case "URL":
                         controls.UrlTextBox.PlaceholderText = "Enter URL (e.g., https://example.com)";
-                        controls.BrowseButton.Visibility = Visibility.Collapsed;
+                        controls.BrowseButton.Visibility = Visibility.Visible;
+                        controls.BrowseButton.Content = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 6,
+                            Children =
+                            {
+                                new FontIcon { Glyph = "\uE71B", FontSize = 14 }, // Link icon
+                                new TextBlock { Text = "Browse Bookmarks", VerticalAlignment = VerticalAlignment.Center }
+                            }
+                        };
                         break;
                     case "File":
                         controls.UrlTextBox.PlaceholderText = "Enter file path or click Browse";
@@ -480,7 +499,11 @@ public class LinkDialogBuilder
         {
             var linkType = (controls.LinkTypeComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "URL";
             
-            if (linkType == "File")
+            if (linkType == "URL")
+            {
+                await BrowseBookmarksAsync(controls.UrlTextBox, controls.TitleTextBox, controls.DescriptionTextBox);
+            }
+            else if (linkType == "File")
             {
                 await BrowseForFileAsync(controls.UrlTextBox, controls.TitleTextBox);
             }
@@ -570,6 +593,214 @@ public class LinkDialogBuilder
             }
             onFolderSelected();
         }
+    }
+    
+    /// <summary>
+    /// Shows bookmark selection dialog and populates URL and title fields.
+    /// Uses a Flyout instead of ContentDialog to avoid nesting dialogs.
+    /// </summary>
+    private async Task BrowseBookmarksAsync(TextBox urlTextBox, TextBox titleTextBox, TextBox descriptionTextBox)
+    {
+        // Ensure we're on the UI thread
+        await Task.Yield();
+        
+        if (_bookmarkLookupCategories == null || _bookmarkLookupCategories.Count == 0)
+        {
+            // Show a simple info bar instead of a dialog
+            var infoBar = new InfoBar
+            {
+                Title = "No Bookmark Categories",
+                Message = "To use this feature:\n1. Create or edit a bookmark category\n2. Check '?? URL Bookmarks Only'\n3. Check '?? Use for bookmark lookup'",
+                Severity = InfoBarSeverity.Informational,
+                IsOpen = true,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            
+            // We can't easily insert this into the current dialog, so just return
+            // User will need to set up bookmark categories first
+            return;
+        }
+
+        // Build bookmark tree
+        var treeView = new TreeView
+        {
+            SelectionMode = TreeViewSelectionMode.Single,
+            MinHeight = 300,
+            MaxHeight = 400,
+            Width = 500
+        };
+
+        // Populate tree with bookmark lookup categories
+        foreach (var categoryNode in _bookmarkLookupCategories)
+        {
+            treeView.RootNodes.Add(CloneTreeNode(categoryNode));
+        }
+
+        var searchBox = new TextBox
+        {
+            PlaceholderText = "Search bookmarks...",
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var selectButton = new Button
+        {
+            Content = "Select",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0),
+            IsEnabled = false
+        };
+
+        var stackPanel = new StackPanel
+        {
+            Width = 500
+        };
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Browse Bookmarks",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        stackPanel.Children.Add(searchBox);
+        stackPanel.Children.Add(new ScrollViewer
+        {
+            Content = treeView,
+            MaxHeight = 400
+        });
+        stackPanel.Children.Add(selectButton);
+
+        // Create flyout
+        var flyout = new Flyout
+        {
+            Content = stackPanel,
+            Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.Bottom
+        };
+
+        // Track selected node
+        TreeViewNode? selectedNode = null;
+
+        // Enable select button when a link is selected
+        treeView.SelectionChanged += (s, e) =>
+        {
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is TreeViewNode node)
+            {
+                selectedNode = node;
+                selectButton.IsEnabled = node.Content is LinkItem;
+            }
+        };
+
+        // Implement search filtering
+        searchBox.TextChanged += (s, e) =>
+        {
+            var searchText = searchBox.Text.ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                // Show all
+                foreach (var node in treeView.RootNodes)
+                {
+                    ShowAllNodes(node);
+                }
+            }
+            else
+            {
+                // Filter by search text
+                foreach (var node in treeView.RootNodes)
+                {
+                    FilterNodes(node, searchText);
+                }
+            }
+        };
+
+        // Handle select button click
+        selectButton.Click += (s, e) =>
+        {
+            if (selectedNode != null && selectedNode.Content is LinkItem selectedLink)
+            {
+                urlTextBox.Text = selectedLink.Url;
+                if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                {
+                    titleTextBox.Text = selectedLink.Title;
+                }
+                if (string.IsNullOrWhiteSpace(descriptionTextBox.Text) && !string.IsNullOrWhiteSpace(selectedLink.Description))
+                {
+                    descriptionTextBox.Text = selectedLink.Description;
+                }
+            }
+            flyout.Hide();
+        };
+
+        // Show flyout attached to the URL textbox
+        flyout.ShowAt(urlTextBox);
+    }
+
+    /// <summary>
+    /// Clones a tree node for display in bookmark browser.
+    /// </summary>
+    private TreeViewNode CloneTreeNode(TreeViewNode source)
+    {
+        var clone = new TreeViewNode
+        {
+            Content = source.Content,
+            IsExpanded = false
+        };
+
+        foreach (var child in source.Children)
+        {
+            clone.Children.Add(CloneTreeNode(child));
+        }
+
+        return clone;
+    }
+
+    /// <summary>
+    /// Shows all nodes in the tree (clears filtering).
+    /// </summary>
+    private void ShowAllNodes(TreeViewNode node)
+    {
+        // TreeView doesn't support hiding nodes directly, so we need to rebuild
+        // For simplicity, we'll just expand all for now
+        node.IsExpanded = true;
+        foreach (var child in node.Children)
+        {
+            ShowAllNodes(child);
+        }
+    }
+
+    /// <summary>
+    /// Filters nodes based on search text (simple contains match).
+    /// </summary>
+    private bool FilterNodes(TreeViewNode node, string searchText)
+    {
+        bool hasMatch = false;
+
+        // Check if current node matches
+        if (node.Content is LinkItem link)
+        {
+            hasMatch = link.Title.ToLowerInvariant().Contains(searchText) ||
+                      link.Url.ToLowerInvariant().Contains(searchText) ||
+                      (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText));
+        }
+        else if (node.Content is CategoryItem category)
+        {
+            hasMatch = category.Name.ToLowerInvariant().Contains(searchText);
+        }
+
+        // Check children
+        foreach (var child in node.Children)
+        {
+            if (FilterNodes(child, searchText))
+            {
+                hasMatch = true;
+            }
+        }
+
+        // Expand if has match
+        if (hasMatch)
+        {
+            node.IsExpanded = true;
+        }
+
+        return hasMatch;
     }
 
     private AddLinkResult? CreateAddLinkResult(LinkDialogControls controls)

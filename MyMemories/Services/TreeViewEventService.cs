@@ -20,11 +20,11 @@ public class TreeViewEventService
         _linkSelectionService = linkSelectionService;
     }
 
-    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
+    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus, Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null)
     {
         if (node.Content is CategoryItem category)
         {
-            await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus);
+            await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus, refreshBookmarksCallback);
         }
         else if (node.Content is LinkItem linkItem)
         {
@@ -32,14 +32,16 @@ public class TreeViewEventService
         }
     }
 
-    private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
+    private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus, Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null)
     {
         hideAllViewers();
         
-        // For bookmark import categories, we need to get the refresh callback from MainWindow
-        // Since we don't have direct access, we'll need to handle this differently
-        // The refresh functionality will be wired up separately when needed
-        await _detailsViewService.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks: null);
+        // Create refresh callback for bookmark import categories
+        Func<Task>? refreshBookmarks = category.IsBookmarkImport && refreshBookmarksCallback != null
+            ? async () => await refreshBookmarksCallback(category, node)
+            : null;
+        
+        await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);

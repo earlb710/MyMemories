@@ -316,6 +316,21 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 _treeViewService!.InsertCategoryNode(category);
             }
             
+            // Collect bookmark lookup categories
+            var bookmarkLookupCategories = new List<TreeViewNode>();
+            foreach (var categoryNode in LinksTreeView.RootNodes)
+            {
+                if (categoryNode.Content is CategoryItem category && 
+                    category.IsBookmarkCategory && 
+                    category.IsBookmarkLookup)
+                {
+                    bookmarkLookupCategories.Add(categoryNode);
+                }
+            }
+            
+            // Pass bookmark lookup categories to link dialog
+            _linkDialog?.SetBookmarkLookupCategories(bookmarkLookupCategories);
+            
             // Check for folder changes and auto-refresh if enabled
             foreach (var category in LinksTreeView.RootNodes)
             {

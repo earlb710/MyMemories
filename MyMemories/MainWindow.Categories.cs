@@ -59,7 +59,8 @@ public sealed partial class MainWindow
                     OwnPasswordHash = result.OwnPassword != null 
                         ? PasswordUtilities.HashPassword(result.OwnPassword) 
                         : null,
-                    IsBookmarkCategory = result.IsBookmarkCategory
+                    IsBookmarkCategory = result.IsBookmarkCategory,
+                    IsBookmarkLookup = result.IsBookmarkLookup
                 }
             };
 
@@ -105,7 +106,8 @@ public sealed partial class MainWindow
                     Icon = result.Icon,
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
-                    IsBookmarkCategory = result.IsBookmarkCategory // Inherit from parent
+                    IsBookmarkCategory = result.IsBookmarkCategory, // Inherit from parent
+                    IsBookmarkLookup = result.IsBookmarkLookup
                 }
             };
 
@@ -156,7 +158,8 @@ public sealed partial class MainWindow
             isRootCategory: isRootCategory,
             currentPasswordProtection: category.PasswordProtection,
             currentPasswordHash: category.OwnPasswordHash,
-            currentIsBookmarkCategory: category.IsBookmarkCategory);
+            currentIsBookmarkCategory: category.IsBookmarkCategory,
+            currentIsBookmarkLookup: category.IsBookmarkLookup);
 
         if (result != null)
         {
@@ -255,7 +258,8 @@ public sealed partial class MainWindow
                 OwnPasswordHash = result.OwnPassword != null
                     ? PasswordUtilities.HashPassword(result.OwnPassword)
                     : category.OwnPasswordHash,
-                IsBookmarkCategory = result.IsBookmarkCategory
+                IsBookmarkCategory = result.IsBookmarkCategory,
+                IsBookmarkLookup = result.IsBookmarkLookup
             };
 
             var newNode = _treeViewService!.RefreshCategoryNode(node, updatedCategory);
