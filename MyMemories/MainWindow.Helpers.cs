@@ -139,22 +139,6 @@ public sealed partial class MainWindow
                     _ => Microsoft.UI.Colors.Gray
                 });
 
-                // Add tooltip
-                var tooltipText = linkItem.UrlStatus switch
-                {
-                    UrlStatus.Accessible => "URL is accessible",
-                    UrlStatus.Error => $"URL error: {linkItem.UrlStatusMessage}",
-                    UrlStatus.NotFound => "URL not found (404)",
-                    _ => "URL status unknown"
-                };
-                
-                if (linkItem.UrlLastChecked.HasValue)
-                {
-                    tooltipText += $"\nLast checked: {linkItem.UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}";
-                }
-                
-                ToolTipService.SetToolTip(statusBadge, tooltipText);
-
                 iconGrid.Children.Add(statusBadge);
             }
             // Add black question mark for unknown URL status
@@ -176,13 +160,132 @@ public sealed partial class MainWindow
                 // Set color to black
                 unknownBadge.Foreground = new SolidColorBrush(Microsoft.UI.Colors.Black);
 
-                // Add tooltip
-                ToolTipService.SetToolTip(unknownBadge, "URL status not checked yet\nClick 'Refresh URL State' to check");
-
                 iconGrid.Children.Add(unknownBadge);
             }
 
             stackPanel.Children.Add(iconGrid);
+
+            // Set tooltip on the entire stack panel for URLs with status information
+            if (!linkItem.IsDirectory && 
+                Uri.TryCreate(linkItem.Url, UriKind.Absolute, out var tooltipUri) && 
+                !tooltipUri.IsFile)
+            {
+                if (linkItem.UrlStatus != UrlStatus.Unknown)
+                {
+                    // Build detailed tooltip with status code explanation
+                    var tooltipBuilder = new StringBuilder();
+                    
+                    // Add main status
+                    tooltipBuilder.Append(linkItem.UrlStatus switch
+                    {
+                        UrlStatus.Accessible => "? URL is accessible",
+                        UrlStatus.Error => "? URL error",
+                        UrlStatus.NotFound => "? URL not found",
+                        _ => "URL status unknown"
+                    });
+                    
+                    // Add status message with HTTP code if available
+                    if (!string.IsNullOrWhiteSpace(linkItem.UrlStatusMessage))
+                    {
+                        tooltipBuilder.AppendLine();
+                        tooltipBuilder.Append($"Status: {linkItem.UrlStatusMessage}");
+                        
+                        // Add explanation for common HTTP codes
+                        if (linkItem.UrlStatusMessage.Contains("404"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(The requested page does not exist)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("403"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Access forbidden - authentication required)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("500"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Internal server error)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("503"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Service unavailable - server may be down)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("301") || linkItem.UrlStatusMessage.Contains("302"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Redirect - page moved to new location)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("410"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Page permanently removed)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("408"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Request timeout)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("429"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Too many requests - rate limited)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("401"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Authentication required)");
+                        }
+                        else if (linkItem.UrlStatusMessage.Contains("502"))
+                        {
+                            tooltipBuilder.AppendLine();
+                            tooltipBuilder.Append("(Bad gateway - server error)");
+                        }
+                    }
+                    
+                    // Add last checked date
+                    if (linkItem.UrlLastChecked.HasValue)
+                    {
+                        tooltipBuilder.AppendLine();
+                        tooltipBuilder.AppendLine();
+                        tooltipBuilder.Append($"Last checked: {linkItem.UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}");
+                    }
+                    
+                    var tooltipText = tooltipBuilder.ToString();
+                    
+                    // Set up tooltip (WinUI 3 doesn't support delay customization via ToolTipService)
+                    ToolTipService.SetToolTip(stackPanel, tooltipText);
+                    
+                    // Set up mouse enter/leave to show in status bar immediately
+                    stackPanel.PointerEntered += (s, e) =>
+                    {
+                        StatusText.Text = tooltipText.Replace("\r\n", " | ");
+                    };
+                    
+                    stackPanel.PointerExited += (s, e) =>
+                    {
+                        StatusText.Text = "Ready";
+                    };
+                }
+                else if (linkItem.UrlStatus == UrlStatus.Unknown)
+                {
+                    var tooltipText = "URL status not checked yet\n\nClick 'Refresh URL State' on the category\nto check all URLs for accessibility";
+                    
+                    // Set up tooltip (WinUI 3 doesn't support delay customization via ToolTipService)
+                    ToolTipService.SetToolTip(stackPanel, tooltipText);
+                    
+                    // Set up mouse enter/leave to show in status bar immediately
+                    stackPanel.PointerEntered += (s, e) =>
+                    {
+                        StatusText.Text = "URL status not checked | Click 'Refresh URL State' on category to check";
+                    };
+                    
+                    stackPanel.PointerExited += (s, e) =>
+                    {
+                        StatusText.Text = "Ready";
+                    };
+                }
+            }
 
             // Add text with file count if applicable
             var displayText = linkItem.Title;
@@ -506,10 +609,44 @@ public sealed partial class MainWindow
             var confirmDialog = new ContentDialog
             {
                 Title = "Refresh Archive",
-                Content = $"This will re-create the zip archive from the current state of the category:\n\n" +
-                         $"?? {manifestCategory!.Name}\n\n" +
-                         $"The existing zip file will be overwritten with a fresh archive containing all current folders in the category.\n\n" +
-                         $"Do you want to continue?",
+                Content = new StackPanel
+                {
+                    Spacing = 12,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = "This will re-create the zip archive from the current state of the category:",
+                            TextWrapping = TextWrapping.Wrap
+                        },
+                        new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            HorizontalAlignment = HorizontalAlignment.Left,
+                            Children =
+                            {
+                                new TextBlock
+                                {
+                                    Text = manifestCategory!.Icon,
+                                    FontSize = 20
+                                },
+                                new TextBlock
+                                {
+                                    Text = manifestCategory.Name,
+                                    FontSize = 16,
+                                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                                    VerticalAlignment = VerticalAlignment.Center
+                                }
+                            }
+                        },
+                        new TextBlock
+                        {
+                            Text = "The existing zip file will be overwritten with a fresh archive containing all current folders in the category.\n\nDo you want to continue?",
+                            TextWrapping = TextWrapping.Wrap
+                        }
+                    }
+                },
                 PrimaryButtonText = "Refresh Archive",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
@@ -527,12 +664,15 @@ public sealed partial class MainWindow
             // Navigate to the zip node and show busy indicator
             LinksTreeView.SelectedNode = zipLinkNode;
             
-            // Add busy indicator as a temporary child
+            // IMPORTANT: Remove catalog entries FIRST to release all file handles to the zip
+            _categoryService!.RemoveCatalogEntries(zipLinkNode);
+            
+            // Add busy indicator as a temporary child (matching the pattern from ZipFolderAsync)
             var busyLinkItem = new LinkItem
             {
-                Title = "? Refreshing archive...",
+                Title = "Busy creating...",
                 Url = string.Empty,
-                Description = "Please wait while the archive is being refreshed",
+                Description = "Zip archive is being refreshed",
                 IsDirectory = false,
                 CategoryPath = zipLinkItem.CategoryPath,
                 CreatedDate = DateTime.Now,
@@ -541,44 +681,125 @@ public sealed partial class MainWindow
             };
             
             var busyNode = new TreeViewNode { Content = busyLinkItem };
-            zipLinkNode.Children.Clear(); // Remove existing catalog entries
             zipLinkNode.Children.Add(busyNode);
             zipLinkNode.IsExpanded = true;
 
             // Call the category zipping method
             StatusText.Text = $"Refreshing archive '{zipFileName}'...";
 
+            // Force garbage collection to ensure file handles are released
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            
+            // Add longer delay to ensure the zip file is fully released
+            await Task.Delay(500);
+
             // Re-zip the category (this will overwrite the existing zip)
             // Use the same password if the original was password-protected
             await ReZipCategoryAsync(manifestCategoryNode, zipFileName, targetDirectory, zipPassword);
 
-            // Small delay to ensure file is fully written and released
+            // Brief delay to ensure file system sync (reduced from 2000ms since we now properly close handles)
+            StatusText.Text = $"Finalizing archive '{zipFileName}'...";
             await Task.Delay(100);
+
+            // Force GC to release any lingering references
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
 
             // Remove busy indicator
             zipLinkNode.Children.Remove(busyNode);
 
-            // Re-catalog the updated zip
-            try
+            StatusText.Text = $"Cataloging archive '{zipFileName}'...";
+
+            // Re-catalog the updated zip with retry logic (reduced retries since file is properly closed)
+            int maxRetries = 3;
+            int retryDelay = 500; // Reduced from 2000ms
+            Exception? lastException = null;
+            
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
-            }
-            catch (InvalidDataException ex)
-            {
-                // If we get an unsupported compression method error, show a helpful message
-                StatusText.Text = $"Warning: Created zip but cataloging failed - {ex.Message}";
-                
-                var warningDialog = new ContentDialog
+                try
                 {
-                    Title = "Zip Created with Warning",
-                    Content = $"The zip archive was successfully created, but automatic cataloging failed.\n\n" +
-                             $"Error: {ex.Message}\n\n" +
-                             $"The zip file is valid and can be opened externally. " +
-                             $"You may need to manually catalog it using the 'Create Catalog' button.",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await warningDialog.ShowAsync();
+                    if (attempt > 0)
+                    {
+                        Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Retry attempt {attempt + 1} for cataloging");
+                        StatusText.Text = $"Retrying catalog creation (attempt {attempt + 1}/{maxRetries})...";
+                        
+                        // Force GC before each retry
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        
+                        await Task.Delay(retryDelay);
+                        retryDelay *= 2; // Exponential backoff: 500ms, 1s, 2s
+                    }
+                    
+                    await _catalogService!.CreateCatalogAsync(zipLinkItem, zipLinkNode);
+                    lastException = null;
+                    break; // Success!
+                }
+                catch (ICSharpCode.SharpZipLib.Zip.ZipException ex) when (ex.Message.Contains("Cannot find central directory") && attempt < maxRetries - 1)
+                {
+                    // Zip file not fully written yet, retry
+                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Zip not ready yet (attempt {attempt + 1}): {ex.Message}");
+                    lastException = ex;
+                    continue;
+                }
+                catch (InvalidDataException ex) when (attempt < maxRetries - 1)
+                {
+                    // Might be temporary file corruption or file still being written, retry
+                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Invalid data (attempt {attempt + 1}), retrying: {ex.Message}");
+                    lastException = ex;
+                    continue;
+                }
+                catch (IOException ex) when (ex.Message.Contains("being used by another process") && attempt < maxRetries - 1)
+                {
+                    // File is still locked, retry
+                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] File locked (attempt {attempt + 1}), retrying: {ex.Message}");
+                    lastException = ex;
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    // Other errors, don't retry
+                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Non-retryable error: {ex.GetType().Name} - {ex.Message}");
+                    lastException = ex;
+                    break;
+                }
+            }
+            
+            if (lastException != null)
+            {
+                // All retries failed
+                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] All {maxRetries} attempts failed. Last error: {lastException.Message}");
+                
+                if (lastException is ICSharpCode.SharpZipLib.Zip.ZipException || 
+                    lastException is InvalidDataException ||
+                    (lastException is IOException && lastException.Message.Contains("being used")))
+                {
+                    StatusText.Text = $"Warning: Created zip but cataloging failed after {maxRetries} attempts - {lastException.Message}";
+                    
+                    var warningDialog = new ContentDialog
+                    {
+                        Title = "Zip Created with Warning",
+                        Content = $"The zip archive was successfully created, but automatic cataloging failed after {maxRetries} attempts.\n\n" +
+                                 $"Error: {lastException.Message}\n\n" +
+                                 $"Possible reasons:\n" +
+                                 $"• The zip file may still be locked by another process\n" +
+                                 $"• Antivirus software may be scanning the file\n" +
+                                 $"• The file system may be slow to sync\n\n" +
+                                 $"The zip file is valid and can be opened externally. " +
+                                 $"Try cataloging it manually later using the 'Create Catalog' button.",
+                        CloseButtonText = "OK",
+                        XamlRoot = Content.XamlRoot
+                    };
+                    await warningDialog.ShowAsync();
+                }
+                else
+                {
+                    // Re-throw unexpected errors
+                    throw lastException;
+                }
                 
                 // Continue without catalog
                 zipLinkItem.LastCatalogUpdate = DateTime.Now;
@@ -666,94 +887,177 @@ public sealed partial class MainWindow
 
         var zipFilePath = Path.Combine(targetDirectory, zipFileName);
 
-        // Delete existing file
+        // Delete existing file with retry logic
         if (File.Exists(zipFilePath))
         {
-            File.Delete(zipFilePath);
+            int deleteRetries = 3;
+            for (int i = 0; i < deleteRetries; i++)
+            {
+                try
+                {
+                    File.Delete(zipFilePath);
+                    break;
+                }
+                catch (IOException) when (i < deleteRetries - 1)
+                {
+                    await Task.Delay(500);
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                }
+            }
         }
 
+        // Generate manifest content on UI thread (before entering Task.Run)
+        var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
+
         // Create new zip with manifest using SharpZipLib for maximum compatibility
+        Debug.WriteLine($"[ReZipCategoryAsync] Creating zip file: {zipFilePath}");
+        Debug.WriteLine($"[ReZipCategoryAsync] Folder paths to zip: {string.Join(", ", folderPaths)}");
+        Debug.WriteLine($"[ReZipCategoryAsync] Manifest content length: {manifestContent.Length} chars");
+        
+        int filesAdded = 0;
+        
         await Task.Run(() =>
         {
-            using (var zipOutputStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(File.Create(zipFilePath)))
+            // Use explicit file stream with no buffering for immediate write
+            using var fileStream = new FileStream(
+                zipFilePath, 
+                FileMode.Create, 
+                FileAccess.Write, 
+                FileShare.None, 
+                bufferSize: 4096, 
+                FileOptions.WriteThrough); // WriteThrough bypasses OS cache
+            
+            using var zipOutputStream = new ICSharpCode.SharpZipLib.Zip.ZipOutputStream(fileStream, 8192);
+            
+            // IMPORTANT: Tell SharpZipLib NOT to close the underlying stream
+            // We'll close it ourselves to ensure proper cleanup
+            zipOutputStream.IsStreamOwner = false;
+            
+            // Use Deflate compression (method 8) with level 6 for good balance
+            zipOutputStream.SetLevel(6);
+
+            // Set password if provided
+            if (!string.IsNullOrEmpty(password))
             {
-                // Use Deflate compression (method 8) with level 1 for compatibility
-                zipOutputStream.SetLevel(1); // 1 = fastest, 9 = best compression
+                zipOutputStream.Password = password;
+                zipOutputStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+            }
 
-                // Set password if provided
-                if (!string.IsNullOrEmpty(password))
+            // Create and add the manifest file
+            var manifestBytes = Encoding.UTF8.GetBytes(manifestContent);
+            Debug.WriteLine($"[ReZipCategoryAsync] Adding manifest file ({manifestBytes.Length} bytes)");
+            
+            var manifestEntry = new ICSharpCode.SharpZipLib.Zip.ZipEntry("_MANIFEST.txt")
+            {
+                DateTime = DateTime.Now,
+                Size = manifestBytes.Length
+            };
+            
+            // Set AES encryption if password is provided
+            if (!string.IsNullOrEmpty(password))
+            {
+                manifestEntry.AESKeySize = 256;
+            }
+            
+            zipOutputStream.PutNextEntry(manifestEntry);
+            zipOutputStream.Write(manifestBytes, 0, manifestBytes.Length);
+            zipOutputStream.CloseEntry();
+            filesAdded++;
+
+            // Add all folder contents
+            foreach (var folderPath in folderPaths)
+            {
+                Debug.WriteLine($"[ReZipCategoryAsync] Processing folder: {folderPath}");
+                
+                if (!Directory.Exists(folderPath))
                 {
-                    zipOutputStream.Password = password;
-                    zipOutputStream.UseZip64 = ICSharpCode.SharpZipLib.Zip.UseZip64.On;
+                    Debug.WriteLine($"[ReZipCategoryAsync] Folder does not exist: {folderPath}");
+                    continue;
                 }
 
-                // Create and add the manifest file
-                var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
-                var manifestBytes = Encoding.UTF8.GetBytes(manifestContent);
-                
-                var manifestEntry = new ICSharpCode.SharpZipLib.Zip.ZipEntry("_MANIFEST.txt")
-                {
-                    DateTime = DateTime.Now,
-                    Size = manifestBytes.Length
-                };
-                
-                // Set AES encryption if password is provided
-                if (!string.IsNullOrEmpty(password))
-                {
-                    manifestEntry.AESKeySize = 256;
-                }
-                
-                zipOutputStream.PutNextEntry(manifestEntry);
-                zipOutputStream.Write(manifestBytes, 0, manifestBytes.Length);
-                zipOutputStream.CloseEntry();
+                var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
+                Debug.WriteLine($"[ReZipCategoryAsync] Found {files.Length} files in folder");
+                var folderName = new DirectoryInfo(folderPath).Name;
 
-                // Add all folder contents
-                foreach (var folderPath in folderPaths)
+                foreach (var file in files)
                 {
-                    if (!Directory.Exists(folderPath))
-                        continue;
-
-                    var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-                    var folderName = new DirectoryInfo(folderPath).Name;
-
-                    foreach (var file in files)
+                    try
                     {
-                        try
+                        var fileInfo = new FileInfo(file);
+                        var relativePath = Path.GetRelativePath(folderPath, file);
+                        var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
+                        
+                        var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
                         {
-                            var fileInfo = new FileInfo(file);
-                            var relativePath = Path.GetRelativePath(folderPath, file);
-                            var entryName = Path.Combine(folderName, relativePath).Replace(Path.DirectorySeparatorChar, '/');
-                            
-                            var entry = new ICSharpCode.SharpZipLib.Zip.ZipEntry(entryName)
-                            {
-                                DateTime = fileInfo.LastWriteTime,
-                                Size = fileInfo.Length
-                            };
-                            
-                            // Set AES encryption if password is provided
-                            if (!string.IsNullOrEmpty(password))
-                            {
-                                entry.AESKeySize = 256;
-                            }
-                            
-                            zipOutputStream.PutNextEntry(entry);
-                            
-                            using var fileStream = File.OpenRead(file);
-                            fileStream.CopyTo(zipOutputStream);
-                            
-                            zipOutputStream.CloseEntry();
-                        }
-                        catch (Exception ex)
+                            DateTime = fileInfo.LastWriteTime,
+                            Size = fileInfo.Length
+                        };
+                        
+                        // Set AES encryption if password is provided
+                        if (!string.IsNullOrEmpty(password))
                         {
-                            Debug.WriteLine($"[ReZipCategoryAsync] Error adding file {file}: {ex.Message}");
-                            // Continue with other files
+                            entry.AESKeySize = 256;
                         }
+                        
+                        zipOutputStream.PutNextEntry(entry);
+                        
+                        // Read and write file contents
+                        using (var inputFileStream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        {
+                            inputFileStream.CopyTo(zipOutputStream);
+                        }
+                        
+                        zipOutputStream.CloseEntry();
+                        filesAdded++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[ReZipCategoryAsync] Error adding file {file}: {ex.Message}");
+                        // Continue with other files
                     }
                 }
-
-                zipOutputStream.Finish();
             }
+
+            Debug.WriteLine($"[ReZipCategoryAsync] Added {filesAdded} entries to zip");
+            
+            // CRITICAL: Finish writing the central directory
+            Debug.WriteLine($"[ReZipCategoryAsync] Calling Finish()...");
+            zipOutputStream.Finish();
+            
+            // Flush the zip stream
+            Debug.WriteLine($"[ReZipCategoryAsync] Calling Flush()...");
+            zipOutputStream.Flush();
+            
+            // Close the zip stream (this writes any remaining data)
+            Debug.WriteLine($"[ReZipCategoryAsync] Closing zip stream...");
+            zipOutputStream.Close();
+            
+            // Now flush and close the file stream
+            Debug.WriteLine($"[ReZipCategoryAsync] Flushing file stream...");
+            fileStream.Flush(true); // Force flush to disk
+            
+            Debug.WriteLine($"[ReZipCategoryAsync] Closing file stream...");
+            fileStream.Close();
+            
+            Debug.WriteLine($"[ReZipCategoryAsync] Successfully created zip file: {zipFilePath}");
         });
+        
+        Debug.WriteLine($"[ReZipCategoryAsync] Task.Run completed, checking file...");
+        
+        // Verify the file was created and is valid
+        if (!File.Exists(zipFilePath))
+        {
+            throw new IOException($"Zip file was not created: {zipFilePath}");
+        }
+        
+        var createdFileInfo = new FileInfo(zipFilePath);
+        Debug.WriteLine($"[ReZipCategoryAsync] Zip file size: {createdFileInfo.Length} bytes");
+        
+        if (createdFileInfo.Length < 22) // Minimum valid zip file size (empty zip with end of central directory)
+        {
+            throw new IOException($"Zip file is too small to be valid: {createdFileInfo.Length} bytes");
+        }
     }
 
     /// <summary>

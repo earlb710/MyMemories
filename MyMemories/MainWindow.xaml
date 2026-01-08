@@ -188,6 +188,27 @@
                             <local:TreeNodeTemplateSelector.LinkTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <!-- Tooltip for entire link item showing URL status -->
+                                        <ToolTipService.ToolTip>
+                                            <ToolTip Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}">
+                                                <StackPanel Spacing="4" MaxWidth="400">
+                                                    <TextBlock 
+                                                        Text="{Binding Content.UrlStatusDisplayText, Mode=OneWay}" 
+                                                        FontWeight="SemiBold"
+                                                        TextWrapping="Wrap"/>
+                                                    <TextBlock 
+                                                        Text="{Binding Content.UrlStatusMessage, Mode=OneWay}" 
+                                                        TextWrapping="Wrap"
+                                                        Visibility="{Binding Content.HasUrlStatusMessage, Mode=OneWay}"/>
+                                                    <TextBlock 
+                                                        Text="{Binding Content.UrlLastCheckedText, Mode=OneWay}" 
+                                                        FontStyle="Italic"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        Visibility="{Binding Content.HasUrlLastChecked, Mode=OneWay}"/>
+                                                </StackPanel>
+                                            </ToolTip>
+                                        </ToolTipService.ToolTip>
+                                        
                                         <!-- Icon Container with Overlay Badges -->
                                         <Grid Width="20" Height="20">
                                             <!-- Primary Icon -->
@@ -277,13 +298,15 @@
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
                                                 Margin="0,0,-2,0"
-                                                Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}">
+                                                Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}"
+                                                PointerEntered="UrlStatusBadge_PointerEntered"
+                                                PointerExited="UrlStatusBadge_PointerExited">
                                                 <Ellipse.Fill>
                                                     <SolidColorBrush Color="{Binding Content.UrlStatusColor, Mode=OneWay}"/>
                                                 </Ellipse.Fill>
                                                 <ToolTipService.ToolTip>
                                                     <ToolTip>
-                                                        <TextBlock>
+                                                        <TextBlock TextWrapping="Wrap" MaxWidth="400">
                                                             <TextBlock.Text>
                                                                 <Binding Path="Content.UrlStatus" Mode="OneWay">
                                                                     <Binding.Converter>
@@ -318,13 +341,13 @@
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Edit Category" Icon="Edit" Click="CategoryMenu_Edit_Click"/>
-                            <MenuFlyoutItem Text="Change Password" Click="CategoryMenu_ChangePassword_Click">
+                            <MenuFlyoutItem x:Name="CategoryMenu_ChangePassword" Text="Change Password" Click="CategoryMenu_ChangePassword_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE72E;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Zip Category" Click="CategoryMenu_ZipCategory_Click">
+                            <MenuFlyoutItem x:Name="CategoryMenu_ZipCategory" Text="Zip Category" Click="CategoryMenu_ZipCategory_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE7B8;"/>
                                 </MenuFlyoutItem.Icon>
@@ -347,33 +370,33 @@
                         
                         <!-- Context Menu for Link Nodes -->
                         <MenuFlyout x:Key="LinkContextMenu">
-                            <MenuFlyoutItem Text="Move Link" Click="LinkMenu_Move_Click">
+                            <MenuFlyoutItem x:Name="LinkMenu_Move" Text="Move Link" Click="LinkMenu_Move_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8DE;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
-                            <MenuFlyoutItem Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
-                            <MenuFlyoutItem Text="Change Password" Click="LinkMenu_ChangePassword_Click">
+                            <MenuFlyoutItem x:Name="LinkMenu_Edit" Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
+                            <MenuFlyoutItem x:Name="LinkMenu_ChangePassword" Text="Change Password" Click="LinkMenu_ChangePassword_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE72E;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Explore Here" Click="LinkMenu_ExploreHere_Click">
+                            <MenuFlyoutItem x:Name="LinkMenu_ExploreHere" Text="Explore Here" Click="LinkMenu_ExploreHere_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8DA;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Zip Folder" Click="LinkMenu_ZipFolder_Click">
+                            <MenuFlyoutItem x:Name="LinkMenu_ZipFolder" Text="Zip Folder" Click="LinkMenu_ZipFolder_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE7B8;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
+                            <MenuFlyoutItem x:Name="LinkMenu_Remove" Text="Remove Link" Icon="Delete" Click="LinkMenu_Remove_Click"/>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="Sort Catalog..." Click="LinkMenu_SortCatalog_Click">
+                            <MenuFlyoutItem x:Name="LinkMenu_SortCatalog" Text="Sort Catalog..." Click="LinkMenu_SortCatalog_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8CB;"/>
                                 </MenuFlyoutItem.Icon>

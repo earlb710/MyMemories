@@ -186,6 +186,45 @@ public class LinkItem : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Gets the display text for URL status in tooltips.
+    /// </summary>
+    [JsonIgnore]
+    public string UrlStatusDisplayText
+    {
+        get
+        {
+            return UrlStatus switch
+            {
+                UrlStatus.Accessible => "✓ URL is accessible",
+                UrlStatus.Error => "⚠ URL returned an error",
+                UrlStatus.NotFound => "✗ URL not found",
+                UrlStatus.Unknown => "URL status not checked",
+                _ => "URL status unknown"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Gets whether there is a URL status message to display.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasUrlStatusMessage => !string.IsNullOrWhiteSpace(UrlStatusMessage) ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// Gets whether the URL last checked date is available.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasUrlLastChecked => UrlLastChecked.HasValue ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// Gets formatted text for when the URL was last checked.
+    /// </summary>
+    [JsonIgnore]
+    public string UrlLastCheckedText => UrlLastChecked.HasValue 
+        ? $"Last checked: {UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}" 
+        : string.Empty;
+
     public DateTime? LastCatalogUpdate
     {
         get => _lastCatalogUpdate;

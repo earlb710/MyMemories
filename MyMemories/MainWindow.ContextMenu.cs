@@ -25,15 +25,135 @@ public sealed partial class MainWindow
 
         _contextMenuNode = node;
 
-        var menu = node.Content switch
+        MenuFlyout? menu = null;
+        
+        if (node.Content is CategoryItem category)
         {
-            CategoryItem => LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout,
-            LinkItem => LinksTreeView.Resources["LinkContextMenu"] as MenuFlyout,
-            _ => null
-        };
+            menu = LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout;
+            if (menu != null)
+            {
+                ConfigureCategoryContextMenu(menu, category, node);
+            }
+        }
+        else if (node.Content is LinkItem linkItem)
+        {
+            menu = LinksTreeView.Resources["LinkContextMenu"] as MenuFlyout;
+            if (menu != null)
+            {
+                ConfigureLinkContextMenu(menu, linkItem, node);
+            }
+        }
 
         menu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Configures the category context menu based on the node's properties.
+    /// </summary>
+    private void ConfigureCategoryContextMenu(MenuFlyout menu, CategoryItem category, TreeViewNode node)
+    {
+        // Get menu items by name
+        var changePasswordItem = FindMenuItemByName(menu, "CategoryMenu_ChangePassword");
+        var zipCategoryItem = FindMenuItemByName(menu, "CategoryMenu_ZipCategory");
+
+        // Change Password: only enabled for root categories
+        bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
+        if (changePasswordItem != null)
+        {
+            changePasswordItem.IsEnabled = isRootCategory;
+        }
+
+        // Zip Category: check if category has any folders
+        if (zipCategoryItem != null)
+        {
+            var statisticsService = new CategoryStatisticsService();
+            var folderPaths = statisticsService.CollectFolderPathsFromCategory(node);
+            zipCategoryItem.IsEnabled = folderPaths.Count > 0;
+        }
+
+        // All other category menu items are always enabled
+        // - Add Link
+        // - Add Subcategory
+        // - Edit
+        // - Statistics
+        // - Sort By
+        // - Remove
+    }
+
+    /// <summary>
+    /// Configures the link context menu based on the link's properties.
+    /// </summary>
+    private void ConfigureLinkContextMenu(MenuFlyout menu, LinkItem link, TreeViewNode node)
+    {
+        // Get menu items by name
+        var editItem = FindMenuItemByName(menu, "LinkMenu_Edit");
+        var moveItem = FindMenuItemByName(menu, "LinkMenu_Move");
+        var removeItem = FindMenuItemByName(menu, "LinkMenu_Remove");
+        var changePasswordItem = FindMenuItemByName(menu, "LinkMenu_ChangePassword");
+        var zipFolderItem = FindMenuItemByName(menu, "LinkMenu_ZipFolder");
+        var exploreHereItem = FindMenuItemByName(menu, "LinkMenu_ExploreHere");
+        var sortCatalogItem = FindMenuItemByName(menu, "LinkMenu_SortCatalog");
+
+        // Check conditions
+        bool isCatalogEntry = link.IsCatalogEntry;
+        bool isZipFile = link.IsDirectory && link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        bool isDirectory = link.IsDirectory;
+        bool isZipOrDirectory = isZipFile || (isDirectory && Directory.Exists(link.Url));
+        bool hasCatalog = isDirectory && node.Children.Count > 0;
+
+        // Edit, Move, Remove: disabled for catalog entries
+        if (editItem != null)
+        {
+            editItem.IsEnabled = !isCatalogEntry;
+        }
+        if (moveItem != null)
+        {
+            moveItem.IsEnabled = !isCatalogEntry;
+        }
+        if (removeItem != null)
+        {
+            removeItem.IsEnabled = !isCatalogEntry;
+        }
+
+        // Change Password: only for zip files
+        if (changePasswordItem != null)
+        {
+            changePasswordItem.IsEnabled = isZipFile;
+        }
+
+        // Zip Folder: only for non-zip, non-catalog directories
+        if (zipFolderItem != null)
+        {
+            zipFolderItem.IsEnabled = isDirectory && !isZipFile && !isCatalogEntry;
+        }
+
+        // Explore Here: only for directories and zip files (that exist)
+        if (exploreHereItem != null)
+        {
+            exploreHereItem.IsEnabled = isZipOrDirectory;
+        }
+
+        // Sort Catalog: only for directories with catalog entries
+        if (sortCatalogItem != null)
+        {
+            sortCatalogItem.IsEnabled = isDirectory && hasCatalog;
+        }
+    }
+
+    /// <summary>
+    /// Finds a menu flyout item by its x:Name property.
+    /// </summary>
+    private MenuFlyoutItem? FindMenuItemByName(MenuFlyout menu, string name)
+    {
+        foreach (var item in menu.Items)
+        {
+            if (item is MenuFlyoutItem menuItem && menuItem.Name == name)
+            {
+                return menuItem;
+            }
+        }
+        return null;
     }
 
     private async void CategoryMenu_AddLink_Click(object sender, RoutedEventArgs e)

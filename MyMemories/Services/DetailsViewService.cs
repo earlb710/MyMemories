@@ -1352,22 +1352,30 @@ public class DetailsViewService
             {
                 try
                 {
-                    // Try standard .NET first
-                    using var archive = ZipFile.OpenRead(zipFilePath);
-                    return archive.GetEntry("_MANIFEST.txt") != null;
+                    // Try standard .NET first - ensure using statement properly closes
+                    using (var archive = ZipFile.OpenRead(zipFilePath))
+                    {
+                        return archive.GetEntry("_MANIFEST.txt") != null;
+                    }
                 }
                 catch (InvalidDataException)
                 {
-                    // Might be password-protected, try SharpZipLib
+                    // Might be password-protected, try SharpZipLib - ensure proper disposal
                     try
                     {
-                        using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipFilePath);
-                        return zipFile.GetEntry("_MANIFEST.txt") != null;
+                        using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipFilePath))
+                        {
+                            return zipFile.GetEntry("_MANIFEST.txt") != null;
+                        }
                     }
                     catch
                     {
                         return false;
                     }
+                }
+                catch
+                {
+                    return false;
                 }
             });
         }
@@ -1391,30 +1399,38 @@ public class DetailsViewService
             {
                 try
                 {
-                    // Try standard .NET first
-                    using var archive = ZipFile.OpenRead(zipFilePath);
-                    var manifestEntry = archive.GetEntry("_MANIFEST.txt");
-                    
-                    if (manifestEntry == null)
-                        return null;
-
-                    using var stream = manifestEntry.Open();
-                    using var reader = new StreamReader(stream);
-                    var content = reader.ReadToEnd();
-
-                    // Parse the manifest to find "Root Category: [name]"
-                    var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
-                    if (match.Success)
+                    // Try standard .NET first - ensure proper disposal
+                    using (var archive = ZipFile.OpenRead(zipFilePath))
                     {
-                        return match.Groups[1].Value.Trim();
-                    }
+                        var manifestEntry = archive.GetEntry("_MANIFEST.txt");
+                        
+                        if (manifestEntry == null)
+                            return null;
 
-                    return null;
+                        using (var stream = manifestEntry.Open())
+                        using (var reader = new StreamReader(stream))
+                        {
+                            var content = reader.ReadToEnd();
+
+                            // Parse the manifest to find "Root Category: [name]"
+                            var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
+                            if (match.Success)
+                            {
+                                return match.Groups[1].Value.Trim();
+                            }
+
+                            return null;
+                        }
+                    }
                 }
                 catch (InvalidDataException)
                 {
                     // Password-protected zip - can't read manifest without password
                     return "Password Protected";
+                }
+                catch
+                {
+                    return null;
                 }
             });
         }

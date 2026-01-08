@@ -1,8 +1,10 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using MyMemories.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace MyMemories;
@@ -47,6 +49,120 @@ public sealed partial class MainWindow
                 ShowViewer,
                 status => StatusText.Text = status,
                 RefreshBookmarksAsync);
+        }
+        
+        // Attach pointer events to show URL status in status bar
+        AttachPointerEventsToTreeViewItems();
+    }
+    
+    /// <summary>
+    /// Attaches pointer events to TreeView items to show URL status information in status bar.
+    /// </summary>
+    private void AttachPointerEventsToTreeViewItems()
+    {
+        // Find all TreeViewItem controls
+        var items = FindVisualChildren<TreeViewItem>(LinksTreeView);
+        
+        foreach (var item in items)
+        {
+            // Remove old handlers to avoid duplicates
+            item.PointerEntered -= TreeViewItem_PointerEntered;
+            item.PointerExited -= TreeViewItem_PointerExited;
+            
+            // Add new handlers
+            item.PointerEntered += TreeViewItem_PointerEntered;
+            item.PointerExited += TreeViewItem_PointerExited;
+        }
+    }
+    
+    /// <summary>
+    /// Handles pointer entering a TreeViewItem to show URL status in status bar.
+    /// </summary>
+    private void TreeViewItem_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is TreeViewItem item && item.Content is TreeViewNode node && node.Content is LinkItem link)
+        {
+            // Check if this is a web URL with status information
+            if (!link.IsDirectory && 
+                Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && 
+                !uri.IsFile)
+            {
+                if (link.UrlStatus != UrlStatus.Unknown)
+                {
+                    // Build status message
+                    var statusMessage = link.UrlStatus switch
+                    {
+                        UrlStatus.Accessible => "? URL is accessible",
+                        UrlStatus.Error => "? URL error",
+                        UrlStatus.NotFound => "? URL not found",
+                        _ => "URL status unknown"
+                    };
+                    
+                    if (!string.IsNullOrWhiteSpace(link.UrlStatusMessage))
+                    {
+                        statusMessage += $" | Status: {link.UrlStatusMessage}";
+                    }
+                    
+                    if (link.UrlLastChecked.HasValue)
+                    {
+                        statusMessage += $" | Last checked: {link.UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}";
+                    }
+                    
+                    StatusText.Text = statusMessage;
+                }
+                else
+                {
+                    StatusText.Text = "URL status not checked | Click 'Refresh URL State' on category to check";
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Handles pointer exiting a TreeViewItem to restore default status.
+    /// </summary>
+    private void TreeViewItem_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        StatusText.Text = "Ready";
+    }
+    
+    /// <summary>
+    /// Handles pointer entering URL status badge to show detailed information.
+    /// </summary>
+    private void UrlStatusBadge_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        // The TreeViewItem event handler will already show the status
+        // This just ensures the badge itself also triggers the status update
+    }
+    
+    /// <summary>
+    /// Handles pointer exiting URL status badge.
+    /// </summary>
+    private void UrlStatusBadge_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        StatusText.Text = "Ready";
+    }
+    
+    /// <summary>
+    /// Finds all visual children of a specific type in the visual tree.
+    /// </summary>
+    private IEnumerable<T> FindVisualChildren<T>(DependencyObject depObj) where T : DependencyObject
+    {
+        if (depObj == null) yield break;
+
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(depObj); i++)
+        {
+            var child = VisualTreeHelper.GetChild(depObj, i);
+            
+            if (child is T typedChild)
+            {
+                yield return typedChild;
+            }
+
+            foreach (var childOfChild in FindVisualChildren<T>(child))
+            {
+                yield return childOfChild;
+            }
         }
     }
 

@@ -4,7 +4,7 @@ using System;
 namespace MyMemories;
 
 /// <summary>
-/// Converts UrlStatus enum to tooltip text.
+/// Converts UrlStatus enum to tooltip text with additional details.
 /// </summary>
 public class UrlStatusToTooltipConverter : IValueConverter
 {
@@ -14,10 +14,10 @@ public class UrlStatusToTooltipConverter : IValueConverter
         {
             return status switch
             {
-                UrlStatus.Accessible => "URL is accessible",
-                UrlStatus.Error => "URL returned an error",
-                UrlStatus.NotFound => "URL not found",
-                UrlStatus.Unknown => "URL status unknown",
+                UrlStatus.Accessible => "? URL is accessible\n\nClick to view the webpage",
+                UrlStatus.Error => "? URL returned an error\n\nThe server responded with an error status.\nHover over the link item for details.",
+                UrlStatus.NotFound => "? URL not found\n\nThe page does not exist or the server is unreachable.\nHover over the link item for details.",
+                UrlStatus.Unknown => "? URL status unknown\n\nClick 'Refresh URL State' on the category\nto check URL accessibility.",
                 _ => "URL status unknown"
             };
         }

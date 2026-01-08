@@ -219,7 +219,7 @@ public class LinkSelectionService
             // Check if this is a temporary state (URL is empty means operation in progress)
             if (string.IsNullOrEmpty(linkItem.Url))
             {
-                setStatus("? Operation in progress - please wait...");
+                setStatus("Operation in progress - please wait...");
             }
             else
             {

@@ -38,6 +38,72 @@ public class ZipCatalogService
             
             Debug.WriteLine($"[CatalogZipFileAsync] Cataloging zip file: {zipPath}");
 
+            // Wait for file to be fully available with retry logic
+            int maxWaitAttempts = 10;
+            bool fileReady = false;
+            
+            for (int i = 0; i < maxWaitAttempts; i++)
+            {
+                try
+                {
+                    // Try to open the file exclusively to verify it's not locked
+                    using (var testStream = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        // Check if file has minimum valid zip size (end of central directory = 22 bytes)
+                        if (testStream.Length < 22)
+                        {
+                            Debug.WriteLine($"[CatalogZipFileAsync] Zip file too small ({testStream.Length} bytes), waiting...");
+                            throw new IOException("Zip file not ready");
+                        }
+                        
+                        // Look for end of central directory signature (PK\x05\x06)
+                        // It can be anywhere in the last 65557 bytes (65535 comment + 22 EOCD)
+                        var searchLength = Math.Min(testStream.Length, 65557);
+                        testStream.Seek(-searchLength, SeekOrigin.End);
+                        
+                        var buffer = new byte[searchLength];
+                        var bytesRead = testStream.Read(buffer, 0, (int)searchLength);
+                        
+                        bool found = false;
+                        // Search backwards for the signature
+                        for (int j = bytesRead - 22; j >= 0; j--)
+                        {
+                            if (buffer[j] == 0x50 && buffer[j + 1] == 0x4b && 
+                                buffer[j + 2] == 0x05 && buffer[j + 3] == 0x06)
+                            {
+                                found = true;
+                                Debug.WriteLine($"[CatalogZipFileAsync] Found EOCD signature at offset {j} from search start");
+                                break;
+                            }
+                        }
+                        
+                        if (!found)
+                        {
+                            Debug.WriteLine($"[CatalogZipFileAsync] Cannot find central directory signature in {bytesRead} bytes, waiting...");
+                            throw new IOException("Central directory not found");
+                        }
+                        
+                        Debug.WriteLine($"[CatalogZipFileAsync] Zip file is ready (size: {testStream.Length} bytes)");
+                        fileReady = true;
+                    }
+                    break; // File is ready
+                }
+                catch (IOException ex) when (i < maxWaitAttempts - 1)
+                {
+                    Debug.WriteLine($"[CatalogZipFileAsync] Attempt {i + 1}/{maxWaitAttempts}: {ex.Message}");
+                    await Task.Delay(500 * (i + 1)); // Increasing delay: 500ms, 1s, 1.5s, etc.
+                    
+                    // Force GC to release any handles
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                }
+            }
+            
+            if (!fileReady)
+            {
+                throw new IOException($"Zip file is not valid after {maxWaitAttempts} attempts. The central directory could not be found.");
+            }
+
             // Read zip archive on background thread and collect data
             var catalogData = await Task.Run(() =>
             {
@@ -114,7 +180,7 @@ public class ZipCatalogService
                 var catalogEntry = new LinkItem
                 {
                     Title = entryName,
-                    Url = $"{zipPath}::{fullName}",  // CHANGED: Use zipPath instead of zipLinkItem.Url
+                    Url = $"{zipPath}::{fullName}",
                     Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
                     IsDirectory = isDirectory,
                     CategoryPath = zipLinkItem.CategoryPath,
@@ -127,7 +193,7 @@ public class ZipCatalogService
 
                 var catalogNode = new TreeViewNode { Content = catalogEntry };
 
-                // If it's a directory, catalog its contents recursively - USE zipPath
+                // If it's a directory, catalog its contents recursively
                 if (isDirectory)
                 {
                     await CatalogZipDirectoryRecursiveAsync(zipPath, fullName, catalogNode, zipLinkItem);
@@ -209,7 +275,6 @@ public class ZipCatalogService
                             // Direct children only
                             bool isDirectChild = pathParts.Length == 1 || 
                                                (pathParts.Length == 2 && string.IsNullOrEmpty(pathParts[1]));
-                            
 
                             if (isDirectChild)
                             {
@@ -242,7 +307,7 @@ public class ZipCatalogService
             var catalogEntry = new LinkItem
             {
                 Title = entryName,
-                Url = $"{zipPath}::{fullName}",  // CHANGED: Use zipPath instead of zipLinkItem.Url
+                Url = $"{zipPath}::{fullName}",
                 Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
                 IsDirectory = isDirectory,
                 CategoryPath = zipLinkItem.CategoryPath,

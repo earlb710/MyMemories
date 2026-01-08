@@ -155,7 +155,7 @@ public sealed partial class MainWindow
                 // Create busy indicator child node
                 var busyLinkItem = new LinkItem
                 {
-                    Title = "⏳ Busy creating...",
+                    Title = "Busy creating...",
                     Url = string.Empty,
                     Description = "Zip archive is being created",
                     IsDirectory = false,
