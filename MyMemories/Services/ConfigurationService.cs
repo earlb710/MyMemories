@@ -49,7 +49,17 @@ public class ConfigurationService
                     _config.WorkingDirectory = _defaultDataFolder;
                 }
                 
-                // DO NOT set a default log directory - it should remain null/empty unless explicitly set
+                // Set default log directory if not configured (enable logging by default)
+                if (string.IsNullOrEmpty(_config.LogDirectory))
+                {
+                    _config.LogDirectory = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "MyMemories",
+                        "Logs"
+                    );
+                    // Save the updated config with the new log directory
+                    await SaveConfigurationAsync();
+                }
             }
             catch (Exception ex)
             {
@@ -75,10 +85,17 @@ public class ConfigurationService
 
     private AppConfiguration CreateDefaultConfiguration()
     {
+        // Create a default log directory in the app data folder
+        var defaultLogDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "MyMemories",
+            "Logs"
+        );
+        
         return new AppConfiguration
         {
             WorkingDirectory = _defaultDataFolder,
-            LogDirectory = string.Empty, // No default log directory
+            LogDirectory = defaultLogDirectory, // Enable logging by default
             GlobalPasswordHash = string.Empty,
             CategoryPasswords = new Dictionary<string, string>(),
             AuditLoggingEnabled = false,
@@ -329,10 +346,10 @@ public class ConfigurationService
             return;
         }
 
-        // Fallback to old method
+        // Fallback to direct file write (shouldn't happen if InitializeLoggingServices was called)
         try
         {
-            var logFilePath = Path.Combine(_config.LogDirectory, "errors.log");
+            var logFilePath = Path.Combine(_config.LogDirectory, "error.log");
             
             var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             var logEntry = $"[{timestamp}] ERROR: {errorMessage}";

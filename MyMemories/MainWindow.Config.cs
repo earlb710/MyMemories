@@ -282,7 +282,8 @@ public sealed partial class MainWindow
             Text = _configService?.WorkingDirectory ?? string.Empty,
             PlaceholderText = "Type or select working directory...",
             IsReadOnly = false,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            MinWidth = 720  // 20% wider than 600
         };
 
         var workingDirButtonPanel = new StackPanel
@@ -351,7 +352,8 @@ public sealed partial class MainWindow
             Text = _configService?.LogDirectory ?? string.Empty,
             PlaceholderText = "Type or select log directory (leave empty to disable)...",
             IsReadOnly = false,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            MinWidth = 720  // Same as working directory
         };
 
         var logDirButtonPanel = new StackPanel
@@ -708,6 +710,10 @@ public sealed partial class MainWindow
                     logFilesListView.Visibility = Visibility.Collapsed;
                     logFilesHeader.Visibility = Visibility.Collapsed;
                     logViewerPanel.Visibility = Visibility.Visible;
+                    
+                    // Scroll to bottom of log file after content is loaded
+                    await Task.Delay(50); // Small delay to ensure UI is rendered
+                    logContentScrollViewer.ChangeView(null, logContentScrollViewer.ScrollableHeight, null, disableAnimation: true);
                 }
                 catch (Exception ex)
                 {
@@ -716,24 +722,7 @@ public sealed partial class MainWindow
             }
         };
 
-        // Initial population of log files list
-        RefreshLogFilesList(logDirTextBox.Text);
-
-        // Update list when log directory text changes
-        logDirTextBox.TextChanged += (s, args) =>
-        {
-            // Hide viewer and show list when directory changes
-            logViewerPanel.Visibility = Visibility.Collapsed;
-            logFilesHeader.Visibility = Visibility.Visible;
-            RefreshLogFilesList(logDirTextBox.Text.Trim());
-        };
-
-        // Update list when browse button is used
-        browseLogButton.Click += (s, args) =>
-        {
-            RefreshLogFilesList(logDirTextBox.Text.Trim());
-        };
-
+        // Log file viewer panel initialization (moved up for clarity)
         stackPanel.Children.Add(logFilesListView);
         stackPanel.Children.Add(logFilesEmptyText);
         stackPanel.Children.Add(logViewerPanel);
@@ -741,11 +730,11 @@ public sealed partial class MainWindow
         // Logging info
         var loggingInfo = new TextBlock
         {
-            Text = "📋 If the log directory is set, all changes to root categories and errors will be logged with timestamps.\n\n" +
-                   "• Category changes: Saved to [CategoryName].log\n" +
-                   "• Application errors: Saved to errors.log\n\n" +
-                   "⚠️ Leave empty to disable logging entirely.\n\n" +
-                   "💡 Tip: You can type or paste directory paths directly into the text boxes.",
+            Text = "📋 Logging is enabled by default. Category operations are logged to:\n" +
+                   "• [CategoryName].log - All category operations (add, remove, rename, changes)\n" +
+                   "• error.log - Application errors\n\n" +
+                   "Default location: %LocalAppData%\\MyMemories\\Logs\n\n" +
+                   "💡 Tip: You can change the log directory or clear it to disable logging.",
             FontSize = 12,
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
             TextWrapping = TextWrapping.Wrap,
@@ -753,19 +742,33 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(loggingInfo);
 
+        // Set explicit width on the stack panel to force the dialog wider
+        stackPanel.Width = 700;
+
+        var scrollViewer = new ScrollViewer
+        {
+            Content = stackPanel,
+            MaxHeight = 700,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Width = 700
+        };
+
         var dialog = new ContentDialog
         {
             Title = "Directory Setup",
-            Content = new ScrollViewer
-            {
-                Content = stackPanel,
-                MaxHeight = 700
-            },
+            Content = scrollViewer,
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot,
-            MinWidth = 900
+            XamlRoot = Content.XamlRoot
+        };
+
+        // Add a Loaded event handler to debug the actual width
+        dialog.Loaded += (s, e) =>
+        {
+            System.Diagnostics.Debug.WriteLine($"[Directory Setup Dialog] Loaded - ActualWidth: {dialog.ActualWidth}, Width: {dialog.Width}");
+            System.Diagnostics.Debug.WriteLine($"[Directory Setup Dialog] StackPanel ActualWidth: {stackPanel.ActualWidth}, Width: {stackPanel.Width}");
+            System.Diagnostics.Debug.WriteLine($"[Directory Setup Dialog] ScrollViewer ActualWidth: {scrollViewer.ActualWidth}, Width: {scrollViewer.Width}");
         };
 
         var result = await dialog.ShowAsync();

@@ -212,7 +212,6 @@ public class CategoryDialogBuilder
         CheckBox? isBookmarkLookupCheckBox = null;
         CheckBox? isAuditLoggingCheckBox = null;
         TextBlock? inheritedNote = null;
-        TextBlock? nonUrlChildrenNote = null;
         
         // Only create bookmark checkbox if category doesn't have non-URL children
         // (or if it's already a bookmark category - in which case it shouldn't have non-URL children)
@@ -269,19 +268,7 @@ public class CategoryDialogBuilder
                 };
             }
         }
-        else
-        {
-            // Category has non-URL children, show a note explaining why the option is hidden
-            nonUrlChildrenNote = new TextBlock
-            {
-                Text = "ℹ️ URL Bookmarks Only option is hidden because this category contains non-URL links (files or folders).",
-                FontSize = 11,
-                FontStyle = FontStyle.Italic,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 8)
-            };
-        }
+        // If category has non-URL children, the bookmark option is simply not shown (no message needed)
         
         // Audit Logging checkbox (only for root categories when logging is enabled)
         if (isRootCategory && _configService != null && _configService.IsLoggingEnabled())
@@ -407,7 +394,7 @@ public class CategoryDialogBuilder
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryDescriptionTextBox);
 
-        // URL Bookmarks checkbox (always show for all categories)
+        // URL Bookmarks checkbox - show for all categories, but hide if has non-URL children
         if (isBookmarkCategoryCheckBox != null)
         {
             stackPanel.Children.Add(isBookmarkCategoryCheckBox);
@@ -423,12 +410,6 @@ public class CategoryDialogBuilder
             {
                 stackPanel.Children.Add(isBookmarkLookupCheckBox);
             }
-        }
-
-        // Non-URL children note (conditionally shown)
-        if (nonUrlChildrenNote != null)
-        {
-            stackPanel.Children.Add(nonUrlChildrenNote);
         }
 
         // Audit Logging (only for root categories and when logging is enabled)

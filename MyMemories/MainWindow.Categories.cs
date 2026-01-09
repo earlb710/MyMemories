@@ -69,23 +69,27 @@ public sealed partial class MainWindow
             };
 
             _treeViewService!.InsertCategoryNode(categoryNode);
+            
+            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Category node inserted: '{result.Name}'");
+            
             await _categoryService!.SaveCategoryAsync(categoryNode);
+            
+            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Category saved to file");
 
-            // Log the category creation to SYSTEM log (persists even if category is later deleted)
-            if (_configService?.IsLoggingEnabled() == true)
+            // Log the category creation to the category's own log
+            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] About to log category creation");
+            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] IsLoggingEnabled: {_configService?.IsLoggingEnabled()}");
+            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] AuditLogService != null: {_configService?.AuditLogService != null}");
+            
+            if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
             {
-                // Try AuditLogService first
-                if (_configService.AuditLogService != null)
-                {
-                    await _configService.AuditLogService.LogCategoryAddedToSystemLogAsync(result.Name, result.Description);
-                }
-                // Fallback to ErrorLogService if AuditLogService is not available
-                else if (_configService.ErrorLogService != null)
-                {
-                    await _configService.ErrorLogService.LogWarningAsync(
-                        $"Category created: {result.Name}" + (!string.IsNullOrEmpty(result.Description) ? $" - {result.Description}" : ""),
-                        "MainWindow.CreateCategoryButton_Click");
-                }
+                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Calling LogCategoryAddedAsync for '{result.Name}', Description: '{result.Description}'");
+                await _configService.AuditLogService.LogCategoryAddedAsync(result.Name, result.Description);
+                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] LogCategoryAddedAsync completed");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Logging SKIPPED - IsLoggingEnabled: {_configService?.IsLoggingEnabled()}, AuditLogService: {_configService?.AuditLogService != null}");
             }
 
             StatusText.Text = $"Created category: {result.Name}";
@@ -139,6 +143,22 @@ public sealed partial class MainWindow
             await _categoryService!.SaveCategoryAsync(GetRootCategoryNode(parentNode));
 
             var fullPath = _treeViewService.GetCategoryPath(subCategoryNode);
+            
+            // Log subcategory creation to the root category's log
+            if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
+            {
+                var rootNode = GetRootCategoryNode(parentNode);
+                if (rootNode?.Content is CategoryItem rootCategory)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateSubCategoryAsync] Logging subcategory creation to root '{rootCategory.Name}.log'");
+                    await _configService.AuditLogService.LogAsync(
+                        rootCategory.Name,
+                        Services.AuditLogType.Add,
+                        $"Subcategory {result.Name} created",
+                        $"Path: {fullPath}");
+                }
+            }
+            
             StatusText.Text = $"Created sub category: {fullPath}";
             
             // Update bookmark lookup categories in case new subcategory has lookup enabled
@@ -196,10 +216,10 @@ public sealed partial class MainWindow
 
         if (result != null)
         {
-            bool categoryRenamed = isRootCategory && oldCategoryName != result.Name;
+            bool categoryRenamed = oldCategoryName != result.Name;
             bool passwordChanged = isRootCategory && oldPasswordProtection != result.PasswordProtection;
             
-            if (categoryRenamed)
+            if (categoryRenamed && isRootCategory)
             {
                 // Delete the old category file
                 await _categoryService!.DeleteCategoryAsync(oldCategoryName);
@@ -208,8 +228,26 @@ public sealed partial class MainWindow
                 if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
                 {
                     await _configService.AuditLogService.RenameLogAsync(oldCategoryName, result.Name);
-                    // Log the rename to SYSTEM log (for tracking category changes)
-                    await _configService.AuditLogService.LogCategoryRenamedToSystemLogAsync(oldCategoryName, result.Name);
+                    // Log the rename to the category's own log
+                    await _configService.AuditLogService.LogCategoryRenamedAsync(result.Name, oldCategoryName, result.Name);
+                }
+            }
+            else if (categoryRenamed && !isRootCategory)
+            {
+                // Subcategory renamed - log to root category's log
+                if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
+                {
+                    var root = GetRootCategoryNode(node);
+                    if (root?.Content is CategoryItem rootCat)
+                    {
+                        var newPath = _treeViewService!.GetCategoryPath(node).Replace(oldCategoryName, result.Name);
+                        System.Diagnostics.Debug.WriteLine($"[EditCategoryAsync] Logging subcategory rename to root '{rootCat.Name}.log'");
+                        await _configService.AuditLogService.LogAsync(
+                            rootCat.Name,
+                            Services.AuditLogType.Change,
+                            $"Subcategory renamed from '{oldCategoryName}' to '{result.Name}'",
+                            $"Path: {newPath}");
+                    }
                 }
             }
 
@@ -319,10 +357,10 @@ public sealed partial class MainWindow
             var rootNode = GetRootCategoryNode(newNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
 
-            // Log password change to SYSTEM log if it occurred (and not already logged as part of rename)
+            // Log password change to category's log if it occurred (and not already logged as part of rename)
             if (passwordChanged && !categoryRenamed && _configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
             {
-                await _configService.AuditLogService.LogCategoryPasswordChangedToSystemLogAsync(result.Name, oldPasswordProtection, result.PasswordProtection);
+                await _configService.AuditLogService.LogCategoryPasswordChangedAsync(result.Name, oldPasswordProtection, result.PasswordProtection);
             }
 
             StatusText.Text = $"Updated category: {result.Name}";
@@ -344,10 +382,43 @@ public sealed partial class MainWindow
         int totalLinks = CountAllLinks(node);
         int totalSubcategories = CountAllSubcategories(node);
         
+        // Build a detailed message showing what will be deleted
+        string deleteMessage = $"Are you sure you want to delete '{category.Icon} {category.Name}'?";
+        
+        if (totalSubcategories > 0 || totalLinks > 0)
+        {
+            deleteMessage += "\n\nThis will delete:";
+            if (totalLinks > 0)
+            {
+                deleteMessage += $"\n  • {totalLinks} link{(totalLinks == 1 ? "" : "s")}";
+            }
+            if (totalSubcategories > 0)
+            {
+                deleteMessage += $"\n  • {totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
+                // Count links in subcategories
+                int subcategoryLinks = 0;
+                foreach (var child in node.Children)
+                {
+                    if (child.Content is CategoryItem)
+                    {
+                        subcategoryLinks += CountAllLinks(child);
+                    }
+                }
+                if (subcategoryLinks > 0)
+                {
+                    deleteMessage += $"\n  • {subcategoryLinks} link{(subcategoryLinks == 1 ? "" : "s")} within subcategories";
+                }
+            }
+        }
+        
         var confirmDialog = new ContentDialog
         {
             Title = "Delete Category",
-            Content = $"Are you sure you want to delete '{category.Icon} {category.Name}' and all its {totalLinks} link(s) and subcategories?",
+            Content = new TextBlock
+            {
+                Text = deleteMessage,
+                TextWrapping = TextWrapping.Wrap
+            },
             PrimaryButtonText = "Delete",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
@@ -360,32 +431,53 @@ public sealed partial class MainWindow
         {
             // Check if this is a root category by checking the RootNodes collection
             bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
+            
+            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Starting delete for '{category.Name}'");
+            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] IsRootCategory: {isRootCategory}");
+            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Total links: {totalLinks}, Total subcategories: {totalSubcategories}");
 
-            // Log the removal to SYSTEM log BEFORE actually deleting (so it persists)
-            if (isRootCategory)
+            // Log the removal - for root categories log to their own log, for subcategories log to root's log
+            if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
             {
-                // Debug: Check logging state
-                System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Logging enabled: {_configService?.IsLoggingEnabled()}");
-                System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] AuditLogService: {_configService?.AuditLogService != null}");
-                System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] ErrorLogService: {_configService?.ErrorLogService != null}");
-                System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Log directory: {_configService?.LogDirectory}");
-                
-                if (_configService?.IsLoggingEnabled() == true)
+                if (isRootCategory)
                 {
-                    // Try AuditLogService first (writes to system.log)
-                    if (_configService.AuditLogService != null)
+                    // Root category - log to its own log before deletion
+                    System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Logging root category removal to '{category.Name}.log'");
+                    
+                    // Build detailed deletion summary
+                    string deletionDetails = $"Links: {totalLinks}, Subcategories: {totalSubcategories}";
+                    if (totalSubcategories > 0)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Calling LogCategoryRemovedToSystemLogAsync for '{category.Name}'");
-                        await _configService.AuditLogService.LogCategoryRemovedToSystemLogAsync(category.Name, totalLinks, totalSubcategories);
-                        System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] LogCategoryRemovedToSystemLogAsync completed");
+                        // Log each subcategory being deleted
+                        var subcategories = GetAllSubcategoriesRecursive(node);
+                        if (subcategories.Any())
+                        {
+                            deletionDetails += $" (Subcategories: {string.Join(", ", subcategories.Select(s => s.Name))})";
+                        }
                     }
                     
-                    // Also log to error.log as a backup (more visible)
-                    if (_configService.ErrorLogService != null)
+                    await _configService.AuditLogService.LogCategoryRemovedAsync(category.Name, totalLinks, totalSubcategories);
+                }
+                else
+                {
+                    // Subcategory - log to the root category's log
+                    var rootNode = GetRootCategoryNode(node);
+                    if (rootNode?.Content is CategoryItem rootCategory)
                     {
-                        await _configService.ErrorLogService.LogWarningAsync(
-                            $"Category removed: {category.Name} (Links: {totalLinks}, Subcategories: {totalSubcategories})",
-                            "MainWindow.DeleteCategoryAsync");
+                        var categoryPath = _treeViewService!.GetCategoryPath(node);
+                        System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Logging subcategory removal to root '{rootCategory.Name}.log'");
+                        
+                        string deletionDetails = $"Path: {categoryPath}";
+                        if (totalLinks > 0 || totalSubcategories > 0)
+                        {
+                            deletionDetails += $", Links: {totalLinks}, Subcategories: {totalSubcategories}";
+                        }
+                        
+                        await _configService.AuditLogService.LogAsync(
+                            rootCategory.Name,
+                            Services.AuditLogType.Remove,
+                            $"Subcategory {category.Name} deleted",
+                            deletionDetails);
                     }
                 }
             }
@@ -443,8 +535,42 @@ public sealed partial class MainWindow
             }
 
             ShowWelcome();
-            StatusText.Text = $"Deleted category: {category.Name}";
+            
+            // Update status message with deletion details
+            string statusMessage = $"Deleted category: {category.Name}";
+            if (totalLinks > 0 || totalSubcategories > 0)
+            {
+                statusMessage += " (";
+                if (totalLinks > 0)
+                {
+                    statusMessage += $"{totalLinks} link{(totalLinks == 1 ? "" : "s")}";
+                }
+                if (totalSubcategories > 0)
+                {
+                    if (totalLinks > 0) statusMessage += ", ";
+                    statusMessage += $"{totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
+                }
+                statusMessage += ")";
+            }
+            StatusText.Text = statusMessage;
         }
+    }
+
+    /// <summary>
+    /// Gets all subcategories recursively from a node as a flat list.
+    /// </summary>
+    private List<CategoryItem> GetAllSubcategoriesRecursive(TreeViewNode node)
+    {
+        var subcategories = new List<CategoryItem>();
+        foreach (var child in node.Children)
+        {
+            if (child.Content is CategoryItem subCategory)
+            {
+                subcategories.Add(subCategory);
+                subcategories.AddRange(GetAllSubcategoriesRecursive(child));
+            }
+        }
+        return subcategories;
     }
 
     /// <summary>

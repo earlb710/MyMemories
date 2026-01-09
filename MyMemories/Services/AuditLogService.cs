@@ -185,14 +185,24 @@ public class AuditLogService
     /// <param name="details">Optional additional details.</param>
     public async Task LogAsync(string categoryName, AuditLogType logType, string message, string? details = null)
     {
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Called - Category: '{categoryName}', Type: {logType}, Message: '{message}'");
+        
         if (!IsLoggingAvailable)
         {
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] ABORT - IsLoggingAvailable is FALSE");
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] _logDirectory is empty: {string.IsNullOrEmpty(_logDirectory)}");
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] _logDirectory value: '{_logDirectory}'");
+            if (!string.IsNullOrEmpty(_logDirectory))
+            {
+                System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Directory exists: {Directory.Exists(_logDirectory)}");
+            }
             return;
         }
 
         try
         {
             var logFilePath = GetLogFilePath(categoryName);
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Log file path: '{logFilePath}'");
             
             // Check for rotation before writing
             await RotateLogIfNeededAsync(logFilePath, categoryName);
@@ -214,13 +224,20 @@ public class AuditLogService
             }
             logEntry += Environment.NewLine;
 
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Writing log entry: {logEntry.TrimEnd()}");
+
             lock (_lockObject)
             {
                 File.AppendAllText(logFilePath, logEntry);
             }
+            
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Log entry written successfully");
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] EXCEPTION: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogAsync] Stack trace: {ex.StackTrace}");
+            
             LogUtilities.LogError(
                 "AuditLogService.LogAsync",
                 $"Failed to write audit log for category '{categoryName}'",
@@ -311,8 +328,15 @@ public class AuditLogService
     /// </summary>
     public async Task LogCategoryAddedAsync(string categoryName, string? description = null)
     {
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryAddedAsync] Called for category: '{categoryName}'");
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryAddedAsync] IsLoggingAvailable: {IsLoggingAvailable}");
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryAddedAsync] Log directory: '{_logDirectory}'");
+        
         var details = !string.IsNullOrEmpty(description) ? $"Description: {description}" : null;
+        
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryAddedAsync] About to call LogAsync");
         await LogAsync(categoryName, AuditLogType.Add, "Category created", details);
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryAddedAsync] LogAsync completed");
     }
 
     /// <summary>
@@ -320,8 +344,15 @@ public class AuditLogService
     /// </summary>
     public async Task LogCategoryRemovedAsync(string categoryName, int linkCount = 0, int subcategoryCount = 0)
     {
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryRemovedAsync] Called for category: '{categoryName}'");
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryRemovedAsync] IsLoggingAvailable: {IsLoggingAvailable}");
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryRemovedAsync] Links: {linkCount}, Subcategories: {subcategoryCount}");
+        
         var details = $"Links: {linkCount}, Subcategories: {subcategoryCount}";
+        
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryRemovedAsync] About to call LogAsync");
         await LogAsync(categoryName, AuditLogType.Remove, "Category removed", details);
+        System.Diagnostics.Debug.WriteLine($"[AuditLogService.LogCategoryRemovedAsync] LogAsync completed");
     }
 
     /// <summary>
