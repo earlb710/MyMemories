@@ -48,8 +48,14 @@ public class CategoryDialogBuilder
         PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
         string? currentPasswordHash = null,
         bool currentIsBookmarkCategory = false,
-        bool currentIsBookmarkLookup = false)
+        bool currentIsBookmarkLookup = false,
+        bool? currentIsAuditLoggingEnabled = null,
+        bool hasNonUrlChildren = false)  // New parameter - hide bookmark checkbox if category has non-URL children
     {
+        // Default to true for new categories (when currentName is null)
+        bool isNewCategory = currentName == null;
+        bool auditLoggingEnabled = currentIsAuditLoggingEnabled ?? isNewCategory; // Default to true for new categories
+        
         var (stackPanel, controls) = BuildCategoryDialogUI(
             currentName, 
             currentDescription, 
@@ -58,7 +64,9 @@ public class CategoryDialogBuilder
             currentPasswordProtection,
             currentPasswordHash,
             currentIsBookmarkCategory,
-            currentIsBookmarkLookup);
+            currentIsBookmarkLookup,
+            auditLoggingEnabled,
+            hasNonUrlChildren);
 
         var dialog = new ContentDialog
         {
@@ -178,7 +186,9 @@ public class CategoryDialogBuilder
         PasswordProtectionType currentPasswordProtection,
         string? currentPasswordHash,
         bool currentIsBookmarkCategory,
-        bool currentIsBookmarkLookup)
+        bool currentIsBookmarkLookup,
+        bool currentIsAuditLoggingEnabled,
+        bool hasNonUrlChildren)
     {
         var categoryNameTextBox = new TextBox
         {
@@ -197,55 +207,93 @@ public class CategoryDialogBuilder
             Margin = new Thickness(0, 0, 0, 8)
         };
 
-        // URL Bookmarks checkbox - show for all categories, but disable for inherited
+        // URL Bookmarks checkbox - show for all categories, but hide if has non-URL children
         CheckBox? isBookmarkCategoryCheckBox = null;
         CheckBox? isBookmarkLookupCheckBox = null;
+        CheckBox? isAuditLoggingCheckBox = null;
         TextBlock? inheritedNote = null;
+        TextBlock? nonUrlChildrenNote = null;
         
-        // Always create checkbox (for root and subcategories)
-        isBookmarkCategoryCheckBox = new CheckBox
+        // Only create bookmark checkbox if category doesn't have non-URL children
+        // (or if it's already a bookmark category - in which case it shouldn't have non-URL children)
+        if (!hasNonUrlChildren || currentIsBookmarkCategory)
         {
-            Content = "\U0001F516 URL Bookmarks Only (restrict to web links)", // 🔖
-            IsChecked = currentIsBookmarkCategory,
-            IsEnabled = isRootCategory || !currentIsBookmarkCategory, // Enabled for root or non-inherited subcategories
-            Margin = new Thickness(0, 8, 0, 8)
-        };
-        
-        // Bookmark Lookup checkbox (shown only when bookmark category is checked)
-        isBookmarkLookupCheckBox = new CheckBox
-        {
-            Content = "\U0001F50D Use for bookmark lookup", // 🔍
-            IsChecked = currentIsBookmarkLookup,
-            IsEnabled = currentIsBookmarkCategory,
-            Visibility = currentIsBookmarkCategory ? Visibility.Visible : Visibility.Collapsed,
-            Margin = new Thickness(20, 0, 0, 8) // Indented to show relationship
-        };
-        
-        // Wire up the bookmark category checkbox to show/hide lookup checkbox
-        isBookmarkCategoryCheckBox.Checked += (s, e) =>
-        {
-            isBookmarkLookupCheckBox.IsEnabled = true;
-            isBookmarkLookupCheckBox.Visibility = Visibility.Visible;
-        };
-        
-        isBookmarkCategoryCheckBox.Unchecked += (s, e) =>
-        {
-            isBookmarkLookupCheckBox.IsEnabled = false;
-            isBookmarkLookupCheckBox.Visibility = Visibility.Collapsed;
-            isBookmarkLookupCheckBox.IsChecked = false;
-        };
-        
-        // Add helper text if it's inherited from bookmark parent
-        if (!isRootCategory && currentIsBookmarkCategory)
-        {
-            inheritedNote = new TextBlock
+            isBookmarkCategoryCheckBox = new CheckBox
             {
-                Text = "   (Inherited from parent category)",
+                Content = "\U0001F516 URL Bookmarks Only (restrict to web links)", // 🔖
+                IsChecked = currentIsBookmarkCategory,
+                IsEnabled = isRootCategory || !currentIsBookmarkCategory, // Enabled for root or non-inherited subcategories
+                Margin = new Thickness(0, 8, 0, 8)
+            };
+            
+            // Bookmark Lookup checkbox (shown only when bookmark category is checked)
+            isBookmarkLookupCheckBox = new CheckBox
+            {
+                Content = "\U0001F50D Use for bookmark lookup", // 🔍
+                IsChecked = currentIsBookmarkLookup,
+                IsEnabled = currentIsBookmarkCategory,
+                Visibility = currentIsBookmarkCategory ? Visibility.Visible : Visibility.Collapsed,
+                Margin = new Thickness(20, 0, 0, 8) // Indented to show relationship
+            };
+            
+            // Wire up the bookmark category checkbox to show/hide lookup checkbox
+            isBookmarkCategoryCheckBox.Checked += (s, e) =>
+            {
+                if (isBookmarkLookupCheckBox != null)
+                {
+                    isBookmarkLookupCheckBox.IsEnabled = true;
+                    isBookmarkLookupCheckBox.Visibility = Visibility.Visible;
+                }
+            };
+            
+            isBookmarkCategoryCheckBox.Unchecked += (s, e) =>
+            {
+                if (isBookmarkLookupCheckBox != null)
+                {
+                    isBookmarkLookupCheckBox.IsEnabled = false;
+                    isBookmarkLookupCheckBox.Visibility = Visibility.Collapsed;
+                    isBookmarkLookupCheckBox.IsChecked = false;
+                }
+            };
+            
+            // Add helper text if it's inherited from bookmark parent
+            if (!isRootCategory && currentIsBookmarkCategory)
+            {
+                inheritedNote = new TextBlock
+                {
+                    Text = "   (Inherited from parent category)",
+                    FontSize = 11,
+                    FontStyle = FontStyle.Italic,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                    Margin = new Thickness(0, -4, 0, 8)
+                };
+            }
+        }
+        else
+        {
+            // Category has non-URL children, show a note explaining why the option is hidden
+            nonUrlChildrenNote = new TextBlock
+            {
+                Text = "ℹ️ URL Bookmarks Only option is hidden because this category contains non-URL links (files or folders).",
                 FontSize = 11,
                 FontStyle = FontStyle.Italic,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Margin = new Thickness(0, -4, 0, 8)
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 8)
             };
+        }
+        
+        // Audit Logging checkbox (only for root categories when logging is enabled)
+        if (isRootCategory && _configService != null && _configService.IsLoggingEnabled())
+        {
+            isAuditLoggingCheckBox = new CheckBox
+            {
+                Content = "\U0001F4DD Enable Audit Logging", // 📝
+                IsChecked = currentIsAuditLoggingEnabled,
+                Margin = new Thickness(0, 8, 0, 8)
+            };
+            // Set tooltip using static method
+            Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(isAuditLoggingCheckBox, "Log all changes to this category to a separate log file");
         }
 
         var iconGridView = BuildIconPicker(currentIcon);
@@ -377,6 +425,18 @@ public class CategoryDialogBuilder
             }
         }
 
+        // Non-URL children note (conditionally shown)
+        if (nonUrlChildrenNote != null)
+        {
+            stackPanel.Children.Add(nonUrlChildrenNote);
+        }
+
+        // Audit Logging (only for root categories and when logging is enabled)
+        if (isRootCategory && isAuditLoggingCheckBox != null)
+        {
+            stackPanel.Children.Add(isAuditLoggingCheckBox);
+        }
+
         // Password Protection (only for root categories) - BEFORE ICON PICKER
         if (isRootCategory && passwordProtectionComboBox != null)
         {
@@ -420,6 +480,7 @@ public class CategoryDialogBuilder
             IconGridView = iconGridView,
             IsBookmarkCategoryCheckBox = isBookmarkCategoryCheckBox,
             IsBookmarkLookupCheckBox = isBookmarkLookupCheckBox,
+            IsAuditLoggingCheckBox = isAuditLoggingCheckBox,
             PasswordProtectionComboBox = passwordProtectionComboBox,
             OwnPasswordBox = ownPasswordBox,
             ConfirmPasswordBox = confirmPasswordBox
@@ -546,7 +607,8 @@ public class CategoryDialogBuilder
             PasswordProtection = passwordProtection,
             OwnPassword = ownPassword,
             IsBookmarkCategory = controls.IsBookmarkCategoryCheckBox?.IsChecked ?? false,
-            IsBookmarkLookup = controls.IsBookmarkLookupCheckBox?.IsChecked ?? false
+            IsBookmarkLookup = controls.IsBookmarkLookupCheckBox?.IsChecked ?? false,
+            IsAuditLoggingEnabled = controls.IsAuditLoggingCheckBox?.IsChecked ?? false
         };
     }
 
@@ -557,6 +619,7 @@ public class CategoryDialogBuilder
         public GridView IconGridView { get; set; } = null!;
         public CheckBox? IsBookmarkCategoryCheckBox { get; set; }
         public CheckBox? IsBookmarkLookupCheckBox { get; set; }
+        public CheckBox? IsAuditLoggingCheckBox { get; set; }
         public ComboBox? PasswordProtectionComboBox { get; set; }
         public PasswordBox? OwnPasswordBox { get; set; }
         public PasswordBox? ConfirmPasswordBox { get; set; }

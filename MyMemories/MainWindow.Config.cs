@@ -265,6 +265,7 @@ public sealed partial class MainWindow
             Message = "These directories are set to the default locations where JSON category files and logs are stored. You can type or paste paths directly.",
             Severity = InfoBarSeverity.Informational,
             IsOpen = true,
+            IsClosable = false,
             Margin = new Thickness(0, 0, 0, 16)
         };
         stackPanel.Children.Add(infoBanner);
@@ -402,6 +403,341 @@ public sealed partial class MainWindow
         stackPanel.Children.Add(logDirButtonPanel);
         stackPanel.Children.Add(clearLogButton);
 
+        // Log Files Section
+        var logFilesHeader = new TextBlock
+        {
+            Text = "Log Files in Directory (click to view):",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 4)
+        };
+        stackPanel.Children.Add(logFilesHeader);
+
+        var logFilesListView = new ListView
+        {
+            MaxHeight = 180,
+            SelectionMode = ListViewSelectionMode.Single,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var logFilesEmptyText = new TextBlock
+        {
+            Text = "No log files found or directory not set.",
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        // Log file viewer panel (hidden initially)
+        var logViewerPanel = new StackPanel
+        {
+            Visibility = Visibility.Collapsed,
+            Spacing = 8
+        };
+
+        // Back button and file info header
+        var logViewerHeader = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12
+        };
+
+        var backButton = new Button
+        {
+            Content = "← Back to List"
+        };
+        logViewerHeader.Children.Add(backButton);
+
+        var viewerFileNameText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        logViewerHeader.Children.Add(viewerFileNameText);
+
+        var viewerFileInfoText = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            FontSize = 11
+        };
+        logViewerHeader.Children.Add(viewerFileInfoText);
+
+        logViewerPanel.Children.Add(logViewerHeader);
+
+        // Log content text box
+        var logContentTextBox = new TextBox
+        {
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            FontSize = 11,
+            MaxHeight = 350,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+        };
+
+        var logContentScrollViewer = new ScrollViewer
+        {
+            Content = logContentTextBox,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 350
+        };
+        logViewerPanel.Children.Add(logContentScrollViewer);
+
+        // Action buttons for log viewer
+        var logViewerButtonsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+
+        var openInNotepadButton = new Button { Content = "Open in Notepad" };
+        var openFolderButton = new Button { Content = "Open Folder" };
+        logViewerButtonsPanel.Children.Add(openInNotepadButton);
+        logViewerButtonsPanel.Children.Add(openFolderButton);
+        logViewerPanel.Children.Add(logViewerButtonsPanel);
+
+        // Variable to track current file path
+        string? currentLogFilePath = null;
+
+        // Back button click - return to list view
+        backButton.Click += (s, args) =>
+        {
+            logViewerPanel.Visibility = Visibility.Collapsed;
+            logFilesListView.Visibility = Visibility.Visible;
+            logFilesHeader.Visibility = Visibility.Visible;
+            currentLogFilePath = null;
+        };
+
+        // Open in Notepad
+        openInNotepadButton.Click += (s, args) =>
+        {
+            if (!string.IsNullOrEmpty(currentLogFilePath))
+            {
+                try
+                {
+                    Process.Start("notepad.exe", currentLogFilePath);
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Error opening Notepad: {ex.Message}";
+                }
+            }
+        };
+
+        // Open containing folder
+        openFolderButton.Click += (s, args) =>
+        {
+            if (!string.IsNullOrEmpty(currentLogFilePath))
+            {
+                try
+                {
+                    Process.Start("explorer.exe", $"/select,\"{currentLogFilePath}\"");
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Error opening folder: {ex.Message}";
+                }
+            }
+        };
+
+        // Store file paths for click handling
+        var logFilePathMap = new Dictionary<Grid, string>();
+
+        // Function to refresh log files list
+        void RefreshLogFilesList(string logDir)
+        {
+            logFilesListView.Items.Clear();
+            logFilePathMap.Clear();
+
+            if (string.IsNullOrEmpty(logDir) || !Directory.Exists(logDir))
+            {
+                logFilesListView.Visibility = Visibility.Collapsed;
+                logFilesEmptyText.Visibility = Visibility.Visible;
+                logFilesEmptyText.Text = string.IsNullOrEmpty(logDir) 
+                    ? "Log directory not set." 
+                    : "Directory does not exist.";
+                return;
+            }
+
+            try
+            {
+                var logFiles = Directory.GetFiles(logDir, "*.log")
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTime)  // Newest first
+                    .ToList();
+
+                if (logFiles.Count == 0)
+                {
+                    logFilesListView.Visibility = Visibility.Collapsed;
+                    logFilesEmptyText.Visibility = Visibility.Visible;
+                    logFilesEmptyText.Text = "No log files found in this directory.";
+                    return;
+                }
+
+                logFilesListView.Visibility = Visibility.Visible;
+                logFilesEmptyText.Visibility = Visibility.Collapsed;
+
+                foreach (var file in logFiles)
+                {
+                    var lineCount = 0;
+                    try
+                    {
+                        lineCount = File.ReadLines(file.FullName).Count();
+                    }
+                    catch
+                    {
+                        // Ignore read errors
+                    }
+
+                    var itemPanel = new Grid
+                    {
+                        Margin = new Thickness(0, 2, 0, 2)
+                    };
+                    itemPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    itemPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    itemPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                    itemPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                    // File name with icon
+                    var fileNamePanel = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 6
+                    };
+                    fileNamePanel.Children.Add(new FontIcon
+                    {
+                        Glyph = "\uE8A5", // Document icon
+                        FontSize = 14,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+                    });
+                    fileNamePanel.Children.Add(new TextBlock
+                    {
+                        Text = file.Name,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+                    });
+                    Grid.SetColumn(fileNamePanel, 0);
+                    itemPanel.Children.Add(fileNamePanel);
+
+                    // Modified date
+                    var modifiedText = new TextBlock
+                    {
+                        Text = file.LastWriteTime.ToString("yyyy-MM-dd HH:mm"),
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                        FontSize = 11,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(12, 0, 0, 0)
+                    };
+                    Grid.SetColumn(modifiedText, 1);
+                    itemPanel.Children.Add(modifiedText);
+
+                    // Line count
+                    var lineCountText = new TextBlock
+                    {
+                        Text = $"{lineCount:N0} lines",
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                        FontSize = 11,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(12, 0, 0, 0),
+                        MinWidth = 70,
+                        TextAlignment = TextAlignment.Right
+                    };
+                    Grid.SetColumn(lineCountText, 2);
+                    itemPanel.Children.Add(lineCountText);
+
+                    // File size
+                    var sizeText = new TextBlock
+                    {
+                        Text = FormatFileSize(file.Length),
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                        FontSize = 11,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(12, 0, 0, 0),
+                        MinWidth = 60,
+                        TextAlignment = TextAlignment.Right
+                    };
+                    Grid.SetColumn(sizeText, 3);
+                    itemPanel.Children.Add(sizeText);
+
+                    // Store file path for click handling
+                    logFilePathMap[itemPanel] = file.FullName;
+
+                    logFilesListView.Items.Add(itemPanel);
+                }
+            }
+            catch (Exception ex)
+            {
+                logFilesListView.Visibility = Visibility.Collapsed;
+                logFilesEmptyText.Visibility = Visibility.Visible;
+                logFilesEmptyText.Text = $"Error reading directory: {ex.Message}";
+            }
+        }
+
+        // Handle log file click to view contents inline
+        logFilesListView.SelectionChanged += async (s, args) =>
+        {
+            if (logFilesListView.SelectedItem is Grid selectedGrid && logFilePathMap.TryGetValue(selectedGrid, out var filePath))
+            {
+                // Clear selection immediately so user can click the same file again
+                logFilesListView.SelectedItem = null;
+
+                // Read and display the log file content inline
+                try
+                {
+                    if (!File.Exists(filePath))
+                    {
+                        StatusText.Text = "Log file no longer exists";
+                        return;
+                    }
+
+                    var fileInfo = new FileInfo(filePath);
+                    var content = await File.ReadAllTextAsync(filePath);
+                    var lineCount = content.Split('\n').Length;
+
+                    // Update viewer info
+                    currentLogFilePath = filePath;
+                    viewerFileNameText.Text = $"📄 {fileInfo.Name}";
+                    viewerFileInfoText.Text = $"{lineCount:N0} lines • {FormatFileSize(fileInfo.Length)} • Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm}";
+                    logContentTextBox.Text = content;
+
+                    // Switch to viewer mode
+                    logFilesListView.Visibility = Visibility.Collapsed;
+                    logFilesHeader.Visibility = Visibility.Collapsed;
+                    logViewerPanel.Visibility = Visibility.Visible;
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Error reading log file: {ex.Message}";
+                }
+            }
+        };
+
+        // Initial population of log files list
+        RefreshLogFilesList(logDirTextBox.Text);
+
+        // Update list when log directory text changes
+        logDirTextBox.TextChanged += (s, args) =>
+        {
+            // Hide viewer and show list when directory changes
+            logViewerPanel.Visibility = Visibility.Collapsed;
+            logFilesHeader.Visibility = Visibility.Visible;
+            RefreshLogFilesList(logDirTextBox.Text.Trim());
+        };
+
+        // Update list when browse button is used
+        browseLogButton.Click += (s, args) =>
+        {
+            RefreshLogFilesList(logDirTextBox.Text.Trim());
+        };
+
+        stackPanel.Children.Add(logFilesListView);
+        stackPanel.Children.Add(logFilesEmptyText);
+        stackPanel.Children.Add(logViewerPanel);
+
         // Logging info
         var loggingInfo = new TextBlock
         {
@@ -423,12 +759,13 @@ public sealed partial class MainWindow
             Content = new ScrollViewer
             {
                 Content = stackPanel,
-                MaxHeight = 600
+                MaxHeight = 700
             },
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
+            XamlRoot = Content.XamlRoot,
+            MinWidth = 900
         };
 
         var result = await dialog.ShowAsync();
@@ -1242,6 +1579,180 @@ public sealed partial class MainWindow
             {
                 await ShowErrorDialogAsync("Error Opening Explorer", $"Failed to open directory: {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Formats a file size in bytes to a human-readable string.
+    /// </summary>
+    private static string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+        int suffixIndex = 0;
+        double size = bytes;
+
+        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            size /= 1024;
+            suffixIndex++;
+        }
+
+        return suffixIndex == 0 
+            ? $"{size:N0} {suffixes[suffixIndex]}" 
+            : $"{size:N1} {suffixes[suffixIndex]}";
+    }
+
+    /// <summary>
+    /// Shows a dialog to view the contents of a log file.
+    /// </summary>
+    private async Task ShowLogFileViewerAsync(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            await ShowErrorDialogAsync("File Not Found", $"The log file no longer exists:\n{filePath}");
+            return;
+        }
+
+        try
+        {
+            var fileName = Path.GetFileName(filePath);
+            var fileInfo = new FileInfo(filePath);
+            var content = await File.ReadAllTextAsync(filePath);
+            var lineCount = content.Split('\n').Length;
+
+            // Create the viewer UI
+            var viewerPanel = new StackPanel { Spacing = 8 };
+
+            // File info header
+            var infoPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 16,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            
+            infoPanel.Children.Add(new TextBlock
+            {
+                Text = $"📄 {fileName}",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            
+            infoPanel.Children.Add(new TextBlock
+            {
+                Text = $"{lineCount:N0} lines",
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            
+            infoPanel.Children.Add(new TextBlock
+            {
+                Text = FormatFileSize(fileInfo.Length),
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            
+            infoPanel.Children.Add(new TextBlock
+            {
+                Text = $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}",
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            
+            viewerPanel.Children.Add(infoPanel);
+
+            // Log content text box (read-only, scrollable)
+            var logTextBox = new TextBox
+            {
+                Text = content,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                FontSize = 11,
+                Height = 400,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            };
+
+            // Wrap in scroll viewer for horizontal scrolling
+            var scrollViewer = new ScrollViewer
+            {
+                Content = logTextBox,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MaxHeight = 400
+            };
+
+            viewerPanel.Children.Add(scrollViewer);
+
+            // Button panel
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+
+            var openInNotepadButton = new Button
+            {
+                Content = "Open in Notepad"
+            };
+            openInNotepadButton.Click += (s, args) =>
+            {
+                try
+                {
+                    Process.Start("notepad.exe", filePath);
+                }
+                catch (Exception ex)
+                {
+                    StatusText.Text = $"Error opening Notepad: {ex.Message}";
+                }
+            };
+            buttonPanel.Children.Add(openInNotepadButton);
+
+            var openFolderButton = new Button
+            {
+                Content = "Open Containing Folder"
+            };
+            openFolderButton.Click += async (s, args) =>
+            {
+                try
+                {
+                    var folder = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(folder))
+                    {
+                        Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    await ShowErrorDialogAsync("Error", $"Failed to open folder: {ex.Message}");
+                }
+            };
+            buttonPanel.Children.Add(openFolderButton);
+
+            viewerPanel.Children.Add(buttonPanel);
+
+            // Show dialog
+            var dialog = new ContentDialog
+            {
+                Title = "Log File Viewer",
+                Content = viewerPanel,
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot,
+                MinWidth = 900,
+                MaxHeight = 700
+            };
+
+            await dialog.ShowAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowErrorDialogAsync("Error Reading Log File", $"Failed to read log file:\n{ex.Message}");
         }
     }
 }

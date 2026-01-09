@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using MyMemories.Utilities;
@@ -15,6 +16,10 @@ public class ConfigurationService
     private readonly string _configFilePath;
     private readonly string _defaultDataFolder;
     private AppConfiguration _config;
+    
+    // Logging services
+    private ErrorLogService? _errorLogService;
+    private AuditLogService? _auditLogService;
 
     public ConfigurationService()
     {
@@ -63,6 +68,9 @@ public class ConfigurationService
         
         // Ensure directories exist
         EnsureDirectoriesExist();
+        
+        // Initialize logging services
+        InitializeLoggingServices();
     }
 
     private AppConfiguration CreateDefaultConfiguration()
@@ -72,7 +80,9 @@ public class ConfigurationService
             WorkingDirectory = _defaultDataFolder,
             LogDirectory = string.Empty, // No default log directory
             GlobalPasswordHash = string.Empty,
-            CategoryPasswords = new Dictionary<string, string>()
+            CategoryPasswords = new Dictionary<string, string>(),
+            AuditLoggingEnabled = false,
+            CategoryAuditSettings = new Dictionary<string, bool>()
         };
     }
 
@@ -89,6 +99,23 @@ public class ConfigurationService
         }
     }
 
+    /// <summary>
+    /// Initializes logging services based on current configuration.
+    /// </summary>
+    private void InitializeLoggingServices()
+    {
+        if (!string.IsNullOrEmpty(_config.LogDirectory))
+        {
+            _errorLogService = new ErrorLogService(_config.LogDirectory);
+            _auditLogService = new AuditLogService(_config.LogDirectory);
+        }
+        else
+        {
+            _errorLogService = null;
+            _auditLogService = null;
+        }
+    }
+
     public async Task SaveConfigurationAsync()
     {
         var json = JsonSerializer.Serialize(_config, new JsonSerializerOptions
@@ -97,6 +124,7 @@ public class ConfigurationService
         });
         await File.WriteAllTextAsync(_configFilePath, json);
         EnsureDirectoriesExist();
+        InitializeLoggingServices();
     }
 
     public string WorkingDirectory
@@ -122,6 +150,7 @@ public class ConfigurationService
             {
                 Directory.CreateDirectory(value);
             }
+            InitializeLoggingServices();
         }
     }
 
@@ -141,6 +170,30 @@ public class ConfigurationService
         get => _config.ZipCompressionLevel;
         set => _config.ZipCompressionLevel = Math.Clamp(value, 0, 9);
     }
+
+    /// <summary>
+    /// Gets or sets the global audit logging enabled flag.
+    /// </summary>
+    public bool AuditLoggingEnabled
+    {
+        get => _config.AuditLoggingEnabled;
+        set => _config.AuditLoggingEnabled = value;
+    }
+
+    /// <summary>
+    /// Gets the per-category audit logging settings.
+    /// </summary>
+    public Dictionary<string, bool> CategoryAuditSettings => _config.CategoryAuditSettings;
+
+    /// <summary>
+    /// Gets the error log service instance.
+    /// </summary>
+    public ErrorLogService? ErrorLogService => _errorLogService;
+
+    /// <summary>
+    /// Gets the audit log service instance.
+    /// </summary>
+    public AuditLogService? AuditLogService => _auditLogService;
 
     public void SetCategoryPassword(string categoryPath, string passwordHash)
     {
@@ -162,34 +215,102 @@ public class ConfigurationService
     public bool IsLoggingEnabled() => !string.IsNullOrEmpty(_config.LogDirectory) && Directory.Exists(_config.LogDirectory);
 
     /// <summary>
-    /// Logs a change to a category.
+    /// Checks if audit logging is enabled for a specific category.
+    /// Uses the category's own IsAuditLoggingEnabled property.
     /// </summary>
-    public async Task LogCategoryChangeAsync(string categoryName, string action, string details = "")
+    /// <param name="categoryName">The root category name.</param>
+    /// <param name="categoryAuditEnabled">The category's IsAuditLoggingEnabled property value.</param>
+    /// <returns>True if audit logging is enabled for this category.</returns>
+    public bool IsCategoryAuditLoggingEnabled(string categoryName, bool? categoryAuditEnabled = null)
+    {
+        if (!IsLoggingEnabled())
+        {
+            return false;
+        }
+
+        // If category has explicit audit setting passed in, use it
+        if (categoryAuditEnabled.HasValue)
+        {
+            return categoryAuditEnabled.Value;
+        }
+
+        // Check if category has explicit setting in config
+        if (_config.CategoryAuditSettings.TryGetValue(categoryName, out var enabled))
+        {
+            return enabled;
+        }
+
+        // Default to global setting
+        return AuditLoggingEnabled;
+    }
+
+    /// <summary>
+    /// Enables or disables audit logging for a specific category.
+    /// </summary>
+    public void SetCategoryAuditLogging(string categoryName, bool enabled)
+    {
+        _config.CategoryAuditSettings[categoryName] = enabled;
+    }
+
+    /// <summary>
+    /// Removes the audit logging setting for a category (falls back to global).
+    /// </summary>
+    public void RemoveCategoryAuditSetting(string categoryName)
+    {
+        _config.CategoryAuditSettings.Remove(categoryName);
+    }
+
+    /// <summary>
+    /// Logs a change to a category. Always logs when log directory is set.
+    /// Uses line-numbered format via AuditLogService.
+    /// </summary>
+    /// <param name="categoryName">The category name.</param>
+    /// <param name="action">The action performed.</param>
+    /// <param name="details">Optional additional details.</param>
+    /// <param name="categoryAuditEnabled">Optional: ignored - always logs when log directory is set.</param>
+    public async Task LogCategoryChangeAsync(string categoryName, string action, string details = "", bool? categoryAuditEnabled = null)
     {
         if (!IsLoggingEnabled())
             return;
 
-        try
+        // Always log when log directory is set
+        // Use the AuditLogService for consistent line-numbered format
+        if (_auditLogService != null)
         {
-            var logFileName = SanitizeFileName(categoryName) + ".log";
-            var logFilePath = Path.Combine(_config.LogDirectory, logFileName);
-            
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var logEntry = $"[{timestamp}] {action}";
-            if (!string.IsNullOrEmpty(details))
-            {
-                logEntry += $": {details}";
-            }
-            logEntry += Environment.NewLine;
-            
-            await File.AppendAllTextAsync(logFilePath, logEntry);
+            await _auditLogService.LogChangeAsync(categoryName, action, null, details);
         }
-        catch (Exception ex)
+        else
         {
-            LogUtilities.LogError(
-                "ConfigurationService.LogCategoryChangeAsync",
-                $"Failed to write category log for '{categoryName}', action: '{action}'",
-                ex);
+            // Fallback to direct file write (shouldn't happen if InitializeLoggingServices was called)
+            try
+            {
+                var logFileName = SanitizeFileName(categoryName) + ".log";
+                var logFilePath = Path.Combine(_config.LogDirectory, logFileName);
+                
+                // Get line number
+                int lineNumber = 1;
+                if (File.Exists(logFilePath))
+                {
+                    lineNumber = File.ReadLines(logFilePath).Count() + 1;
+                }
+                
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var logEntry = $"{lineNumber}|[{timestamp}] [CHANGE] {action}";
+                if (!string.IsNullOrEmpty(details))
+                {
+                    logEntry += $" | {details}";
+                }
+                logEntry += Environment.NewLine;
+                
+                await File.AppendAllTextAsync(logFilePath, logEntry);
+            }
+            catch (Exception ex)
+            {
+                LogUtilities.LogError(
+                    "ConfigurationService.LogCategoryChangeAsync",
+                    $"Failed to write category log for '{categoryName}', action: '{action}'",
+                    ex);
+            }
         }
     }
 
@@ -201,6 +322,14 @@ public class ConfigurationService
         if (!IsLoggingEnabled())
             return;
 
+        // Use the new ErrorLogService
+        if (_errorLogService != null)
+        {
+            await _errorLogService.LogErrorAsync(errorMessage, "Application", exception);
+            return;
+        }
+
+        // Fallback to old method
         try
         {
             var logFilePath = Path.Combine(_config.LogDirectory, "errors.log");
@@ -251,6 +380,24 @@ public class ConfigurationService
         }
     }
 
+    /// <summary>
+    /// Logs an invalid password attempt for a category.
+    /// </summary>
+    public async Task LogInvalidPasswordAttemptAsync(string categoryName, string context = "Category access")
+    {
+        // Log to error log
+        if (_errorLogService != null)
+        {
+            await _errorLogService.LogWarningAsync($"Invalid password attempt for category '{categoryName}'", context);
+        }
+
+        // Log to category audit log if enabled
+        if (IsCategoryAuditLoggingEnabled(categoryName) && _auditLogService != null)
+        {
+            await _auditLogService.LogInvalidPasswordAsync(categoryName, context);
+        }
+    }
+
     private string SanitizeFileName(string fileName)
     {
         var invalidChars = Path.GetInvalidFileNameChars();
@@ -273,4 +420,15 @@ public class AppConfiguration
     /// 0 = No compression, 1-3 = Fast, 4-6 = Balanced, 7-9 = Maximum compression.
     /// </summary>
     public int ZipCompressionLevel { get; set; } = 2;
+    
+    /// <summary>
+    /// Global toggle for audit logging. When true, categories can have individual audit logs.
+    /// </summary>
+    public bool AuditLoggingEnabled { get; set; } = false;
+    
+    /// <summary>
+    /// Per-category audit logging settings. Key is category name, value is enabled/disabled.
+    /// Categories not in this dictionary inherit the global AuditLoggingEnabled setting.
+    /// </summary>
+    public Dictionary<string, bool> CategoryAuditSettings { get; set; } = new();
 }

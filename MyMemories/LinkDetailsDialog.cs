@@ -56,7 +56,9 @@ public class LinkDetailsDialog
         PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
         string? currentPasswordHash = null,
         bool currentIsBookmarkCategory = false,
-        bool currentIsBookmarkLookup = false) => 
+        bool currentIsBookmarkLookup = false,
+        bool currentIsAuditLoggingEnabled = false,
+        bool hasNonUrlChildren = false) => 
         _categoryDialogBuilder.ShowCategoryDialogAsync(
             title, 
             currentName, 
@@ -66,7 +68,9 @@ public class LinkDetailsDialog
             currentPasswordProtection, 
             currentPasswordHash,
             currentIsBookmarkCategory,
-            currentIsBookmarkLookup);
+            currentIsBookmarkLookup,
+            currentIsAuditLoggingEnabled,
+            hasNonUrlChildren);
 
     public Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath) => 
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPath);

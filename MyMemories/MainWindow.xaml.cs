@@ -275,6 +275,14 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                     }
                     else
                     {
+                        // Log invalid password attempt to error.log
+                        if (_configService.IsLoggingEnabled() && _configService.ErrorLogService != null)
+                        {
+                            await _configService.ErrorLogService.LogWarningAsync(
+                                "Invalid global password attempt at application startup",
+                                "MainWindow.PromptForGlobalPasswordIfNeededAsync");
+                        }
+                        
                         // Wrong password - show error and prompt again
                         var errorDialog = new ContentDialog
                         {
@@ -604,6 +612,33 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
         {
             IsUrlLoading = false; // Stop loading animation on error
             StatusText.Text = $"Error loading URL: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Handles the File > Exit menu click.
+    /// </summary>
+    private async void MenuFile_Exit_Click(object sender, RoutedEventArgs e)
+    {
+        var confirmDialog = new ContentDialog
+        {
+            Title = "Exit Application",
+            Content = "Are you sure you want to exit?",
+            PrimaryButtonText = "Yes",
+            CloseButtonText = "No",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await confirmDialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            // Clear any cached passwords before exiting
+            _categoryService?.ClearPasswordCache();
+            
+            // Close the application
+            Close();
         }
     }
 }

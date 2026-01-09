@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using MyMemories.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MyMemories;
@@ -406,6 +407,125 @@ public sealed partial class MainWindow
                 // Recursively refresh subcategories
                 RefreshTreeNodesRecursively(child);
             }
+        }
+    }
+
+    /// <summary>
+    /// Handles keyboard input on the TreeView. Delete key removes the selected item, Insert key adds a link.
+    /// </summary>
+    private async void LinksTreeView_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Delete)
+        {
+            var selectedNode = LinksTreeView.SelectedNode;
+            if (selectedNode == null)
+                return;
+
+            if (selectedNode.Content is LinkItem link)
+            {
+                // Don't allow deleting catalog entries
+                if (link.IsCatalogEntry)
+                {
+                    StatusText.Text = "Cannot remove catalog entries. Use 'Refresh Catalog' to update them.";
+                    e.Handled = true;
+                    return;
+                }
+
+                await DeleteLinkAsync(link, selectedNode);
+                e.Handled = true;
+            }
+            else if (selectedNode.Content is CategoryItem category)
+            {
+                await DeleteCategoryAsync(category, selectedNode);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Windows.System.VirtualKey.Insert)
+        {
+            // Add link - same as clicking the Add Link button or context menu
+            var selectedNode = LinksTreeView.SelectedNode;
+            
+            // Get the parent category node for the new link
+            TreeViewNode? targetCategoryNode = null;
+            
+            if (selectedNode != null)
+            {
+                if (selectedNode.Content is CategoryItem)
+                {
+                    // If a category is selected, add link to that category
+                    targetCategoryNode = selectedNode;
+                }
+                else if (selectedNode.Content is LinkItem)
+                {
+                    // If a link is selected, add to its parent category
+                    targetCategoryNode = _treeViewService!.GetParentCategoryNode(selectedNode);
+                }
+            }
+            
+            // Fall back to last used category if nothing is selected
+            targetCategoryNode ??= _lastUsedCategory;
+            
+            // Get all root categories for the dialog
+            var categories = LinksTreeView.RootNodes
+                .Where(n => n.Content is CategoryItem)
+                .Select(n => new CategoryNode
+                {
+                    Name = ((CategoryItem)n.Content).Name,
+                    Node = n
+                })
+                .ToList();
+
+            if (categories.Count == 0)
+            {
+                StatusText.Text = "Please create a category first";
+                e.Handled = true;
+                return;
+            }
+
+            // Prepare selected category for the dialog
+            CategoryNode? selectedCategoryNode = null;
+            if (targetCategoryNode != null && targetCategoryNode.Content is CategoryItem targetCategory)
+            {
+                selectedCategoryNode = new CategoryNode 
+                { 
+                    Name = _treeViewService!.GetCategoryPath(targetCategoryNode), 
+                    Node = targetCategoryNode 
+                };
+            }
+
+            var result = await _linkDialog!.ShowAddAsync(categories, selectedCategoryNode);
+
+            if (result?.CategoryNode != null)
+            {
+                var categoryPath = _treeViewService!.GetCategoryPath(result.CategoryNode);
+                
+                var linkNode = new TreeViewNode
+                {
+                    Content = new LinkItem
+                    {
+                        Title = result.Title,
+                        Url = result.Url,
+                        Description = result.Description,
+                        IsDirectory = result.IsDirectory,
+                        CategoryPath = categoryPath,
+                        CreatedDate = DateTime.Now,
+                        ModifiedDate = DateTime.Now,
+                        FolderType = result.FolderType,
+                        FileFilters = result.FileFilters
+                    }
+                };
+
+                result.CategoryNode.Children.Add(linkNode);
+                result.CategoryNode.IsExpanded = true;
+                _lastUsedCategory = result.CategoryNode;
+
+                // Update parent categories' ModifiedDate and save
+                await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
+
+                StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
+            }
+
+            e.Handled = true;
         }
     }
 }

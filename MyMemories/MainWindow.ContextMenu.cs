@@ -968,7 +968,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task<string?> GetCategoryPasswordAsync(CategoryItem category)
     {
-        var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!);
+        var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!, _configService);
         return await passwordService.GetCategoryPasswordAsync(category);
     }
 

@@ -84,6 +84,9 @@ public class CategoryItem
     
     // Bookmark lookup - makes this category available for bookmark search
     public bool IsBookmarkLookup { get; set; } = false;
+    
+    // Audit logging - enables per-category audit logging
+    public bool IsAuditLoggingEnabled { get; set; } = false;
 
     public override string ToString() => $"{Icon} {Name}";
 }
@@ -601,6 +604,10 @@ public class CategoryData
     // Bookmark lookup availability
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsBookmarkLookup { get; set; }
+    
+    // Audit logging - enables per-category audit logging
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsAuditLoggingEnabled { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }
@@ -730,6 +737,7 @@ public class CategoryEditResult
     public string? OwnPassword { get; set; }
     public bool IsBookmarkCategory { get; set; } = false;
     public bool IsBookmarkLookup { get; set; } = false;
+    public bool IsAuditLoggingEnabled { get; set; } = false;
 }
 
 /// <summary>

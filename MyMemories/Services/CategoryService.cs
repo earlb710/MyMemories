@@ -103,6 +103,9 @@ public class CategoryService
                 {
                     var categoryNode = CreateCategoryNode(categoryData);
                     categories.Add(categoryNode);
+                    
+                    // Log the category load if audit logging is enabled for this category
+                    await LogCategoryLoadedAsync(categoryNode);
                 }
             }
             catch (Exception ex)
@@ -126,6 +129,9 @@ public class CategoryService
                     {
                         var categoryNode = CreateCategoryNode(categoryData);
                         categories.Add(categoryNode);
+                        
+                        // Log the category load if audit logging is enabled for this category
+                        await LogCategoryLoadedAsync(categoryNode);
                     }
                 }
             }
@@ -138,6 +144,36 @@ public class CategoryService
         }
 
         return categories;
+    }
+
+    /// <summary>
+    /// Logs when a category is loaded at startup if audit logging is enabled.
+    /// </summary>
+    private async Task LogCategoryLoadedAsync(TreeViewNode categoryNode)
+    {
+        if (_configService == null || !_configService.IsLoggingEnabled())
+            return;
+
+        if (categoryNode.Content is not CategoryItem category)
+            return;
+
+        // Only log if audit logging is enabled for this category
+        if (!category.IsAuditLoggingEnabled)
+            return;
+
+        var linkCount = CountLinksRecursive(categoryNode);
+        var subcategoryCount = CountSubcategoriesRecursive(categoryNode);
+        
+        // Use AuditLogService directly with INFO type instead of CHANGE
+        var auditLogService = _configService.AuditLogService;
+        if (auditLogService != null)
+        {
+            await auditLogService.LogAsync(
+                category.Name,
+                AuditLogType.Info,
+                "Category loaded at startup",
+                $"Links: {linkCount}, Subcategories: {subcategoryCount}");
+        }
     }
 
     /// <summary>
@@ -243,6 +279,55 @@ public class CategoryService
                 File.Delete(encryptedPath);
             }
         }
+
+        // Log the save operation if logging is enabled (always log when log directory is set)
+        if (_configService != null && _configService.IsLoggingEnabled())
+        {
+            var linkCount = CountLinksRecursive(categoryNode);
+            var subcategoryCount = CountSubcategoriesRecursive(categoryNode);
+            await _configService.LogCategoryChangeAsync(
+                category.Name, 
+                "Category saved", 
+                $"Links: {linkCount}, Subcategories: {subcategoryCount}",
+                category.IsAuditLoggingEnabled);
+        }
+    }
+
+    /// <summary>
+    /// Counts links recursively in a category node.
+    /// </summary>
+    private int CountLinksRecursive(TreeViewNode node)
+    {
+        int count = 0;
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link && !link.IsCatalogEntry)
+            {
+                count++;
+            }
+            else if (child.Content is CategoryItem)
+            {
+                count += CountLinksRecursive(child);
+            }
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// Counts subcategories recursively in a category node.
+    /// </summary>
+    private int CountSubcategoriesRecursive(TreeViewNode node)
+    {
+        int count = 0;
+        foreach (var child in node.Children)
+        {
+            if (child.Content is CategoryItem)
+            {
+                count++;
+                count += CountSubcategoriesRecursive(child);
+            }
+        }
+        return count;
     }
 
     /// <summary>
@@ -378,6 +463,7 @@ public class CategoryService
             ImportedBookmarkCount = category.ImportedBookmarkCount,
             IsBookmarkCategory = category.IsBookmarkCategory,
             IsBookmarkLookup = category.IsBookmarkLookup,
+            IsAuditLoggingEnabled = category.IsAuditLoggingEnabled,
             Links = null,
             SubCategories = null
         };
@@ -553,7 +639,8 @@ public class CategoryService
                 LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
                 ImportedBookmarkCount = categoryData.ImportedBookmarkCount,
                 IsBookmarkCategory = categoryData.IsBookmarkCategory,
-                IsBookmarkLookup = categoryData.IsBookmarkLookup
+                IsBookmarkLookup = categoryData.IsBookmarkLookup,
+                IsAuditLoggingEnabled = categoryData.IsAuditLoggingEnabled
             }
         };
 
@@ -890,6 +977,18 @@ public class CategoryService
         if (_passwordCache.TryGetValue("__GLOBAL__", out var globalPassword))
         {
             return globalPassword;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the cached password for a specific category if available.
+    /// </summary>
+    public string? GetCachedCategoryPassword(string categoryName)
+    {
+        if (_passwordCache.TryGetValue(categoryName, out var categoryPassword))
+        {
+            return categoryPassword;
         }
         return null;
     }
