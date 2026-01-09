@@ -24,6 +24,7 @@ public sealed partial class MainWindow
             currentName: null,
             currentDescription: null,
             currentIcon: null,
+            currentKeywords: null,
             isRootCategory: true,
             currentPasswordProtection: PasswordProtectionType.None,
             currentPasswordHash: null,
@@ -41,12 +42,6 @@ public sealed partial class MainWindow
             else if (result.PasswordProtection == PasswordProtectionType.GlobalPassword)
             {
                 // Global password should already be cached from startup or Security Setup
-                // If not cached yet, prompt for it now
-                if (_configService != null && _configService.HasGlobalPassword())
-                {
-                    // Try to use it - if it fails, it will throw an error with helpful message
-                    // The error will be caught and displayed to the user
-                }
             }
             
             var categoryNode = new TreeViewNode
@@ -55,6 +50,7 @@ public sealed partial class MainWindow
                 {
                     Name = result.Name,
                     Description = result.Description,
+                    Keywords = result.Keywords,
                     Icon = result.Icon,
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
@@ -118,6 +114,7 @@ public sealed partial class MainWindow
             currentName: null,
             currentDescription: null,
             currentIcon: null,
+            currentKeywords: null,
             isRootCategory: false,
             currentPasswordProtection: PasswordProtectionType.None,
             currentPasswordHash: null,
@@ -131,10 +128,11 @@ public sealed partial class MainWindow
                 {
                     Name = result.Name,
                     Description = result.Description,
+                    Keywords = result.Keywords,
                     Icon = result.Icon,
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
-                    IsBookmarkCategory = result.IsBookmarkCategory, // Inherit from parent
+                    IsBookmarkCategory = result.IsBookmarkCategory,
                     IsBookmarkLookup = result.IsBookmarkLookup
                 }
             };
@@ -206,6 +204,7 @@ public sealed partial class MainWindow
             currentName: category.Name,
             currentDescription: category.Description,
             currentIcon: category.Icon,
+            currentKeywords: category.Keywords,
             isRootCategory: isRootCategory,
             currentPasswordProtection: category.PasswordProtection,
             currentPasswordHash: category.OwnPasswordHash,
@@ -335,6 +334,7 @@ public sealed partial class MainWindow
             {
                 Name = result.Name,
                 Description = result.Description,
+                Keywords = result.Keywords,
                 Icon = result.Icon,
                 CreatedDate = category.CreatedDate,
                 ModifiedDate = DateTime.Now,

@@ -44,6 +44,7 @@ public class CategoryDialogBuilder
         string? currentName = null, 
         string? currentDescription = null, 
         string? currentIcon = null,
+        string? currentKeywords = null,
         bool isRootCategory = true,
         PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
         string? currentPasswordHash = null,
@@ -59,7 +60,8 @@ public class CategoryDialogBuilder
         var (stackPanel, controls) = BuildCategoryDialogUI(
             currentName, 
             currentDescription, 
-            currentIcon, 
+            currentIcon,
+            currentKeywords,
             isRootCategory,
             currentPasswordProtection,
             currentPasswordHash,
@@ -182,6 +184,7 @@ public class CategoryDialogBuilder
         string? currentName, 
         string? currentDescription, 
         string? currentIcon,
+        string? currentKeywords,
         bool isRootCategory,
         PasswordProtectionType currentPasswordProtection,
         string? currentPasswordHash,
@@ -204,6 +207,16 @@ public class CategoryDialogBuilder
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             Height = 80,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var categoryKeywordsTextBox = new TextBox
+        {
+            Text = currentKeywords ?? string.Empty,
+            PlaceholderText = "Enter keywords (comma or semicolon separated, optional)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 60,
             Margin = new Thickness(0, 0, 0, 8)
         };
 
@@ -394,6 +407,17 @@ public class CategoryDialogBuilder
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryDescriptionTextBox);
 
+        // Keywords
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords:", 
+            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(categoryKeywordsTextBox);
+
+        // Audit Logging (only for root categories and when logging is enabled) - FIRST CHECKBOX
+        if (isRootCategory && isAuditLoggingCheckBox != null)
+        {
+            stackPanel.Children.Add(isAuditLoggingCheckBox);
+        }
+
         // URL Bookmarks checkbox - show for all categories, but hide if has non-URL children
         if (isBookmarkCategoryCheckBox != null)
         {
@@ -410,12 +434,6 @@ public class CategoryDialogBuilder
             {
                 stackPanel.Children.Add(isBookmarkLookupCheckBox);
             }
-        }
-
-        // Audit Logging (only for root categories and when logging is enabled)
-        if (isRootCategory && isAuditLoggingCheckBox != null)
-        {
-            stackPanel.Children.Add(isAuditLoggingCheckBox);
         }
 
         // Password Protection (only for root categories) - BEFORE ICON PICKER
@@ -458,6 +476,7 @@ public class CategoryDialogBuilder
         {
             NameTextBox = categoryNameTextBox,
             DescriptionTextBox = categoryDescriptionTextBox,
+            KeywordsTextBox = categoryKeywordsTextBox,
             IconGridView = iconGridView,
             IsBookmarkCategoryCheckBox = isBookmarkCategoryCheckBox,
             IsBookmarkLookupCheckBox = isBookmarkLookupCheckBox,
@@ -516,6 +535,7 @@ public class CategoryDialogBuilder
     {
         string categoryName = controls.NameTextBox.Text.Trim();
         string categoryDescription = controls.DescriptionTextBox.Text.Trim();
+        string categoryKeywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty;
         string selectedIcon = CategoryIcons[0];
 
         if (controls.IconGridView.SelectedIndex >= 0 && controls.IconGridView.SelectedIndex < CategoryIcons.Count)
@@ -584,6 +604,7 @@ public class CategoryDialogBuilder
         {
             Name = categoryName,
             Description = categoryDescription,
+            Keywords = categoryKeywords,
             Icon = selectedIcon,
             PasswordProtection = passwordProtection,
             OwnPassword = ownPassword,
@@ -597,6 +618,7 @@ public class CategoryDialogBuilder
     {
         public TextBox NameTextBox { get; set; } = null!;
         public TextBox DescriptionTextBox { get; set; } = null!;
+        public TextBox KeywordsTextBox { get; set; } = null!;
         public GridView IconGridView { get; set; } = null!;
         public CheckBox? IsBookmarkCategoryCheckBox { get; set; }
         public CheckBox? IsBookmarkLookupCheckBox { get; set; }

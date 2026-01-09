@@ -88,12 +88,14 @@ public sealed partial class MainWindow
     {
         // Get menu items by name
         var editItem = FindMenuItemByName(menu, "LinkMenu_Edit");
+        var copyItem = FindMenuItemByName(menu, "LinkMenu_Copy");
         var moveItem = FindMenuItemByName(menu, "LinkMenu_Move");
         var removeItem = FindMenuItemByName(menu, "LinkMenu_Remove");
         var changePasswordItem = FindMenuItemByName(menu, "LinkMenu_ChangePassword");
         var zipFolderItem = FindMenuItemByName(menu, "LinkMenu_ZipFolder");
         var exploreHereItem = FindMenuItemByName(menu, "LinkMenu_ExploreHere");
         var sortCatalogItem = FindMenuItemByName(menu, "LinkMenu_SortCatalog");
+        var summarizeItem = FindMenuItemByName(menu, "LinkMenu_Summarize");
 
         // Check conditions
         bool isCatalogEntry = link.IsCatalogEntry;
@@ -101,11 +103,17 @@ public sealed partial class MainWindow
         bool isDirectory = link.IsDirectory;
         bool isZipOrDirectory = isZipFile || (isDirectory && Directory.Exists(link.Url));
         bool hasCatalog = isDirectory && node.Children.Count > 0;
+        bool isUrl = Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && 
+                     (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
-        // Edit, Move, Remove: disabled for catalog entries
+        // Edit, Copy, Move, Remove: disabled for catalog entries
         if (editItem != null)
         {
             editItem.IsEnabled = !isCatalogEntry;
+        }
+        if (copyItem != null)
+        {
+            copyItem.IsEnabled = !isCatalogEntry;
         }
         if (moveItem != null)
         {
@@ -120,6 +128,12 @@ public sealed partial class MainWindow
         if (changePasswordItem != null)
         {
             changePasswordItem.IsEnabled = isZipFile;
+        }
+
+        // Summarize: only for URLs (http/https)
+        if (summarizeItem != null)
+        {
+            summarizeItem.IsEnabled = isUrl;
         }
 
         // Zip Folder: only for non-zip, non-catalog directories
@@ -786,6 +800,156 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void LinkMenu_Copy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (link.IsCatalogEntry)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Cannot Copy Catalog Entry",
+                Content = "Catalog entries are read-only and cannot be copied.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        // Find the parent category node
+        var parentNode = FindParentNode(_contextMenuNode);
+        if (parentNode == null)
+        {
+            StatusText.Text = "Could not find parent category";
+            return;
+        }
+
+        // Generate a unique title with sequence number
+        var baseTitle = link.Title;
+        var newTitle = GenerateUniqueTitle(baseTitle, parentNode);
+
+        // Create a copy of the link
+        var copiedLink = new LinkItem
+        {
+            Title = newTitle,
+            Url = link.Url,
+            Description = link.Description,
+            Keywords = link.Keywords,
+            IsDirectory = link.IsDirectory,
+            CategoryPath = link.CategoryPath,
+            CreatedDate = DateTime.Now,
+            ModifiedDate = DateTime.Now,
+            FolderType = link.FolderType,
+            FileFilters = link.FileFilters,
+            UrlStatus = link.UrlStatus,
+            UrlLastChecked = link.UrlLastChecked,
+            UrlStatusMessage = link.UrlStatusMessage
+        };
+
+        // Create the new node
+        var copiedNode = new TreeViewNode { Content = copiedLink };
+
+        // Add the copied link to the parent category (after the original)
+        var insertIndex = parentNode.Children.IndexOf(_contextMenuNode) + 1;
+        if (insertIndex > 0 && insertIndex <= parentNode.Children.Count)
+        {
+            parentNode.Children.Insert(insertIndex, copiedNode);
+        }
+        else
+        {
+            parentNode.Children.Add(copiedNode);
+        }
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(parentNode);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+
+        StatusText.Text = $"Copied link as '{newTitle}'";
+
+        // Select the new node and open the edit dialog
+        LinksTreeView.SelectedNode = copiedNode;
+        _contextMenuNode = copiedNode;
+
+        // Open the edit dialog for the copied link
+        await EditLinkAsync(copiedLink, copiedNode);
+    }
+
+    /// <summary>
+    /// Generates a unique title by appending a sequence number if needed.
+    /// </summary>
+    private string GenerateUniqueTitle(string baseTitle, TreeViewNode parentNode)
+    {
+        // Check if base title already ends with a number in parentheses like " (2)"
+        var match = System.Text.RegularExpressions.Regex.Match(baseTitle, @"^(.+?)\s*\((\d+)\)$");
+        string coreName;
+        int startSequence;
+
+        if (match.Success)
+        {
+            coreName = match.Groups[1].Value.Trim();
+            startSequence = int.Parse(match.Groups[2].Value) + 1;
+        }
+        else
+        {
+            coreName = baseTitle;
+            startSequence = 2;
+        }
+
+        // Collect existing titles in the parent
+        var existingTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var child in parentNode.Children)
+        {
+            if (child.Content is LinkItem childLink)
+            {
+                existingTitles.Add(childLink.Title);
+            }
+        }
+
+        // Find a unique title
+        var newTitle = $"{coreName} ({startSequence})";
+        while (existingTitles.Contains(newTitle))
+        {
+            startSequence++;
+            newTitle = $"{coreName} ({startSequence})";
+        }
+
+        return newTitle;
+    }
+
+    /// <summary>
+    /// Finds the parent node of a given tree view node.
+    /// </summary>
+    private TreeViewNode? FindParentNode(TreeViewNode childNode)
+    {
+        // Check root nodes first
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            var parent = FindParentNodeRecursive(rootNode, childNode);
+            if (parent != null)
+                return parent;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Recursively searches for the parent of a given node.
+    /// </summary>
+    private TreeViewNode? FindParentNodeRecursive(TreeViewNode currentNode, TreeViewNode targetChild)
+    {
+        foreach (var child in currentNode.Children)
+        {
+            if (child == targetChild)
+                return currentNode;
+
+            var found = FindParentNodeRecursive(child, targetChild);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
     private async void LinkMenu_ChangePassword_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is not LinkItem link)
@@ -963,13 +1127,454 @@ public sealed partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Gets the password for a category (either from cache or prompts user).
-    /// </summary>
-    private async Task<string?> GetCategoryPasswordAsync(CategoryItem category)
+    private async void LinkMenu_Summarize_Click(object sender, RoutedEventArgs e)
     {
-        var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!, _configService);
-        return await passwordService.GetCategoryPasswordAsync(category);
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Verify this is a URL
+        if (!Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) || 
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Not a Web URL",
+                Content = "The summarize feature only works with web URLs (http:// or https://).",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        // Create cancellation token source
+        using var cts = new System.Threading.CancellationTokenSource();
+
+        // Show loading dialog with cancel button
+        var loadingDialog = new ContentDialog
+        {
+            Title = "Summarizing URL",
+            Content = new StackPanel
+            {
+                Spacing = 16,
+                Children =
+                {
+                    new ProgressRing { IsActive = true, Width = 48, Height = 48 },
+                    new TextBlock
+                    {
+                        Text = $"Fetching and analyzing:\n{link.Url}",
+                        TextWrapping = TextWrapping.Wrap,
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = "This may take a few seconds...",
+                        FontSize = 11,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    }
+                }
+            },
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        // Track if cancelled via dialog
+        bool wasCancelledByUser = false;
+
+        // Start the summarization task
+        var summaryService = new WebSummaryService();
+        var summaryTask = summaryService.SummarizeUrlAsync(link.Url, cts.Token);
+
+        // Show dialog and handle cancellation
+        var dialogTask = loadingDialog.ShowAsync();
+
+        // When dialog is closed (Cancel clicked), cancel the operation
+        _ = dialogTask.AsTask().ContinueWith(_ =>
+        {
+            if (!summaryTask.IsCompleted)
+            {
+                wasCancelledByUser = true;
+                cts.Cancel();
+            }
+        });
+
+        try
+        {
+            StatusText.Text = $"Summarizing '{link.Title}'...";
+
+            // Wait for the summary task to complete
+            var summary = await summaryTask;
+
+            // Close loading dialog
+            loadingDialog.Hide();
+
+            // Check if cancelled
+            if (summary.WasCancelled || wasCancelledByUser)
+            {
+                StatusText.Text = "Summarization cancelled";
+                return;
+            }
+
+            if (!summary.Success)
+            {
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Error Fetching URL",
+                    Content = $"Failed to fetch or summarize the URL:\n\n{summary.ErrorMessage}",
+                    CloseButtonText = "OK",
+                    XamlRoot = Content.XamlRoot
+                };
+                await errorDialog.ShowAsync();
+                StatusText.Text = $"Failed to summarize '{link.Title}'";
+                return;
+            }
+
+            // Build summary UI with editable fields
+            var stackPanel = new StackPanel { Spacing = 12, Width = 650 };
+
+            // Title from website
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = summary.Title,
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            });
+
+            // URL
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = summary.Url,
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, -8, 0, 0),
+                IsTextSelectionEnabled = true
+            });
+
+            // Status Code
+            if (summary.StatusCode > 0)
+            {
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = $"HTTP {summary.StatusCode}",
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen),
+                    Margin = new Thickness(0, -8, 0, 0)
+                });
+            }
+
+            // Separator
+            stackPanel.Children.Add(new Border
+            {
+                Height = 1,
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Opacity = 0.3,
+                Margin = new Thickness(0, 8, 0, 8)
+            });
+
+            // Current Description Section
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = "Current Description:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(link.Description) ? "(No description set)" : link.Description,
+                TextWrapping = TextWrapping.Wrap,
+                FontStyle = string.IsNullOrWhiteSpace(link.Description) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    string.IsNullOrWhiteSpace(link.Description) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
+            });
+
+            // Fetched Description from Website
+            if (!string.IsNullOrWhiteSpace(summary.Description))
+            {
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = "Description from Website:",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+                
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = summary.Description,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                    Margin = new Thickness(0, 0, 0, 8),
+                    IsTextSelectionEnabled = true
+                });
+            }
+
+            // Editable Description
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = "New Description (editable):",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 4)
+            });
+
+            var descriptionTextBox = new TextBox
+            {
+                Text = !string.IsNullOrWhiteSpace(summary.Description) ? summary.Description : link.Description,
+                PlaceholderText = "Enter description...",
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                Height = 80,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(descriptionTextBox);
+
+            // Current Keywords Section
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = "Current Keywords:",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 4)
+            });
+
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(link.Keywords) ? "(No keywords set)" : link.Keywords,
+                TextWrapping = TextWrapping.Wrap,
+                FontStyle = string.IsNullOrWhiteSpace(link.Keywords) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    string.IsNullOrWhiteSpace(link.Keywords) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
+            });
+
+            // Keywords from Website (displayed as badges - gray for existing, blue for new)
+            if (summary.Keywords.Count > 0)
+            {
+                // Parse existing keywords for comparison
+                var existingKeywordsSet = string.IsNullOrWhiteSpace(link.Keywords) 
+                    ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    : new HashSet<string>(
+                        link.Keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                            .Select(k => k.Trim()),
+                        StringComparer.OrdinalIgnoreCase);
+
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = "Keywords from Website:",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 4)
+                });
+
+                // Use ItemsRepeater with UniformGridLayout for wrapping, or fall back to a simple wrapping approach
+                // Using a vertical StackPanel with multiple horizontal rows for wrapping
+                var keywordsContainer = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    Spacing = 6
+                };
+
+                // Create rows of keywords that wrap
+                var currentRow = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6
+                };
+
+                int keywordsPerRow = 4; // Approximate keywords per row
+                int keywordCount = 0;
+
+                foreach (var keyword in summary.Keywords.Take(15)) // Limit to 15 for display
+                {
+                    // Check if this keyword already exists
+                    bool isExistingKeyword = existingKeywordsSet.Contains(keyword.Trim());
+
+                    var keywordBorder = new Border
+                    {
+                        // Gray background for existing keywords, Blue for new keywords
+                        Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                            isExistingKeyword ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.DodgerBlue),
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(8, 4, 8, 4)
+                    };
+
+                    keywordBorder.Child = new TextBlock
+                    {
+                        Text = keyword,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+                        FontSize = 11,
+                        MaxWidth = 150,
+                        TextTrimming = TextTrimming.CharacterEllipsis
+                    };
+
+                    // Add tooltip to indicate status and show full text if truncated
+                    ToolTipService.SetToolTip(keywordBorder, 
+                        $"{keyword}\n({(isExistingKeyword ? "Already in your keywords" : "New keyword from website")})");
+
+                    currentRow.Children.Add(keywordBorder);
+                    keywordCount++;
+
+                    // Start a new row after keywordsPerRow items
+                    if (keywordCount % keywordsPerRow == 0)
+                    {
+                        keywordsContainer.Children.Add(currentRow);
+                        currentRow = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 6
+                        };
+                    }
+                }
+
+                // Add the last row if it has items
+                if (currentRow.Children.Count > 0)
+                {
+                    keywordsContainer.Children.Add(currentRow);
+                }
+
+                stackPanel.Children.Add(keywordsContainer);
+            }
+
+            // Merge existing and new keywords (no duplicates)
+            var existingKeywords = string.IsNullOrWhiteSpace(link.Keywords) 
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(
+                    link.Keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(k => k.Trim()),
+                    StringComparer.OrdinalIgnoreCase);
+
+            var newKeywords = new HashSet<string>(existingKeywords, StringComparer.OrdinalIgnoreCase);
+            foreach (var keyword in summary.Keywords)
+            {
+                newKeywords.Add(keyword.Trim());
+            }
+
+            var mergedKeywordsText = string.Join(", ", newKeywords.OrderBy(k => k));
+
+            // Editable Keywords
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = "Merged Keywords (editable, comma or semicolon separated):",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 4)
+            });
+
+            var keywordsTextBox = new TextBox
+            {
+                Text = mergedKeywordsText,
+                PlaceholderText = "Enter keywords separated by comma or semicolon...",
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                Height = 60,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            stackPanel.Children.Add(keywordsTextBox);
+
+            // Content Summary (read-only but selectable)
+            if (!string.IsNullOrWhiteSpace(summary.ContentSummary))
+            {
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = "Content Summary:",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 4)
+                });
+
+                stackPanel.Children.Add(new TextBlock
+                {
+                    Text = summary.ContentSummary,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                    FontSize = 12,
+                    IsTextSelectionEnabled = true
+                });
+            }
+
+            // Show summary dialog
+            var summaryDialog = new ContentDialog
+            {
+                Title = "URL Summary - Update Description & Keywords",
+                Content = new ScrollViewer
+                {
+                    Content = stackPanel,
+                    MaxHeight = 550,
+                    Width = 650
+                },
+                CloseButtonText = "Cancel",
+                PrimaryButtonText = "Save Changes",
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await summaryDialog.ShowAsync();
+
+            // If user clicked "Save Changes", update the link's description and keywords
+            if (result == ContentDialogResult.Primary)
+            {
+                var newDescription = descriptionTextBox.Text.Trim();
+                var newKeywordsText = keywordsTextBox.Text.Trim();
+
+                bool hasChanges = false;
+
+                if (link.Description != newDescription)
+                {
+                    link.Description = newDescription;
+                    hasChanges = true;
+                }
+
+                if (link.Keywords != newKeywordsText)
+                {
+                    link.Keywords = newKeywordsText;
+                    hasChanges = true;
+                }
+
+                if (hasChanges)
+                {
+                    link.ModifiedDate = DateTime.Now;
+
+                    // Save the category
+                    var rootNode = GetRootCategoryNode(_contextMenuNode);
+                    await _categoryService!.SaveCategoryAsync(rootNode);
+
+                    StatusText.Text = $"Updated description and keywords for '{link.Title}'";
+
+                    // Refresh the details view if this link is currently selected
+                    if (LinksTreeView.SelectedNode == _contextMenuNode)
+                    {
+                        await _detailsViewService!.ShowLinkDetailsAsync(link, _contextMenuNode,
+                            async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode),
+                            async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode),
+                            null);
+                    }
+                }
+                else
+                {
+                    StatusText.Text = "No changes made";
+                }
+            }
+            else
+            {
+                StatusText.Text = "Ready";
+            }
+        }
+        catch (Exception ex)
+        {
+            loadingDialog.Hide();
+            
+            var errorDialog = new ContentDialog
+            {
+                Title = "Error",
+                Content = $"An unexpected error occurred:\n\n{ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            
+            StatusText.Text = "Ready";
+        }
     }
 
     private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
@@ -977,43 +1582,47 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
+        // Build sort options UI
+        var stackPanel = new StackPanel { Spacing = 8 };
+
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Select sort order for items in this category:",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var sortComboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
         var sortOptions = new[]
         {
             SortOption.NameAscending,
             SortOption.NameDescending,
-            SortOption.SizeAscending,
-            SortOption.SizeDescending,
             SortOption.DateAscending,
-            SortOption.DateDescending
+            SortOption.DateDescending,
+            SortOption.SizeAscending,
+            SortOption.SizeDescending
         };
 
-        var comboBox = new ComboBox
+        foreach (var option in sortOptions)
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = sortOptions.Select(o => SortingService.GetSortOptionDisplayName(o)).ToList()
-        };
+            sortComboBox.Items.Add(SortingService.GetSortOptionDisplayName(option));
+        }
 
-        // Set the current selection
-        comboBox.SelectedIndex = (int)category.SortOrder;
+        // Set current sort option as selected
+        sortComboBox.SelectedIndex = Array.IndexOf(sortOptions, category.SortOrder);
+        if (sortComboBox.SelectedIndex < 0) sortComboBox.SelectedIndex = 0;
+
+        stackPanel.Children.Add(sortComboBox);
 
         var dialog = new ContentDialog
         {
-            Title = $"Sort '{category.Name}'",
-            Content = new StackPanel
-            {
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Choose how to sort this category's children:",
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 0, 0, 12)
-                    },
-                    comboBox
-                }
-            },
-            PrimaryButtonText = "Sort",
+            Title = $"Sort - {category.Name}",
+            Content = stackPanel,
+            PrimaryButtonText = "Apply",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot
@@ -1021,15 +1630,18 @@ public sealed partial class MainWindow
 
         var result = await dialog.ShowAsync();
 
-        if (result == ContentDialogResult.Primary && comboBox.SelectedIndex >= 0)
+        if (result == ContentDialogResult.Primary)
         {
-            var sortOption = sortOptions[comboBox.SelectedIndex];
-            SortingService.SortCategoryChildren(_contextMenuNode, sortOption);
+            var selectedOption = sortOptions[sortComboBox.SelectedIndex];
 
+            // Apply sorting
+            SortingService.SortCategoryChildren(_contextMenuNode, selectedOption);
+
+            // Save the category
             var rootNode = GetRootCategoryNode(_contextMenuNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
 
-            StatusText.Text = $"Sorted '{category.Name}' by {SortingService.GetSortOptionDisplayName(sortOption)}";
+            StatusText.Text = $"Sorted '{category.Name}' by {SortingService.GetSortOptionDisplayName(selectedOption)}";
         }
     }
 
@@ -1038,51 +1650,56 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not LinkItem link || !link.IsDirectory)
             return;
 
+        // Build sort options UI
+        var stackPanel = new StackPanel { Spacing = 8 };
+
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Select sort order for catalog entries:",
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var sortComboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
         var sortOptions = new[]
         {
             SortOption.NameAscending,
             SortOption.NameDescending,
-            SortOption.SizeAscending,
-            SortOption.SizeDescending,
             SortOption.DateAscending,
-            SortOption.DateDescending
+            SortOption.DateDescending,
+            SortOption.SizeAscending,
+            SortOption.SizeDescending
         };
 
-        var comboBox = new ComboBox
+        foreach (var option in sortOptions)
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ItemsSource = sortOptions.Select(o => SortingService.GetSortOptionDisplayName(o)).ToList()
-        };
+            sortComboBox.Items.Add(SortingService.GetSortOptionDisplayName(option));
+        }
 
-        // Set the current selection
-        comboBox.SelectedIndex = (int)link.CatalogSortOrder;
+        // Set current sort option as selected
+        sortComboBox.SelectedIndex = Array.IndexOf(sortOptions, link.CatalogSortOrder);
+        if (sortComboBox.SelectedIndex < 0) sortComboBox.SelectedIndex = 0;
 
-        var recursiveCheckBox = new CheckBox
+        stackPanel.Children.Add(sortComboBox);
+
+        // Option to apply to subdirectories
+        var applyToSubdirsCheckBox = new CheckBox
         {
             Content = "Apply to all subdirectories",
             IsChecked = true,
             Margin = new Thickness(0, 8, 0, 0)
         };
+        stackPanel.Children.Add(applyToSubdirsCheckBox);
 
         var dialog = new ContentDialog
         {
-            Title = $"Sort Catalog '{link.Title}'",
-            Content = new StackPanel
-            {
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = "Choose how to sort this catalog's entries:",
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 0, 0, 12)
-                    },
-                    comboBox,
-                    recursiveCheckBox
-                }
-            },
-            PrimaryButtonText = "Sort",
+            Title = $"Sort Catalog - {link.Title}",
+            Content = stackPanel,
+            PrimaryButtonText = "Apply",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot
@@ -1090,409 +1707,26 @@ public sealed partial class MainWindow
 
         var result = await dialog.ShowAsync();
 
-        if (result == ContentDialogResult.Primary && comboBox.SelectedIndex >= 0)
+        if (result == ContentDialogResult.Primary)
         {
-            var sortOption = sortOptions[comboBox.SelectedIndex];
-            bool recursive = recursiveCheckBox.IsChecked ?? false;
+            var selectedOption = sortOptions[sortComboBox.SelectedIndex];
+            var applyToSubdirs = applyToSubdirsCheckBox.IsChecked ?? false;
 
-            if (recursive)
+            // Apply sorting
+            if (applyToSubdirs)
             {
-                SortingService.SortCatalogEntriesRecursive(_contextMenuNode, sortOption);
+                SortingService.SortCatalogEntriesRecursive(_contextMenuNode, selectedOption);
             }
             else
             {
-                SortingService.SortCatalogEntries(_contextMenuNode, sortOption);
+                SortingService.SortCatalogEntries(_contextMenuNode, selectedOption);
             }
 
+            // Save the category
             var rootNode = GetRootCategoryNode(_contextMenuNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
 
-            var recursiveText = recursive ? " (including subdirectories)" : "";
-            StatusText.Text = $"Sorted catalog '{link.Title}' by {SortingService.GetSortOptionDisplayName(sortOption)}{recursiveText}";
+            StatusText.Text = $"Sorted catalog for '{link.Title}' by {SortingService.GetSortOptionDisplayName(selectedOption)}";
         }
-    }
-
-    private async Task ShowChangePasswordDialogAsync(CategoryItem category, TreeViewNode categoryNode)
-    {
-        var stackPanel = new StackPanel { Spacing = 16 };
-
-        // Current status
-        var currentStatus = new TextBlock
-        {
-            Text = $"Current: {GetPasswordStatusText(category.PasswordProtection)}",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
-        };
-        stackPanel.Children.Add(currentStatus);
-
-        // Radio buttons for password options
-        var noneRadio = new RadioButton
-        {
-            Content = "⭕ No Password Protection",
-            GroupName = "PasswordType",
-            IsChecked = category.PasswordProtection == PasswordProtectionType.None
-        };
-        stackPanel.Children.Add(noneRadio);
-
-        var globalRadio = new RadioButton
-        {
-            Content = "⬛ Use Global Password",
-            GroupName = "PasswordType",
-            IsChecked = category.PasswordProtection == PasswordProtectionType.GlobalPassword,
-            IsEnabled = _configService?.HasGlobalPassword() ?? false
-        };
-        stackPanel.Children.Add(globalRadio);
-
-        if (!globalRadio.IsEnabled)
-        {
-            var globalNote = new TextBlock
-            {
-                Text = "   (Set global password in Config → Security Setup first)",
-                FontSize = 11,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Margin = new Thickness(0, -8, 0, 0)
-            };
-            stackPanel.Children.Add(globalNote);
-        }
-
-        var ownRadio = new RadioButton
-        {
-            Content = "🟥 Use Own Password",
-            GroupName = "PasswordType",
-            IsChecked = category.PasswordProtection == PasswordProtectionType.OwnPassword
-        };
-        stackPanel.Children.Add(ownRadio);
-
-        // Password input for own password
-        var passwordPanel = new StackPanel
-        {
-            Spacing = 8,
-            Margin = new Thickness(24, 8, 0, 0),
-            Visibility = ownRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
-        };
-
-        var passwordBox = new PasswordBox
-        {
-            PlaceholderText = "Enter password",
-            Width = 250,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        passwordPanel.Children.Add(passwordBox);
-
-        var confirmPasswordBox = new PasswordBox
-        {
-            PlaceholderText = "Confirm password",
-            Width = 250,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        passwordPanel.Children.Add(confirmPasswordBox);
-
-        stackPanel.Children.Add(passwordPanel);
-
-        // Toggle password panel visibility
-        ownRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Visible;
-        noneRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
-        globalRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
-
-        // Info
-        var infoText = new TextBlock
-        {
-            Text = "⚠️ Changing password protection will re-encrypt this category file.\n\n" +
-                   "• No Password: Category data is stored as plain JSON\n" +
-                   "• Global Password: Encrypted with shared password (⬛ black badge)\n" +
-                   "• Own Password: Encrypted with unique password (🟥 red badge)",
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        stackPanel.Children.Add(infoText);
-
-        var dialog = new ContentDialog
-        {
-            Title = $"Change Password Protection - {category.Name}",
-            Content = new ScrollViewer
-            {
-                Content = stackPanel,
-                MaxHeight = 500
-            },
-            PrimaryButtonText = "Apply",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            PasswordProtectionType newType;
-            string? newPassword = null;
-
-            if (noneRadio.IsChecked == true)
-            {
-                newType = PasswordProtectionType.None;
-            }
-            else if (globalRadio.IsChecked == true)
-            {
-                newType = PasswordProtectionType.GlobalPassword;
-            }
-            else if (ownRadio.IsChecked == true)
-            {
-                newType = PasswordProtectionType.OwnPassword;
-                
-                if (string.IsNullOrEmpty(passwordBox.Password))
-                {
-                    await ShowErrorDialogAsync("Password Required", "Please enter a password for 'Own Password' protection.");
-                    return;
-                }
-
-                if (passwordBox.Password != confirmPasswordBox.Password)
-                {
-                    await ShowErrorDialogAsync("Password Mismatch", "The passwords do not match.");
-                    return;
-                }
-
-                newPassword = passwordBox.Password;
-            }
-            else
-            {
-                return;
-            }
-
-            // Apply the change
-            var oldType = category.PasswordProtection;
-            category.PasswordProtection = newType;
-
-            if (newType == PasswordProtectionType.OwnPassword && newPassword != null)
-            {
-                category.OwnPasswordHash = PasswordUtilities.HashPassword(newPassword);
-                _categoryService?.CacheCategoryPassword(_treeViewService!.GetCategoryPath(categoryNode), newPassword);
-            }
-            else
-            {
-                category.OwnPasswordHash = null;
-            }
-
-            // Save the category (will encrypt/decrypt based on new settings)
-            try
-            {
-                await _categoryService!.SaveCategoryAsync(categoryNode);
-                StatusText.Text = $"Changed password protection for '{category.Name}' from {GetPasswordStatusText(oldType)} to {GetPasswordStatusText(newType)}";
-
-                // Refresh the node visual to update badge color
-                RefreshNodeVisual(categoryNode);
-            }
-            catch (Exception ex)
-            {
-                // Revert on error
-                category.PasswordProtection = oldType;
-                await ShowErrorDialogAsync("Error Changing Password", $"Failed to change password protection:\n\n{ex.Message}");
-            }
-        }
-    }
-
-    private async Task ShowChangeZipPasswordDialogAsync(LinkItem zipLink, TreeViewNode zipNode)
-    {
-        var stackPanel = new StackPanel { Spacing = 16 };
-
-        // Current status
-        var currentStatus = new TextBlock
-        {
-            Text = $"Current: {(zipLink.IsZipPasswordProtected ? "🔒 Password Protected" : "⭕ No Password")}",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
-        };
-        stackPanel.Children.Add(currentStatus);
-
-        // Get parent category for context
-        var parentCategory = zipNode.Parent?.Content as CategoryItem;
-        var rootCategoryNode = GetRootCategoryNode(zipNode);
-        var rootCategory = rootCategoryNode?.Content as CategoryItem;
-
-        // Radio buttons for password options
-        var noneRadio = new RadioButton
-        {
-            Content = "⭕ Remove Password Protection",
-            GroupName = "ZipPasswordType",
-            IsChecked = !zipLink.IsZipPasswordProtected
-        };
-        stackPanel.Children.Add(noneRadio);
-
-        var categoryRadio = new RadioButton
-        {
-            Content = $"Use Category Password ({rootCategory?.Name ?? "Unknown"})",
-            GroupName = "ZipPasswordType",
-            IsEnabled = rootCategory?.PasswordProtection != PasswordProtectionType.None
-        };
-        stackPanel.Children.Add(categoryRadio);
-
-        if (!categoryRadio.IsEnabled)
-        {
-            var categoryNote = new TextBlock
-            {
-                Text = "   (Root category has no password protection)",
-                FontSize = 11,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Margin = new Thickness(0, -8, 0, 0)
-            };
-            stackPanel.Children.Add(categoryNote);
-        }
-
-        var globalRadio = new RadioButton
-        {
-            Content = "⬛ Use Global Password",
-            GroupName = "ZipPasswordType",
-            IsEnabled = _configService?.HasGlobalPassword() ?? false
-        };
-        stackPanel.Children.Add(globalRadio);
-
-        if (!globalRadio.IsEnabled)
-        {
-            var globalNote = new TextBlock
-            {
-                Text = "   (Set global password in Config → Security Setup first)",
-                FontSize = 11,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Margin = new Thickness(0, -8, 0, 0)
-            };
-            stackPanel.Children.Add(globalNote);
-        }
-
-        var ownRadio = new RadioButton
-        {
-            Content = "🔐 Use Own Password",
-            GroupName = "ZipPasswordType",
-            IsChecked = zipLink.IsZipPasswordProtected
-        };
-        stackPanel.Children.Add(ownRadio);
-
-        // Password input for own password
-        var passwordPanel = new StackPanel
-        {
-            Spacing = 8,
-            Margin = new Thickness(24, 8, 0, 0),
-            Visibility = ownRadio.IsChecked == true ? Visibility.Visible : Visibility.Collapsed
-        };
-
-        var passwordBox = new PasswordBox
-        {
-            PlaceholderText = "Enter password",
-            Width = 250,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        passwordPanel.Children.Add(passwordBox);
-
-        var confirmPasswordBox = new PasswordBox
-        {
-            PlaceholderText = "Confirm password",
-            Width = 250,
-            HorizontalAlignment = HorizontalAlignment.Left
-        };
-        passwordPanel.Children.Add(confirmPasswordBox);
-
-        stackPanel.Children.Add(passwordPanel);
-
-        // Toggle password panel visibility
-        ownRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Visible;
-        noneRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
-        globalRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
-        categoryRadio.Checked += (s, e) => passwordPanel.Visibility = Visibility.Collapsed;
-
-        // Keep backup checkbox
-        var keepBackupCheckBox = new CheckBox
-        {
-            Content = "Keep backup of original zip file (*.backup.zip)",
-            IsChecked = false,
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        stackPanel.Children.Add(keepBackupCheckBox);
-
-        // Warning
-        var warningText = new TextBlock
-        {
-            Text = "⚠️ Changing zip password will:\n" +
-                   "1. Rename original to *.backup.zip\n" +
-                   "2. Extract and re-compress with new password\n" +
-                   "3. Delete backup (unless 'Keep backup' is checked)\n\n" +
-                   "If an error occurs, the original will be restored.",
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange),
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        stackPanel.Children.Add(warningText);
-
-        var dialog = new ContentDialog
-        {
-            Title = $"Change Zip Password - {zipLink.Title}",
-            Content = new ScrollViewer
-            {
-                Content = stackPanel,
-                MaxHeight = 500
-            },
-            PrimaryButtonText = "Apply",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            // Determine new password settings
-            string? newPassword = null;
-            bool usePassword = false;
-
-            if (noneRadio.IsChecked == true)
-            {
-                usePassword = false;
-            }
-            else if (globalRadio.IsChecked == true)
-            {
-                usePassword = true;
-                newPassword = _categoryService?.GetCachedGlobalPassword();
-                if (string.IsNullOrEmpty(newPassword))
-                {
-                    await ShowErrorDialogAsync("Global Password Not Available", "Please set the global password in Config → Security Setup first.");
-                    return;
-                }
-            }
-            else if (categoryRadio.IsChecked == true)
-            {
-                usePassword = true;
-                newPassword = await GetCategoryPasswordAsync(rootCategory!);
-                if (string.IsNullOrEmpty(newPassword))
-                {
-                    return; // User cancelled or error
-                }
-            }
-            else if (ownRadio.IsChecked == true)
-            {
-                if (string.IsNullOrEmpty(passwordBox.Password))
-                {
-                    await ShowErrorDialogAsync("Password Required", "Please enter a password.");
-                    return;
-                }
-
-                if (passwordBox.Password != confirmPasswordBox.Password)
-                {
-                    await ShowErrorDialogAsync("Password Mismatch", "The passwords do not match.");
-                    return;
-                }
-
-                usePassword = true;
-                newPassword = passwordBox.Password;
-            }
-
-            // Execute the password change
-            await ChangeZipPasswordAsync(zipLink, zipNode, usePassword, newPassword, keepBackupCheckBox.IsChecked == true);
-        }
-    }
-
-    private string GetPasswordStatusText(PasswordProtectionType type)
-    {
-        return PasswordDialogService.GetPasswordStatusText(type);
     }
 }

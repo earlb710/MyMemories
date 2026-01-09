@@ -319,15 +319,10 @@
                                                 </Ellipse.Fill>
                                                 <ToolTipService.ToolTip>
                                                     <ToolTip>
-                                                        <TextBlock TextWrapping="Wrap" MaxWidth="400">
-                                                            <TextBlock.Text>
-                                                                <Binding Path="Content.UrlStatus" Mode="OneWay">
-                                                                    <Binding.Converter>
-                                                                        <local:UrlStatusToTooltipConverter/>
-                                                                    </Binding.Converter>
-                                                                </Binding>
-                                                            </TextBlock.Text>
-                                                        </TextBlock>
+                                                        <TextBlock 
+                                                            Text="{Binding Content.UrlStatusTooltip, Mode=OneWay}"
+                                                            TextWrapping="Wrap" 
+                                                            MaxWidth="400"/>
                                                     </ToolTip>
                                                 </ToolTipService.ToolTip>
                                             </Ellipse>
@@ -389,9 +384,16 @@
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutItem x:Name="LinkMenu_Edit" Text="Edit Link" Icon="Edit" Click="LinkMenu_Edit_Click"/>
+                            <MenuFlyoutItem x:Name="LinkMenu_Copy" Text="Copy Link" Icon="Copy" Click="LinkMenu_Copy_Click"/>
                             <MenuFlyoutItem x:Name="LinkMenu_ChangePassword" Text="Change Password" Click="LinkMenu_ChangePassword_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE72E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutItem x:Name="LinkMenu_Summarize" Text="Summarize URL" Click="LinkMenu_Summarize_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8F4;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>

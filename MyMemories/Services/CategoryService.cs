@@ -450,6 +450,7 @@ public class CategoryService
             Name = category.Name,
             Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
             Icon = category.Icon == "📁" ? null : category.Icon,
+            Keywords = string.IsNullOrWhiteSpace(category.Keywords) ? null : category.Keywords,
             CreatedDate = category.CreatedDate,
             ModifiedDate = category.ModifiedDate,
             PasswordProtection = category.PasswordProtection,
@@ -487,6 +488,7 @@ public class CategoryService
                     Title = link.Title,
                     Url = link.Url,
                     Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
+                    Keywords = string.IsNullOrWhiteSpace(link.Keywords) ? null : link.Keywords,
                     IsDirectory = link.IsDirectory ? true : null,
                     CategoryPath = link.CategoryPath,
                     CreatedDate = link.CreatedDate,
@@ -564,7 +566,7 @@ public class CategoryService
 
                                         subCatalogEntries.Add(new LinkData
                                         {
-                                            Title = subCatalogEntry.Title,
+                                            Title = subCatalogEntry.Title ?? string.Empty,
                                             Url = subRelativeUrl,
                                             Description = string.IsNullOrWhiteSpace(subCatalogEntry.Description) ? null : subCatalogEntry.Description,
                                             IsDirectory = subCatalogEntry.IsDirectory ? true : null,
@@ -627,6 +629,7 @@ public class CategoryService
                 Name = categoryData.Name,
                 Description = categoryData.Description ?? string.Empty,
                 Icon = categoryData.Icon ?? "📁",
+                Keywords = categoryData.Keywords ?? string.Empty,
                 CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
                 ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
                 PasswordProtection = categoryData.PasswordProtection,
@@ -664,6 +667,7 @@ public class CategoryService
                     Title = linkData.Title ?? string.Empty,
                     Url = linkData.Url ?? string.Empty,
                     Description = linkData.Description ?? string.Empty,
+                    Keywords = linkData.Keywords ?? string.Empty,
                     IsDirectory = linkData.IsDirectory ?? false,
                     CategoryPath = linkData.CategoryPath ?? string.Empty,
                     CreatedDate = linkData.CreatedDate ?? DateTime.Now,

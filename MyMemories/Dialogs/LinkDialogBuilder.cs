@@ -149,6 +149,15 @@ public class LinkDialogBuilder
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
+            Height = 100,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var keywordsTextBox = new TextBox
+        {
+            PlaceholderText = "Enter keywords (comma or semicolon separated, optional)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
             Height = 60,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -198,6 +207,10 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", 
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(descriptionTextBox);
+        
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", 
+            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(keywordsTextBox);
 
         var controls = new LinkDialogControls
         {
@@ -206,6 +219,7 @@ public class LinkDialogBuilder
             TitleTextBox = titleTextBox,
             UrlTextBox = urlTextBox,
             DescriptionTextBox = descriptionTextBox,
+            KeywordsTextBox = keywordsTextBox,
             FolderTypeComboBox = folderControls.TypeComboBox,
             FileFiltersTextBox = folderControls.FiltersTextBox,
             FolderTypeLabel = folderControls.TypeLabel,
@@ -239,7 +253,17 @@ public class LinkDialogBuilder
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            Height = 80,
+            Height = 100,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var keywordsTextBox = new TextBox
+        {
+            Text = link.Keywords,
+            PlaceholderText = "Enter keywords (comma or semicolon separated)",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 60,
             Margin = new Thickness(0, 0, 0, 8)
         };
 
@@ -261,12 +285,17 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", 
             new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(descriptionTextBox);
+        
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", 
+            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(keywordsTextBox);
 
         var controls = new LinkDialogControls
         {
             TitleTextBox = titleTextBox,
             UrlTextBox = urlTextBox,
             DescriptionTextBox = descriptionTextBox,
+            KeywordsTextBox = keywordsTextBox,
             FolderTypeComboBox = folderControls.TypeComboBox,
             FileFiltersTextBox = folderControls.FiltersTextBox,
             FolderTypeLabel = folderControls.TypeLabel,
@@ -793,6 +822,37 @@ public class LinkDialogBuilder
     }
 
     /// <summary>
+    /// Expands all children recursively.
+    /// </summary>
+    private void ExpandAllChildren(TreeViewNode node)
+    {
+        node.IsExpanded = true;
+        foreach (var child in node.Children)
+        {
+            ExpandAllChildren(child);
+        }
+    }
+
+    /// <summary>
+    /// Clones a tree node for display in bookmark browser.
+    /// </summary>
+    private TreeViewNode CloneTreeNode(TreeViewNode source)
+    {
+        var clone = new TreeViewNode
+        {
+            Content = source.Content,
+            IsExpanded = false
+        };
+
+        foreach (var child in source.Children)
+        {
+            clone.Children.Add(CloneTreeNode(child));
+        }
+
+        return clone;
+    }
+
+    /// <summary>
     /// Builds a filtered tree containing only matching nodes.
     /// Returns null if no matches found in this branch.
     /// </summary>
@@ -805,11 +865,13 @@ public class LinkDialogBuilder
         {
             currentNodeMatches = link.Title.ToLowerInvariant().Contains(searchText) ||
                                 link.Url.ToLowerInvariant().Contains(searchText) ||
-                                (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText));
+                                (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText)) ||
+                                (!string.IsNullOrWhiteSpace(link.Keywords) && MatchesKeywordsSearch(link.Keywords, searchText));
         }
         else if (source.Content is CategoryItem category)
         {
-            currentNodeMatches = category.Name.ToLowerInvariant().Contains(searchText);
+            currentNodeMatches = category.Name.ToLowerInvariant().Contains(searchText) ||
+                                (!string.IsNullOrWhiteSpace(category.Keywords) && MatchesKeywordsSearch(category.Keywords, searchText));
         }
 
         // Recursively filter children
@@ -829,7 +891,7 @@ public class LinkDialogBuilder
             var filteredNode = new TreeViewNode
             {
                 Content = source.Content,
-                IsExpanded = false // Will be expanded by caller if needed
+                IsExpanded = false
             };
 
             foreach (var child in matchingChildren)
@@ -840,19 +902,28 @@ public class LinkDialogBuilder
             return filteredNode;
         }
 
-        return null; // No matches in this branch
+        return null;
     }
 
     /// <summary>
-    /// Expands all children recursively.
+    /// Checks if the search term matches any of the keywords (comma or semicolon separated).
     /// </summary>
-    private void ExpandAllChildren(TreeViewNode node)
+    private bool MatchesKeywordsSearch(string keywords, string searchLower)
     {
-        node.IsExpanded = true;
-        foreach (var child in node.Children)
+        if (string.IsNullOrWhiteSpace(keywords))
+            return false;
+
+        var keywordList = keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var keyword in keywordList)
         {
-            ExpandAllChildren(child);
+            var trimmedKeyword = keyword.Trim().ToLowerInvariant();
+            if (trimmedKeyword.Contains(searchLower) || searchLower.Contains(trimmedKeyword))
+            {
+                return true;
+            }
         }
+
+        return false;
     }
 
     private AddLinkResult? CreateAddLinkResult(LinkDialogControls controls)
@@ -860,6 +931,7 @@ public class LinkDialogBuilder
         string title = controls.TitleTextBox.Text.Trim();
         string url = controls.UrlTextBox.Text.Trim();
         string description = controls.DescriptionTextBox.Text.Trim();
+        string keywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty;
 
         if (controls.CategoryComboBox?.SelectedIndex < 0 || 
             string.IsNullOrWhiteSpace(title) || 
@@ -917,6 +989,7 @@ public class LinkDialogBuilder
             Title = title,
             Url = url,
             Description = description,
+            Keywords = keywords,
             IsDirectory = isDirectory,
             CategoryNode = targetCategory,
             FolderType = folderType,
@@ -929,6 +1002,7 @@ public class LinkDialogBuilder
         string newTitle = controls.TitleTextBox.Text.Trim();
         string newUrl = controls.UrlTextBox.Text.Trim();
         string newDescription = controls.DescriptionTextBox.Text.Trim();
+        string newKeywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(newTitle) || string.IsNullOrWhiteSpace(newUrl))
         {
@@ -956,6 +1030,7 @@ public class LinkDialogBuilder
             Title = newTitle,
             Url = newUrl,
             Description = newDescription,
+            Keywords = newKeywords,
             IsDirectory = isDirectory,
             FolderType = folderType,
             FileFilters = fileFilters
@@ -969,6 +1044,7 @@ public class LinkDialogBuilder
         public TextBox TitleTextBox { get; set; } = null!;
         public TextBox UrlTextBox { get; set; } = null!;
         public TextBox DescriptionTextBox { get; set; } = null!;
+        public TextBox KeywordsTextBox { get; set; } = null!;
         public ComboBox FolderTypeComboBox { get; set; } = null!;
         public TextBox FileFiltersTextBox { get; set; } = null!;
         public TextBlock FolderTypeLabel { get; set; } = null!;
@@ -983,24 +1059,5 @@ public class LinkDialogBuilder
         public TextBox FiltersTextBox { get; set; } = null!;
         public TextBlock TypeLabel { get; set; } = null!;
         public TextBlock FiltersLabel { get; set; } = null!;
-    }
-
-    /// <summary>
-    /// Clones a tree node for display in bookmark browser.
-    /// </summary>
-    private TreeViewNode CloneTreeNode(TreeViewNode source)
-    {
-        var clone = new TreeViewNode
-        {
-            Content = source.Content,
-            IsExpanded = false
-        };
-
-        foreach (var child in source.Children)
-        {
-            clone.Children.Add(CloneTreeNode(child));
-        }
-
-        return clone;
     }
 }

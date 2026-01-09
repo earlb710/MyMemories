@@ -43,6 +43,7 @@ public sealed partial class MainWindow
                     Title = result.Title,
                     Url = result.Url,
                     Description = result.Description,
+                    Keywords = result.Keywords,
                     IsDirectory = result.IsDirectory,
                     CategoryPath = categoryPath,
                     CreatedDate = DateTime.Now,
@@ -72,6 +73,7 @@ public sealed partial class MainWindow
             link.Title = editResult.Title;
             link.Url = editResult.Url;
             link.Description = editResult.Description;
+            link.Keywords = editResult.Keywords;
             link.IsDirectory = editResult.IsDirectory;
             link.CategoryPath = _treeViewService!.GetCategoryPath(node.Parent);
             link.ModifiedDate = DateTime.Now;

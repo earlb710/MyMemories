@@ -2,6 +2,7 @@
 using MyMemories.Services;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Windows.System;
@@ -138,8 +139,10 @@ public sealed partial class MainWindow
         {
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             
+            // Search in name, description, and keywords
             if (category.Name.ToLowerInvariant().Contains(searchLower) ||
-                (!string.IsNullOrEmpty(category.Description) && category.Description.ToLowerInvariant().Contains(searchLower)))
+                (!string.IsNullOrEmpty(category.Description) && category.Description.ToLowerInvariant().Contains(searchLower)) ||
+                (!string.IsNullOrEmpty(category.Keywords) && MatchesKeywords(category.Keywords, searchLower)))
             {
                 results.Add(new SearchResult
                 {
@@ -158,9 +161,11 @@ public sealed partial class MainWindow
         {
             var categoryPath = link.CategoryPath;
             
+            // Search in title, URL, description, and keywords
             if (link.Title.ToLowerInvariant().Contains(searchLower) ||
                 (!string.IsNullOrEmpty(link.Url) && link.Url.ToLowerInvariant().Contains(searchLower)) ||
-                (!string.IsNullOrEmpty(link.Description) && link.Description.ToLowerInvariant().Contains(searchLower)))
+                (!string.IsNullOrEmpty(link.Description) && link.Description.ToLowerInvariant().Contains(searchLower)) ||
+                (!string.IsNullOrEmpty(link.Keywords) && MatchesKeywords(link.Keywords, searchLower)))
             {
                 var icon = link.GetIcon();
                 var displayText = string.IsNullOrEmpty(categoryPath) 
@@ -175,6 +180,28 @@ public sealed partial class MainWindow
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// Checks if the search term matches any of the keywords (comma or semicolon separated).
+    /// </summary>
+    private bool MatchesKeywords(string keywords, string searchLower)
+    {
+        if (string.IsNullOrWhiteSpace(keywords))
+            return false;
+
+        // Split keywords by comma or semicolon, trim each, and check if any contains the search term
+        var keywordList = keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var keyword in keywordList)
+        {
+            var trimmedKeyword = keyword.Trim().ToLowerInvariant();
+            if (trimmedKeyword.Contains(searchLower) || searchLower.Contains(trimmedKeyword))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void NavigateToSearchResult(SearchResult result, bool clearSearch = true)

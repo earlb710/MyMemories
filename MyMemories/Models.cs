@@ -71,6 +71,11 @@ public class CategoryItem
     public string? OwnPasswordHash { get; set; }
     public SortOption SortOrder { get; set; } = SortOption.NameAscending;
     
+    /// <summary>
+    /// Keywords for searching and categorization. Comma or semicolon separated.
+    /// </summary>
+    public string Keywords { get; set; } = string.Empty;
+    
     // Bookmark import metadata
     public bool IsBookmarkImport { get; set; } = false;
     public BrowserType? SourceBrowserType { get; set; }
@@ -102,10 +107,30 @@ public class LinkItem : INotifyPropertyChanged
     private UrlStatus _urlStatus = UrlStatus.Unknown;
     private DateTime? _urlLastChecked;
     private string _urlStatusMessage = string.Empty;
+    private string _description = string.Empty;
 
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
+    
+    public string Description 
+    { 
+        get => _description;
+        set
+        {
+            if (_description != value)
+            {
+                _description = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UrlStatusTooltip)); // Update tooltip when description changes
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Keywords for searching and categorization. Comma or semicolon separated.
+    /// </summary>
+    public string Keywords { get; set; } = string.Empty;
+    
     public bool IsDirectory { get; set; }
     public string CategoryPath { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; } = DateTime.Now;
@@ -205,6 +230,33 @@ public class LinkItem : INotifyPropertyChanged
                 UrlStatus.Unknown => "URL status not checked",
                 _ => "URL status unknown"
             };
+        }
+    }
+
+    /// <summary>
+    /// Gets the full tooltip text for URL status, including description for non-error states.
+    /// </summary>
+    [JsonIgnore]
+    public string UrlStatusTooltip
+    {
+        get
+        {
+            var baseTooltip = UrlStatus switch
+            {
+                UrlStatus.Accessible => "✓ URL is accessible\n\nClick to view the webpage",
+                UrlStatus.Error => "⚠ URL returned an error\n\nThe server responded with an error status.\nHover over the link item for details.",
+                UrlStatus.NotFound => "✗ URL not found\n\nThe page does not exist or the server is unreachable.\nHover over the link item for details.",
+                UrlStatus.Unknown => "❓ URL status unknown\n\nClick 'Refresh URL State' on the category\nto check URL accessibility.",
+                _ => "URL status unknown"
+            };
+
+            // Add description for accessible and unknown states (not error states)
+            if (UrlStatus != UrlStatus.Error && UrlStatus != UrlStatus.NotFound && !string.IsNullOrWhiteSpace(Description))
+            {
+                baseTooltip += $"\n\n📝 {Description}";
+            }
+
+            return baseTooltip;
         }
     }
 
@@ -565,6 +617,12 @@ public class CategoryData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Icon { get; set; }
+    
+    /// <summary>
+    /// Keywords for searching and categorization. Comma or semicolon separated.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Keywords { get; set; }
 
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
@@ -626,6 +684,12 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Keywords for searching and categorization. Comma or semicolon separated.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Keywords { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsDirectory { get; set; }
@@ -698,6 +762,7 @@ public class AddLinkResult
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Keywords { get; set; } = string.Empty;
     public bool IsDirectory { get; set; }
     public TreeViewNode? CategoryNode { get; set; }
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
@@ -712,6 +777,7 @@ public class LinkEditResult
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Keywords { get; set; } = string.Empty;
     public bool IsDirectory { get; set; }
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
@@ -732,6 +798,7 @@ public class CategoryEditResult
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Keywords { get; set; } = string.Empty;
     public string Icon { get; set; } = "📁";
     public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
     public string? OwnPassword { get; set; }
