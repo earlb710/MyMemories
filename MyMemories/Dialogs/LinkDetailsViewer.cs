@@ -84,17 +84,15 @@ public class LinkDetailsViewer
         if (link.TagIds.Count == 0)
             return;
 
-        var tagText = Services.TagManagementService.Instance?.GetTagDisplayText(link.TagIds);
-        if (string.IsNullOrEmpty(tagText))
+        var tagService = Services.TagManagementService.Instance;
+        if (tagService == null)
             return;
 
         panel.Children.Add(DialogHelpers.CreateLabel("Tags:"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = tagText,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+        
+        var tagsPanel = tagService.CreateTagBadgesPanel(link.TagIds, fontSize: 12, spacing: 8);
+        tagsPanel.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(tagsPanel);
     }
 
     private void AddUrlSection(StackPanel panel, LinkItem link)

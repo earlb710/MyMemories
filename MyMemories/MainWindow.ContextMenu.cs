@@ -1926,10 +1926,6 @@ public sealed partial class MainWindow
                 StatusText.Text = "No changes made";
             }
         }
-        else
-        {
-            StatusText.Text = "Ready";
-        }
     }
 
     private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
@@ -2104,11 +2100,20 @@ public sealed partial class MainWindow
         {
             category.TagIds.Add(tagId);
             category.ModifiedDate = DateTime.Now;
-            category.NotifyTagsChanged();
 
             // Save the category
             var rootNode = GetRootCategoryNode(_contextMenuNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
+
+            // Refresh the tree node visual to show updated tag indicator
+            _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
+
+            // Refresh the detail view if this category is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                _detailsViewService!.ShowCategoryHeader(category.Name, category.Description, category.Icon, category);
+                await _detailsViewService.ShowCategoryDetailsAsync(category, _contextMenuNode);
+            }
 
             StatusText.Text = $"Added tag '{tag.Name}' to category '{category.Name}'";
         }
@@ -2131,11 +2136,20 @@ public sealed partial class MainWindow
         
         category.TagIds.RemoveAt(category.TagIds.Count - 1);
         category.ModifiedDate = DateTime.Now;
-        category.NotifyTagsChanged();
 
         // Save the category
         var rootNode = GetRootCategoryNode(_contextMenuNode);
         await _categoryService!.SaveCategoryAsync(rootNode);
+
+        // Refresh the tree node visual to show updated tag indicator
+        _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
+
+        // Refresh the detail view if this category is currently selected
+        if (LinksTreeView.SelectedNode == _contextMenuNode)
+        {
+            _detailsViewService!.ShowCategoryHeader(category.Name, category.Description, category.Icon, category);
+            await _detailsViewService.ShowCategoryDetailsAsync(category, _contextMenuNode);
+        }
 
         var tagName = tag?.Name ?? "Unknown";
         StatusText.Text = $"Removed tag '{tagName}' from category '{category.Name}'";
@@ -2158,11 +2172,21 @@ public sealed partial class MainWindow
         {
             link.TagIds.Add(tagId);
             link.ModifiedDate = DateTime.Now;
-            link.NotifyTagsChanged();
 
             // Save the category
             var rootNode = GetRootCategoryNode(_contextMenuNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
+
+            // Refresh the tree node visual to show updated tag indicator
+            _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
+
+            // Refresh the detail view if this link is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                bool showLinkBadge = link.IsDirectory && link.FolderType == FolderLinkType.LinkOnly;
+                _detailsViewService!.ShowLinkHeader(link.Title, link.Description, link.GetIcon(), showLinkBadge, 
+                    link.FileSize, link.CreatedDate, link.ModifiedDate, link);
+            }
 
             StatusText.Text = $"Added tag '{tag.Name}' to link '{link.Title}'";
         }
@@ -2185,11 +2209,21 @@ public sealed partial class MainWindow
         
         link.TagIds.RemoveAt(link.TagIds.Count - 1);
         link.ModifiedDate = DateTime.Now;
-        link.NotifyTagsChanged();
 
         // Save the category
         var rootNode = GetRootCategoryNode(_contextMenuNode);
         await _categoryService!.SaveCategoryAsync(rootNode);
+
+        // Refresh the tree node visual to show updated tag indicator
+        _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
+
+        // Refresh the detail view if this link is currently selected
+        if (LinksTreeView.SelectedNode == _contextMenuNode)
+        {
+            bool showLinkBadge = link.IsDirectory && link.FolderType == FolderLinkType.LinkOnly;
+            _detailsViewService!.ShowLinkHeader(link.Title, link.Description, link.GetIcon(), showLinkBadge, 
+                link.FileSize, link.CreatedDate, link.ModifiedDate, link);
+        }
 
         var tagName = tag?.Name ?? "Unknown";
         StatusText.Text = $"Removed tag '{tagName}' from link '{link.Title}'";

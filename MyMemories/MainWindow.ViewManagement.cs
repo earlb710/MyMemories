@@ -49,9 +49,9 @@ public sealed partial class MainWindow
                 break;
             case FileViewerType.Web:
                 WebViewer.Visibility = Visibility.Visible;
-                HeaderViewerScroll.Visibility = Visibility.Collapsed; // Don't show header - URL bar takes its place
+                HeaderViewerScroll.Visibility = Visibility.Visible; // Show header for web (title, description, tags)
                 DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for web
-                UrlBarPanel.Visibility = Visibility.Visible;
+                UrlBarPanel.Visibility = Visibility.Visible; // Also show URL bar
                 break;
             case FileViewerType.Document:
                 WebViewer.Visibility = Visibility.Visible;

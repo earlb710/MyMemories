@@ -88,13 +88,8 @@ public class HeaderPanelBuilder
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        var titleRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 12
-        };
-
-        titleRow.Children.Add(new TextBlock
+        // Title
+        textPanel.Children.Add(new TextBlock
         {
             Text = categoryName,
             FontSize = 20,
@@ -102,22 +97,15 @@ public class HeaderPanelBuilder
             TextWrapping = TextWrapping.Wrap
         });
 
+        // Tag badges row
         if (category != null && category.TagIds.Count > 0)
         {
-            var tagText = TagManagementService.Instance?.GetTagDisplayText(category.TagIds);
-            if (!string.IsNullOrEmpty(tagText))
+            var tagsPanel = TagManagementService.Instance?.CreateTagBadgesPanel(category.TagIds, fontSize: 11, spacing: 6);
+            if (tagsPanel != null && tagsPanel.Children.Count > 0)
             {
-                titleRow.Children.Add(new TextBlock
-                {
-                    Text = tagText,
-                    FontSize = 14,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
-                });
+                textPanel.Children.Add(tagsPanel);
             }
         }
-
-        textPanel.Children.Add(titleRow);
 
         if (!string.IsNullOrWhiteSpace(description))
         {
@@ -170,13 +158,8 @@ public class HeaderPanelBuilder
             titleText += $" ({FileViewerService.FormatFileSize(fileSize.Value)})";
         }
 
-        var titleRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 12
-        };
-
-        titleRow.Children.Add(new TextBlock
+        // Title
+        textPanel.Children.Add(new TextBlock
         {
             Text = titleText,
             FontSize = 14,
@@ -184,22 +167,15 @@ public class HeaderPanelBuilder
             TextWrapping = TextWrapping.Wrap
         });
 
+        // Tag badges row
         if (linkItem != null && linkItem.TagIds.Count > 0)
         {
-            var tagText = TagManagementService.Instance?.GetTagDisplayText(linkItem.TagIds);
-            if (!string.IsNullOrEmpty(tagText))
+            var tagsPanel = TagManagementService.Instance?.CreateTagBadgesPanel(linkItem.TagIds, fontSize: 10, spacing: 4);
+            if (tagsPanel != null && tagsPanel.Children.Count > 0)
             {
-                titleRow.Children.Add(new TextBlock
-                {
-                    Text = tagText,
-                    FontSize = 11,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
-                });
+                textPanel.Children.Add(tagsPanel);
             }
         }
-
-        textPanel.Children.Add(titleRow);
 
         if (createdDate.HasValue || modifiedDate.HasValue)
         {

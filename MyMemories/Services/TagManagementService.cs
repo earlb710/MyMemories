@@ -211,6 +211,60 @@ public class TagManagementService
     }
 
     /// <summary>
+    /// Gets tag icons only (no names) for tree node display.
+    /// Returns one tag icon glyph per tag.
+    /// </summary>
+    public string GetTagIconsOnly(IEnumerable<string> tagIds)
+    {
+        if (tagIds == null || !tagIds.Any())
+            return string.Empty;
+
+        int count = 0;
+        foreach (var tagId in tagIds)
+        {
+            if (GetTag(tagId) != null)
+            {
+                count++;
+            }
+        }
+
+        if (count == 0)
+            return string.Empty;
+
+        // Return tag icons (one per tag, up to 3, then show count)
+        if (count <= 3)
+        {
+            return string.Join("", Enumerable.Repeat(TagIconGlyph, count));
+        }
+        else
+        {
+            // Show 3 icons + count for many tags
+            return $"{TagIconGlyph}{TagIconGlyph}{TagIconGlyph}+{count - 3}";
+        }
+    }
+
+    /// <summary>
+    /// Gets tag information for display (name and color) for a list of tag IDs.
+    /// Returns a list of tuples with (Name, Color) for each valid tag.
+    /// </summary>
+    public List<(string Name, string Color)> GetTagsInfo(IEnumerable<string> tagIds)
+    {
+        var result = new List<(string Name, string Color)>();
+        if (tagIds == null)
+            return result;
+
+        foreach (var tagId in tagIds)
+        {
+            var tag = GetTag(tagId);
+            if (tag != null)
+            {
+                result.Add((tag.Name, tag.Color));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Creates a styled StackPanel with tag badges for display in UI.
     /// Each tag shows: [tag icon] TagName with tag color background and white text.
     /// </summary>

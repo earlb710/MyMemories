@@ -84,35 +84,23 @@ public static class DetailsUIHelpers
 
         var linkInfo = new StackPanel { Spacing = 4 };
 
-        var titleRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8
-        };
-
-        titleRow.Children.Add(new TextBlock
+        // Title
+        linkInfo.Children.Add(new TextBlock
         {
             Text = link.ToString(),
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
 
+        // Tag badges row
         if (link.TagIds.Count > 0)
         {
-            var tagText = TagManagementService.Instance?.GetTagDisplayText(link.TagIds);
-            if (!string.IsNullOrEmpty(tagText))
+            var tagsPanel = TagManagementService.Instance?.CreateTagBadgesPanel(link.TagIds, fontSize: 10, spacing: 4);
+            if (tagsPanel != null && tagsPanel.Children.Count > 0)
             {
-                titleRow.Children.Add(new TextBlock
-                {
-                    Text = tagText,
-                    FontSize = 11,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
-                });
+                linkInfo.Children.Add(tagsPanel);
             }
         }
-
-        linkInfo.Children.Add(titleRow);
 
         if (!string.IsNullOrWhiteSpace(link.Description))
         {

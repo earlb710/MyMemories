@@ -554,6 +554,7 @@
             <Grid Grid.Column="2" x:Name="ContentGrid">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -567,9 +568,9 @@
                     <StackPanel x:Name="HeaderPanel" Spacing="4"/>
                 </ScrollViewer>
 
-                <!-- URL Bar for Web Viewing (above WebView2) -->
+                <!-- URL Bar for Web Viewing (below Header, above WebView2) -->
                 <Grid 
-                    Grid.Row="0"
+                    Grid.Row="1"
                     x:Name="UrlBarPanel"
                     Visibility="Collapsed"
                     Padding="12,8"
@@ -632,7 +633,7 @@
 
                 <!-- Image Viewer -->
                 <Image 
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="ImageViewer"
                     Visibility="Collapsed"
                     Stretch="Uniform"
@@ -641,13 +642,13 @@
 
                 <!-- WebView2 for HTML and PDF -->
                 <WebView2 
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="WebViewer"
                     Visibility="Collapsed"/>
 
                 <!-- Text Viewer -->
                 <ScrollViewer
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="TextViewerScroll"
                     Visibility="Collapsed">
                     <TextBox 
@@ -663,7 +664,7 @@
 
                 <!-- Node Details Viewer -->
                 <ScrollViewer
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="DetailsViewerScroll"
                     Visibility="Collapsed"
                     Padding="20">
@@ -672,7 +673,7 @@
 
                 <!-- Welcome Panel -->
                 <StackPanel 
-                    Grid.Row="1"
+                    Grid.Row="2"
                     x:Name="WelcomePanel"
                     Visibility="Visible"
                     HorizontalAlignment="Center"

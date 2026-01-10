@@ -377,4 +377,51 @@ public class CategoryDetailsBuilder
 
         _detailsPanel.Children.Add(linksListPanel);
     }
+
+    private Border CreateLinkCard(LinkItem link)
+    {
+        var linkCard = new Border
+        {
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderBrush = new SolidColorBrush(Colors.Gray),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+
+        var linkInfo = new StackPanel { Spacing = 4 };
+
+        // Title
+        linkInfo.Children.Add(new TextBlock
+        {
+            Text = link.ToString(),
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+
+        // Tag badges row
+        if (link.TagIds.Count > 0)
+        {
+            var tagsPanel = TagManagementService.Instance?.CreateTagBadgesPanel(link.TagIds, fontSize: 10, spacing: 4);
+            if (tagsPanel != null && tagsPanel.Children.Count > 0)
+            {
+                linkInfo.Children.Add(tagsPanel);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(link.Description))
+        {
+            linkInfo.Children.Add(new TextBlock
+            {
+                Text = link.Description,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
+
+        linkCard.Child = linkInfo;
+        return linkCard;
+    }
 }
