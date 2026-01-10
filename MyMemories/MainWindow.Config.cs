@@ -89,18 +89,6 @@ public sealed partial class MainWindow
     /// </summary>
     private static string FormatFileSize(long bytes)
     {
-        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-        int suffixIndex = 0;
-        double size = bytes;
-
-        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
-        {
-            size /= 1024;
-            suffixIndex++;
-        }
-
-        return suffixIndex == 0 
-            ? $"{size:N0} {suffixes[suffixIndex]}" 
-            : $"{size:N1} {suffixes[suffixIndex]}";
+        return Utilities.FileUtilities.FormatFileSize(bytes);
     }
 }

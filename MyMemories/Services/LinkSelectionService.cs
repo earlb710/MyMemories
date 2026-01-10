@@ -48,18 +48,24 @@ public class LinkSelectionService
 
     public async Task HandleLinkSelectionAsync(LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
     {
+        System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] START - Title: {linkItem.Title}, URL: {linkItem.Url ?? "(null)"}");
+        
         if (string.IsNullOrEmpty(linkItem.Url))
         {
+            System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] Empty URL - calling HandleEmptyUrlAsync");
             await HandleEmptyUrlAsync(linkItem, linkNode, hideAllViewers, showDetailsViewers, setStatus);
             return;
         }
 
+        System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] Checking if zip entry URL...");
         if (ZipUtilities.IsZipEntryUrl(linkItem.Url))
         {
+            System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] IS zip entry URL - calling HandleZipEntryAsync");
             await HandleZipEntryAsync(linkItem, linkNode, hideAllViewers, showViewer, setStatus);
             return;
         }
 
+        System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] NOT zip entry URL - calling HandleRegularLinkAsync");
         await HandleRegularLinkAsync(linkItem, linkNode, hideAllViewers, showDetailsViewers, showViewer, setStatus);
     }
 
@@ -76,6 +82,10 @@ public class LinkSelectionService
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Starting for: {linkItem.Title}");
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] URL: {linkItem.Url}");
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] IsDirectory: {linkItem.IsDirectory}");
+            
             if (!linkItem.IsDirectory)
             {
                 // Get the password from the root category
@@ -91,19 +101,71 @@ public class LinkSelectionService
                     }
                 }
 
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling hideAllViewers");
                 hideAllViewers();
+                
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling LoadZipEntryAsync");
+                // Load and show the actual content
                 var result = await _fileViewerService.LoadZipEntryAsync(linkItem.Url, password);
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] LoadZipEntryAsync completed, ViewerType: {result.ViewerType}");
 
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling showViewer");
                 // Show the appropriate viewer based on the file type
                 showViewer(result.ViewerType);
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] showViewer completed");
 
+                // Show compact link header (no full details panel for zip entries)
                 ShowLinkHeaderWithBadge(linkItem, setStatus);
+                
                 setStatus($"Viewing from zip: {linkItem.Title}");
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Completed successfully");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Skipping - IsDirectory is true");
             }
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Error: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] StackTrace: {ex.StackTrace}");
             setStatus($"Error loading zip entry: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Shows details for a zip entry file in the details panel.
+    /// </summary>
+    private async Task ShowZipEntryDetailsAsync(LinkItem linkItem, TreeViewNode? linkNode)
+    {
+        // Parse the zip entry URL to get file info
+        var (zipPath, entryPath) = ZipUtilities.ParseZipEntryUrl(linkItem.Url);
+        
+        if (zipPath == null || entryPath == null)
+            return;
+
+        // Show basic file information in details panel
+        // The DetailsViewService will be shown alongside the image viewer
+        if (linkNode != null)
+        {
+            // Create a minimal save callback
+            Func<Task> saveCallback = async () =>
+            {
+                var rootNode = GetRootCategoryNode(linkNode);
+                if (rootNode != null)
+                {
+                    await _categoryService.SaveCategoryAsync(rootNode);
+                }
+            };
+
+            // Show link details (will show file size, path, timestamps, etc.)
+            await _detailsViewService.ShowLinkDetailsAsync(
+                linkItem, 
+                linkNode,
+                async () => { }, // No catalog create for zip entries
+                async () => { }, // No catalog refresh for zip entries
+                null, // No archive refresh
+                saveCallback);
         }
     }
 
@@ -164,21 +226,29 @@ public class LinkSelectionService
         }
         else
         {
-            // For web URLs, check the URL status if not accessible
-            if (_urlStateCheckerService != null && linkItem.UrlStatus != UrlStatus.Accessible)
+            // For web URLs, always check and update the URL status
+            if (_urlStateCheckerService != null)
             {
                 setStatus($"Checking URL accessibility...");
                 
                 try
                 {
+                    var previousStatus = linkItem.UrlStatus;
                     var (status, message) = await _urlStateCheckerService.CheckSingleUrlAsync(linkItem.Url);
+                    
+                    // Update the link item
                     linkItem.UrlStatus = status;
                     linkItem.UrlStatusMessage = message;
                     linkItem.UrlLastChecked = DateTime.Now;
                     
-                    // Save the updated status if we have a node
-                    if (linkNode != null)
+                    // Save the updated status if status changed and we have a node
+                    bool statusChanged = previousStatus != status;
+                    if (statusChanged && linkNode != null)
                     {
+                        // Refresh the tree node visual
+                        _treeViewService.RefreshLinkNode(linkNode, linkItem);
+                        
+                        // Save the category
                         var rootNode = GetRootCategoryNode(linkNode);
                         if (rootNode != null)
                         {
@@ -186,9 +256,8 @@ public class LinkSelectionService
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[LinkSelectionService] Error checking URL: {ex.Message}");
                     // Continue loading the URL even if the check fails
                 }
             }
@@ -252,7 +321,87 @@ public class LinkSelectionService
     private void ShowLinkHeaderWithBadge(LinkItem linkItem, Action<string> setStatus)
     {
         bool showLinkBadge = linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly;
-        _detailsViewService.ShowLinkHeader(linkItem.Title, linkItem.Description, linkItem.GetIcon(), showLinkBadge);
+        
+        // Get file size and timestamps - use stored values or try to get from file system
+        ulong? fileSize = linkItem.FileSize;
+        DateTime? createdDate = linkItem.CreatedDate;
+        DateTime? modifiedDate = linkItem.ModifiedDate;
+        
+        if (!string.IsNullOrEmpty(linkItem.Url))
+        {
+            try
+            {
+                // Check if it's a zip entry URL
+                if (ZipUtilities.IsZipEntryUrl(linkItem.Url))
+                {
+                    // For zip entries, try to get info from the archive
+                    var (zipPath, entryPath) = ZipUtilities.ParseZipEntryUrl(linkItem.Url);
+                    if (zipPath != null && entryPath != null && File.Exists(zipPath))
+                    {
+                        var entryInfo = ZipUtilities.GetEntryInfo(zipPath, entryPath);
+                        if (entryInfo.exists)
+                        {
+                            if (!fileSize.HasValue || fileSize == 0)
+                            {
+                                fileSize = (ulong)entryInfo.size;
+                            }
+                            if (entryInfo.modified != DateTime.MinValue)
+                            {
+                                modifiedDate = entryInfo.modified;
+                            }
+                        }
+                    }
+                }
+                else if (linkItem.IsDirectory)
+                {
+                    // For directories, get directory info
+                    if (Directory.Exists(linkItem.Url))
+                    {
+                        var dirInfo = new DirectoryInfo(linkItem.Url);
+                        if (createdDate == default || createdDate == DateTime.MinValue)
+                        {
+                            createdDate = dirInfo.CreationTime;
+                        }
+                        if (modifiedDate == default || modifiedDate == DateTime.MinValue)
+                        {
+                            modifiedDate = dirInfo.LastWriteTime;
+                        }
+                        // For directories, we can show the item count instead of size
+                        // fileSize remains null for directories
+                    }
+                }
+                else if (File.Exists(linkItem.Url))
+                {
+                    // For regular files (including zip archives), get file info
+                    var fileInfo = new FileInfo(linkItem.Url);
+                    if (!fileSize.HasValue || fileSize == 0)
+                    {
+                        fileSize = (ulong)fileInfo.Length;
+                    }
+                    if (createdDate == default || createdDate == DateTime.MinValue)
+                    {
+                        createdDate = fileInfo.CreationTime;
+                    }
+                    if (modifiedDate == default || modifiedDate == DateTime.MinValue)
+                    {
+                        modifiedDate = fileInfo.LastWriteTime;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore errors getting file info
+            }
+        }
+        
+        _detailsViewService.ShowLinkHeader(
+            linkItem.Title, 
+            linkItem.Description, 
+            linkItem.GetIcon(), 
+            showLinkBadge,
+            fileSize,
+            createdDate,
+            modifiedDate);
     }
 
     private async Task ShowLinkDetailsWithCatalogActions(LinkItem linkItem, TreeViewNode? linkNode, Action<string> setStatus)
@@ -261,14 +410,26 @@ public class LinkSelectionService
         {
             // Only pass RefreshArchiveFromManifestAsync for zip files
             bool isZipFile = IsZipFile(linkItem.Url);
+            
+            // Create save callback
+            Func<Task> saveCallback = async () =>
+            {
+                var rootNode = GetRootCategoryNode(linkNode);
+                if (rootNode != null)
+                {
+                    await _categoryService.SaveCategoryAsync(rootNode);
+                }
+            };
+            
             await _detailsViewService.ShowLinkDetailsAsync(linkItem, linkNode,
                 async () => await _catalogService.CreateCatalogAsync(linkItem, linkNode),
                 async () => await _catalogService.RefreshCatalogAsync(linkItem, linkNode),
-                isZipFile ? async () => await _catalogService.RefreshArchiveFromManifestAsync(linkItem, linkNode) : null);
+                isZipFile ? async () => await _catalogService.RefreshArchiveFromManifestAsync(linkItem, linkNode) : null,
+                saveCallback);
         }
         else
         {
-            await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, null);
+            await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, null, null);
         }
     }
 

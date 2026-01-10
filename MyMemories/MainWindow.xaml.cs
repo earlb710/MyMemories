@@ -154,18 +154,21 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Initialize new refactored services
             _fileLauncherService = new FileLauncherService();
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
-                new ZipCatalogService(_categoryService, _treeViewService));
+                new ZipCatalogService(_categoryService, _treeViewService),
+                _configService.AuditLogService);
             
             // Set the refresh archive callback
             _catalogService.SetRefreshArchiveCallback(RefreshArchiveFromManifestAsync);
             
+            // Initialize URL state checker service BEFORE DoubleTapHandlerService
+            _urlStateCheckerService = new UrlStateCheckerService();
+            
             _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService, _urlStateCheckerService);
             _linkSelectionService.SetUrlTextBox(UrlTextBox); // Wire up URL text box
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
-            _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService);
-
-            // Initialize URL state checker service
-            _urlStateCheckerService = new UrlStateCheckerService();
+            
+            // Initialize DoubleTapHandlerService with URL state checker, category service, and tree view service for status updates
+            _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService, _urlStateCheckerService, _categoryService, _treeViewService);
 
             // Set up WebView2 navigation events to update URL bar
             WebViewer.CoreWebView2.NavigationStarting += (s, e) =>

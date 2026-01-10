@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using MyMemories.Services;
+using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -83,18 +84,29 @@ public sealed partial class MainWindow
     {
         if (sender is TreeViewItem item && item.Content is TreeViewNode node && node.Content is LinkItem link)
         {
+            System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Link: {link.Title}, URL: {link.Url ?? "(null)"}");
+            
+            // Skip zip entry URLs - they contain :: which is invalid for Uri parsing
+            if (ZipUtilities.IsZipEntryUrl(link.Url))
+            {
+                System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Skipping zip entry URL");
+                StatusText.Text = $"Zip entry: {link.Title}";
+                return;
+            }
+            
             // Check if this is a web URL with status information
             if (!link.IsDirectory && 
                 Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && 
                 !uri.IsFile)
             {
+                System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Web URL detected, checking status");
                 if (link.UrlStatus != UrlStatus.Unknown)
                 {
                     // Build status message
                     var statusMessage = link.UrlStatus switch
                     {
                         UrlStatus.Accessible => "? URL is accessible",
-                        UrlStatus.Error => "? URL error",
+                        UrlStatus.Error => "?? URL error",
                         UrlStatus.NotFound => "? URL not found",
                         _ => "URL status unknown"
                     };
@@ -183,9 +195,11 @@ public sealed partial class MainWindow
         }
         else if (node.Content is LinkItem linkItem)
         {
+            // Pass the actual node that was double-tapped, not LinksTreeView.SelectedNode
+            // as they might be different (double-tap can occur before selection updates)
             await _doubleTapHandlerService!.HandleDoubleTapAsync(
                 linkItem,
-                LinksTreeView.SelectedNode,
+                node,  // Use the node from the double-tap event, not the selected node
                 status => StatusText.Text = status);
             e.Handled = true;
         }

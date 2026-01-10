@@ -195,6 +195,7 @@ public sealed partial class MainWindow
                     Title = result.Title,
                     Url = result.Url,
                     Description = result.Description,
+                    Keywords = result.Keywords,
                     IsDirectory = result.IsDirectory,
                     CategoryPath = categoryPath,
                     CreatedDate = DateTime.Now,
@@ -209,6 +210,17 @@ public sealed partial class MainWindow
 
             var rootNode = GetRootCategoryNode(result.CategoryNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
+            
+            // Audit log the link addition
+            if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkChangeAsync(
+                    rootCategory.Name,
+                    "added",
+                    result.Title,
+                    result.Url);
+            }
+            
             StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
 
             if (LinksTreeView.SelectedNode == result.CategoryNode)
@@ -1230,7 +1242,14 @@ public sealed partial class MainWindow
                 return;
             }
 
-            // Build summary UI with editable fields
+            // Handle binary content (images, PDFs, etc.)
+            if (summary.IsBinaryContent)
+            {
+                await ShowBinarySummaryDialog(link, summary);
+                return;
+            }
+
+            // Build summary UI with editable fields for HTML content
             var stackPanel = new StackPanel { Spacing = 12, Width = 650 };
 
             // Title from website
@@ -1254,16 +1273,89 @@ public sealed partial class MainWindow
                 IsTextSelectionEnabled = true
             });
 
-            // Status Code
+            // Metadata row (status, site name, author, date)
+            var metadataPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 16,
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+
             if (summary.StatusCode > 0)
             {
-                stackPanel.Children.Add(new TextBlock
+                metadataPanel.Children.Add(new TextBlock
                 {
                     Text = $"HTTP {summary.StatusCode}",
                     FontSize = 11,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen),
-                    Margin = new Thickness(0, -8, 0, 0)
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen)
                 });
+            }
+
+            if (!string.IsNullOrEmpty(summary.SiteName))
+            {
+                metadataPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📰 {summary.SiteName}",
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+                });
+            }
+
+            if (!string.IsNullOrEmpty(summary.Author))
+            {
+                metadataPanel.Children.Add(new TextBlock
+                {
+                    Text = $"✍️ {summary.Author}",
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange)
+                });
+            }
+
+            if (!string.IsNullOrEmpty(summary.PublishedDate))
+            {
+                metadataPanel.Children.Add(new TextBlock
+                {
+                    Text = $"📅 {summary.PublishedDate}",
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                });
+            }
+
+            if (metadataPanel.Children.Count > 0)
+            {
+                stackPanel.Children.Add(metadataPanel);
+            }
+
+            // Content type and locale
+            if (!string.IsNullOrEmpty(summary.ContentType) || !string.IsNullOrEmpty(summary.Locale))
+            {
+                var typeLocalePanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 16
+                };
+
+                if (!string.IsNullOrEmpty(summary.ContentType))
+                {
+                    typeLocalePanel.Children.Add(new TextBlock
+                    {
+                        Text = $"Type: {summary.ContentType}",
+                        FontSize = 10,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                    });
+                }
+
+                if (!string.IsNullOrEmpty(summary.Locale))
+                {
+                    typeLocalePanel.Children.Add(new TextBlock
+                    {
+                        Text = $"Language: {summary.Locale}",
+                        FontSize = 10,
+                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                    });
+                }
+
+                stackPanel.Children.Add(typeLocalePanel);
             }
 
             // Separator
@@ -1573,6 +1665,177 @@ public sealed partial class MainWindow
             };
             await errorDialog.ShowAsync();
             
+            StatusText.Text = "Ready";
+        }
+    }
+
+    /// <summary>
+    /// Shows a summary dialog for binary content (images, PDFs, etc.)
+    /// </summary>
+    private async Task ShowBinarySummaryDialog(LinkItem link, WebPageSummary summary)
+    {
+        var stackPanel = new StackPanel { Spacing = 12, Width = 500 };
+
+        // Icon based on content type
+        var icon = summary.MediaType switch
+        {
+            string s when s.StartsWith("image/") => "🖼️",
+            string s when s.StartsWith("audio/") => "🎵",
+            string s when s.StartsWith("video/") => "🎬",
+            "application/pdf" => "📋",
+            string s when s.Contains("zip") || s.Contains("compressed") => "📦",
+            _ => "📄"
+        };
+
+        // Title
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = $"{icon} {summary.Title}",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        // URL
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = summary.Url,
+            FontSize = 11,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
+        });
+
+        // Content type info
+        var infoPanel = new Border
+        {
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                Microsoft.UI.ColorHelper.FromArgb(40, 255, 193, 7)),
+            BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gold),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 8, 0, 8)
+        };
+
+        var infoContent = new StackPanel { Spacing = 4 };
+        infoContent.Children.Add(new TextBlock
+        {
+            Text = "⚠️ Binary Content Detected",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+        });
+        infoContent.Children.Add(new TextBlock
+        {
+            Text = summary.ContentSummary,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
+            FontSize = 12
+        });
+        if (!string.IsNullOrEmpty(summary.MediaType))
+        {
+            infoContent.Children.Add(new TextBlock
+            {
+                Text = $"Content-Type: {summary.MediaType}",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LightGray),
+                FontStyle = Windows.UI.Text.FontStyle.Italic
+            });
+        }
+
+        infoPanel.Child = infoContent;
+        stackPanel.Children.Add(infoPanel);
+
+        // Separator
+        stackPanel.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Opacity = 0.3
+        });
+
+        // Current Description
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Current Description:",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 4)
+        });
+
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(link.Description) ? "(No description set)" : link.Description,
+            TextWrapping = TextWrapping.Wrap,
+            FontStyle = string.IsNullOrWhiteSpace(link.Description) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                string.IsNullOrWhiteSpace(link.Description) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
+        });
+
+        // Editable Description
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Description (editable):",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        var descriptionTextBox = new TextBox
+        {
+            Text = !string.IsNullOrWhiteSpace(summary.Description) ? summary.Description : link.Description,
+            PlaceholderText = "Enter description...",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 80
+        };
+        stackPanel.Children.Add(descriptionTextBox);
+
+        // Show dialog
+        var dialog = new ContentDialog
+        {
+            Title = "Binary Content Summary",
+            Content = new ScrollViewer
+            {
+                Content = stackPanel,
+                MaxHeight = 450
+            },
+            CloseButtonText = "Cancel",
+            PrimaryButtonText = "Save Description",
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            var newDescription = descriptionTextBox.Text.Trim();
+
+            if (link.Description != newDescription)
+            {
+                link.Description = newDescription;
+                link.ModifiedDate = DateTime.Now;
+
+                var rootNode = GetRootCategoryNode(_contextMenuNode!);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                StatusText.Text = $"Updated description for '{link.Title}'";
+
+                if (LinksTreeView.SelectedNode == _contextMenuNode)
+                {
+                    await _detailsViewService!.ShowLinkDetailsAsync(link, _contextMenuNode!,
+                        async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode!),
+                        async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode!),
+                        null);
+                }
+            }
+            else
+            {
+                StatusText.Text = "No changes made";
+            }
+        }
+        else
+        {
             StatusText.Text = "Ready";
         }
     }

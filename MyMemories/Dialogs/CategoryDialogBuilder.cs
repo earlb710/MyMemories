@@ -11,12 +11,38 @@ using Windows.UI.Text;
 namespace MyMemories.Dialogs;
 
 /// <summary>
+/// Options for displaying the category dialog.
+/// </summary>
+public record CategoryDialogOptions
+{
+    public string? CurrentName { get; init; }
+    public string? CurrentDescription { get; init; }
+    public string? CurrentIcon { get; init; }
+    public string? CurrentKeywords { get; init; }
+    public bool IsRootCategory { get; init; } = true;
+    public PasswordProtectionType CurrentPasswordProtection { get; init; } = PasswordProtectionType.None;
+    public string? CurrentPasswordHash { get; init; }
+    public bool CurrentIsBookmarkCategory { get; init; }
+    public bool CurrentIsBookmarkLookup { get; init; }
+    public bool? CurrentIsAuditLoggingEnabled { get; init; }
+    public bool HasNonUrlChildren { get; init; }
+}
+
+/// <summary>
 /// Builder for category-related dialogs.
 /// </summary>
 public class CategoryDialogBuilder
 {
     private readonly XamlRoot _xamlRoot;
     private readonly ConfigurationService? _configService;
+    
+    // UI Layout Constants
+    private const int TextBoxDescriptionHeight = 80;
+    private const int TextBoxKeywordsHeight = 60;
+    private const int IconPickerMaxHeight = 180;
+    private const int IconButtonSize = 50;
+    private const int IconFontSize = 28;
+    private const int DialogMaxHeight = 600;
     
     private static readonly List<string> CategoryIcons = new()
     {
@@ -26,7 +52,6 @@ public class CategoryDialogBuilder
         "🖼️", "🌍", "🌐", "🔧", "🔨", "⚙️", "🔗", "📊",
         "📈", "📉", "💻", "⌨️", "🖥️", "📱", "☁️", "💾",
         "🔒", "🔓", "🔑", "🏆", "🎓", "📚", "✏️", "📐",
-        // Bookmark icons
         "🔖", "📑", "🏷️", "📎", "💌", "📧", "📨", "📬"
     };
 
@@ -39,36 +64,14 @@ public class CategoryDialogBuilder
     /// <summary>
     /// Shows the add/edit category dialog with icon picker and password options.
     /// </summary>
-    public async Task<CategoryEditResult?> ShowCategoryDialogAsync(
-        string title, 
-        string? currentName = null, 
-        string? currentDescription = null, 
-        string? currentIcon = null,
-        string? currentKeywords = null,
-        bool isRootCategory = true,
-        PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
-        string? currentPasswordHash = null,
-        bool currentIsBookmarkCategory = false,
-        bool currentIsBookmarkLookup = false,
-        bool? currentIsAuditLoggingEnabled = null,
-        bool hasNonUrlChildren = false)  // New parameter - hide bookmark checkbox if category has non-URL children
+    public async Task<CategoryEditResult?> ShowCategoryDialogAsync(string title, CategoryDialogOptions? options = null)
     {
-        // Default to true for new categories (when currentName is null)
-        bool isNewCategory = currentName == null;
-        bool auditLoggingEnabled = currentIsAuditLoggingEnabled ?? isNewCategory; // Default to true for new categories
+        options ??= new CategoryDialogOptions();
         
-        var (stackPanel, controls) = BuildCategoryDialogUI(
-            currentName, 
-            currentDescription, 
-            currentIcon,
-            currentKeywords,
-            isRootCategory,
-            currentPasswordProtection,
-            currentPasswordHash,
-            currentIsBookmarkCategory,
-            currentIsBookmarkLookup,
-            auditLoggingEnabled,
-            hasNonUrlChildren);
+        bool isNewCategory = options.CurrentName == null;
+        bool auditLoggingEnabled = options.CurrentIsAuditLoggingEnabled ?? isNewCategory;
+        
+        var (stackPanel, controls) = BuildCategoryDialogUI(options, auditLoggingEnabled);
 
         var dialog = new ContentDialog
         {
@@ -76,13 +79,13 @@ public class CategoryDialogBuilder
             Content = new ScrollViewer
             {
                 Content = stackPanel,
-                MaxHeight = 600
+                MaxHeight = DialogMaxHeight
             },
-            PrimaryButtonText = currentName == null ? "Create" : "Save",
+            PrimaryButtonText = isNewCategory ? "Create" : "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = _xamlRoot,
-            IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(currentName)
+            IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(options.CurrentName)
         };
 
         controls.NameTextBox.TextChanged += (s, args) =>
@@ -94,7 +97,7 @@ public class CategoryDialogBuilder
 
         if (result == ContentDialogResult.Primary)
         {
-            return await CreateCategoryResultAsync(controls, currentPasswordHash);
+            return await CreateCategoryResultAsync(controls, options.CurrentPasswordHash);
         }
 
         return null;
@@ -115,17 +118,13 @@ public class CategoryDialogBuilder
             Margin = new Thickness(0, 0, 0, 8)
         };
 
-        // Populate categories, excluding the current category
-        foreach (var category in allCategories)
+        foreach (var category in allCategories.Where(c => c.Node != currentCategoryNode))
         {
-            if (category.Node != currentCategoryNode)
-            {
-                categoryComboBox.Items.Add(new ComboBoxItem 
-                { 
-                    Content = category.Name, 
-                    Tag = category.Node
-                });
-            }
+            categoryComboBox.Items.Add(new ComboBoxItem 
+            { 
+                Content = category.Name, 
+                Tag = category.Node
+            });
         }
 
         if (categoryComboBox.Items.Count == 0)
@@ -144,8 +143,7 @@ public class CategoryDialogBuilder
             Margin = new Thickness(0, 0, 0, 8),
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Target Category: *", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Target Category: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(categoryComboBox);
 
         var dialog = new ContentDialog
@@ -166,327 +164,295 @@ public class CategoryDialogBuilder
 
         var result = await dialog.ShowAsync();
 
-        if (result == ContentDialogResult.Primary && categoryComboBox.SelectedIndex >= 0)
+        if (result == ContentDialogResult.Primary && 
+            categoryComboBox.SelectedItem is ComboBoxItem { Tag: TreeViewNode targetCategory })
         {
-            var selectedItem = categoryComboBox.SelectedItem as ComboBoxItem;
-            var targetCategory = selectedItem?.Tag as TreeViewNode;
-
-            if (targetCategory != null)
-            {
-                return new MoveLinkResult { TargetCategoryNode = targetCategory };
-            }
+            return new MoveLinkResult { TargetCategoryNode = targetCategory };
         }
 
         return null;
     }
 
-    private (StackPanel, CategoryDialogControls) BuildCategoryDialogUI(
-        string? currentName, 
-        string? currentDescription, 
-        string? currentIcon,
-        string? currentKeywords,
-        bool isRootCategory,
-        PasswordProtectionType currentPasswordProtection,
-        string? currentPasswordHash,
-        bool currentIsBookmarkCategory,
-        bool currentIsBookmarkLookup,
-        bool currentIsAuditLoggingEnabled,
-        bool hasNonUrlChildren)
+    private (StackPanel, CategoryDialogControls) BuildCategoryDialogUI(CategoryDialogOptions options, bool auditLoggingEnabled)
     {
-        var categoryNameTextBox = new TextBox
+        var controls = new CategoryDialogControls
         {
-            Text = currentName ?? string.Empty,
-            PlaceholderText = "Enter category name (required)",
-            Margin = new Thickness(0, 0, 0, 8)
+            NameTextBox = CreateNameTextBox(options.CurrentName),
+            DescriptionTextBox = CreateDescriptionTextBox(options.CurrentDescription),
+            KeywordsTextBox = CreateKeywordsTextBox(options.CurrentKeywords),
+            IconGridView = BuildIconPicker(options.CurrentIcon)
         };
 
-        var categoryDescriptionTextBox = new TextBox
+        var bookmarkControls = BuildBookmarkControls(options);
+        controls.IsBookmarkCategoryCheckBox = bookmarkControls.CategoryCheckBox;
+        controls.IsBookmarkLookupCheckBox = bookmarkControls.LookupCheckBox;
+
+        if (options.IsRootCategory && _configService?.IsLoggingEnabled() == true)
         {
-            Text = currentDescription ?? string.Empty,
-            PlaceholderText = "Enter category description (optional)",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 80,
-            Margin = new Thickness(0, 0, 0, 8)
+            controls.IsAuditLoggingCheckBox = CreateAuditLoggingCheckBox(auditLoggingEnabled);
+        }
+
+        if (options.IsRootCategory)
+        {
+            var passwordControls = BuildPasswordControls(options.CurrentPasswordProtection, options.CurrentPasswordHash);
+            controls.PasswordProtectionComboBox = passwordControls.ComboBox;
+            controls.OwnPasswordBox = passwordControls.PasswordBox;
+            controls.ConfirmPasswordBox = passwordControls.ConfirmPasswordBox;
+        }
+
+        var stackPanel = AssembleDialogPanel(controls, options, bookmarkControls.InheritedNote);
+        return (stackPanel, controls);
+    }
+
+    private static TextBox CreateNameTextBox(string? currentName) => new()
+    {
+        Text = currentName ?? string.Empty,
+        PlaceholderText = "Enter category name (required)",
+        Margin = new Thickness(0, 0, 0, 8)
+    };
+
+    private static TextBox CreateDescriptionTextBox(string? currentDescription) => new()
+    {
+        Text = currentDescription ?? string.Empty,
+        PlaceholderText = "Enter category description (optional)",
+        AcceptsReturn = true,
+        TextWrapping = TextWrapping.Wrap,
+        Height = TextBoxDescriptionHeight,
+        Margin = new Thickness(0, 0, 0, 8)
+    };
+
+    private static TextBox CreateKeywordsTextBox(string? currentKeywords) => new()
+    {
+        Text = currentKeywords ?? string.Empty,
+        PlaceholderText = "Enter keywords (comma or semicolon separated, optional)",
+        AcceptsReturn = true,
+        TextWrapping = TextWrapping.Wrap,
+        Height = TextBoxKeywordsHeight,
+        Margin = new Thickness(0, 0, 0, 8)
+    };
+
+    private static CheckBox CreateAuditLoggingCheckBox(bool isChecked)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = "📝 Enable Audit Logging",
+            IsChecked = isChecked,
+            Margin = new Thickness(0, 8, 0, 8)
+        };
+        ToolTipService.SetToolTip(checkBox, "Log all changes to this category to a separate log file");
+        return checkBox;
+    }
+
+    private static (CheckBox? CategoryCheckBox, CheckBox? LookupCheckBox, TextBlock? InheritedNote) BuildBookmarkControls(CategoryDialogOptions options)
+    {
+        if (options.HasNonUrlChildren && !options.CurrentIsBookmarkCategory)
+        {
+            return (null, null, null);
+        }
+
+        var categoryCheckBox = new CheckBox
+        {
+            Content = "🔖 URL Bookmarks Only (restrict to web links)",
+            IsChecked = options.CurrentIsBookmarkCategory,
+            IsEnabled = options.IsRootCategory || !options.CurrentIsBookmarkCategory,
+            Margin = new Thickness(0, 8, 0, 8)
         };
 
-        var categoryKeywordsTextBox = new TextBox
+        var lookupCheckBox = new CheckBox
         {
-            Text = currentKeywords ?? string.Empty,
-            PlaceholderText = "Enter keywords (comma or semicolon separated, optional)",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 60,
-            Margin = new Thickness(0, 0, 0, 8)
+            Content = "🔍 Use for bookmark lookup",
+            IsChecked = options.CurrentIsBookmarkLookup,
+            IsEnabled = options.CurrentIsBookmarkCategory,
+            Visibility = options.CurrentIsBookmarkCategory ? Visibility.Visible : Visibility.Collapsed,
+            Margin = new Thickness(20, 0, 0, 8)
         };
 
-        // URL Bookmarks checkbox - show for all categories, but hide if has non-URL children
-        CheckBox? isBookmarkCategoryCheckBox = null;
-        CheckBox? isBookmarkLookupCheckBox = null;
-        CheckBox? isAuditLoggingCheckBox = null;
+        categoryCheckBox.Checked += (s, e) =>
+        {
+            lookupCheckBox.IsEnabled = true;
+            lookupCheckBox.Visibility = Visibility.Visible;
+        };
+
+        categoryCheckBox.Unchecked += (s, e) =>
+        {
+            lookupCheckBox.IsEnabled = false;
+            lookupCheckBox.Visibility = Visibility.Collapsed;
+            lookupCheckBox.IsChecked = false;
+        };
+
         TextBlock? inheritedNote = null;
-        
-        // Only create bookmark checkbox if category doesn't have non-URL children
-        // (or if it's already a bookmark category - in which case it shouldn't have non-URL children)
-        if (!hasNonUrlChildren || currentIsBookmarkCategory)
+        if (!options.IsRootCategory && options.CurrentIsBookmarkCategory)
         {
-            isBookmarkCategoryCheckBox = new CheckBox
+            inheritedNote = new TextBlock
             {
-                Content = "\U0001F516 URL Bookmarks Only (restrict to web links)", // 🔖
-                IsChecked = currentIsBookmarkCategory,
-                IsEnabled = isRootCategory || !currentIsBookmarkCategory, // Enabled for root or non-inherited subcategories
-                Margin = new Thickness(0, 8, 0, 8)
+                Text = "   (Inherited from parent category)",
+                FontSize = 11,
+                FontStyle = FontStyle.Italic,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, -4, 0, 8)
             };
-            
-            // Bookmark Lookup checkbox (shown only when bookmark category is checked)
-            isBookmarkLookupCheckBox = new CheckBox
-            {
-                Content = "\U0001F50D Use for bookmark lookup", // 🔍
-                IsChecked = currentIsBookmarkLookup,
-                IsEnabled = currentIsBookmarkCategory,
-                Visibility = currentIsBookmarkCategory ? Visibility.Visible : Visibility.Collapsed,
-                Margin = new Thickness(20, 0, 0, 8) // Indented to show relationship
-            };
-            
-            // Wire up the bookmark category checkbox to show/hide lookup checkbox
-            isBookmarkCategoryCheckBox.Checked += (s, e) =>
-            {
-                if (isBookmarkLookupCheckBox != null)
-                {
-                    isBookmarkLookupCheckBox.IsEnabled = true;
-                    isBookmarkLookupCheckBox.Visibility = Visibility.Visible;
-                }
-            };
-            
-            isBookmarkCategoryCheckBox.Unchecked += (s, e) =>
-            {
-                if (isBookmarkLookupCheckBox != null)
-                {
-                    isBookmarkLookupCheckBox.IsEnabled = false;
-                    isBookmarkLookupCheckBox.Visibility = Visibility.Collapsed;
-                    isBookmarkLookupCheckBox.IsChecked = false;
-                }
-            };
-            
-            // Add helper text if it's inherited from bookmark parent
-            if (!isRootCategory && currentIsBookmarkCategory)
-            {
-                inheritedNote = new TextBlock
-                {
-                    Text = "   (Inherited from parent category)",
-                    FontSize = 11,
-                    FontStyle = FontStyle.Italic,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                    Margin = new Thickness(0, -4, 0, 8)
-                };
-            }
-        }
-        // If category has non-URL children, the bookmark option is simply not shown (no message needed)
-        
-        // Audit Logging checkbox (only for root categories when logging is enabled)
-        if (isRootCategory && _configService != null && _configService.IsLoggingEnabled())
-        {
-            isAuditLoggingCheckBox = new CheckBox
-            {
-                Content = "\U0001F4DD Enable Audit Logging", // 📝
-                IsChecked = currentIsAuditLoggingEnabled,
-                Margin = new Thickness(0, 8, 0, 8)
-            };
-            // Set tooltip using static method
-            Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(isAuditLoggingCheckBox, "Log all changes to this category to a separate log file");
         }
 
-        var iconGridView = BuildIconPicker(currentIcon);
+        return (categoryCheckBox, lookupCheckBox, inheritedNote);
+    }
 
-        // Password controls (only for root categories)
-        ComboBox? passwordProtectionComboBox = null;
-        PasswordBox? ownPasswordBox = null;
-        PasswordBox? confirmPasswordBox = null;
-        TextBlock? passwordLabel = null;
-        TextBlock? confirmPasswordLabel = null;
-
-        if (isRootCategory)
+    private static (ComboBox ComboBox, PasswordBox PasswordBox, PasswordBox ConfirmPasswordBox, TextBlock PasswordLabel, TextBlock ConfirmLabel) BuildPasswordControls(
+        PasswordProtectionType currentProtection, 
+        string? currentPasswordHash)
+    {
+        var comboBox = new ComboBox
         {
-            // Debug output
-            System.Diagnostics.Debug.WriteLine($"BuildCategoryDialogUI: isRootCategory={isRootCategory}, creating password controls");
-            
-            passwordProtectionComboBox = new ComboBox
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 0, 0, 12),
-                MinWidth = 200
-            };
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 12),
+            MinWidth = 200
+        };
 
-            passwordProtectionComboBox.Items.Add(new ComboBoxItem 
-            { 
-                Content = "No Password", 
-                Tag = PasswordProtectionType.None 
-            });
-            passwordProtectionComboBox.Items.Add(new ComboBoxItem 
-            { 
-                Content = "Global Password", 
-                Tag = PasswordProtectionType.GlobalPassword 
-            });
-            passwordProtectionComboBox.Items.Add(new ComboBoxItem 
-            { 
-                Content = "Own Password", 
-                Tag = PasswordProtectionType.OwnPassword 
-            });
+        comboBox.Items.Add(new ComboBoxItem { Content = "No Password", Tag = PasswordProtectionType.None });
+        comboBox.Items.Add(new ComboBoxItem { Content = "Global Password", Tag = PasswordProtectionType.GlobalPassword });
+        comboBox.Items.Add(new ComboBoxItem { Content = "Own Password", Tag = PasswordProtectionType.OwnPassword });
+        comboBox.SelectedIndex = (int)currentProtection;
 
-            passwordProtectionComboBox.SelectedIndex = (int)currentPasswordProtection;
+        var isOwnPassword = currentProtection == PasswordProtectionType.OwnPassword;
+        var placeholderText = currentPasswordHash != null ? "Leave empty to keep current password" : "Enter password";
+        var confirmPlaceholder = currentPasswordHash != null ? "Leave empty to keep current password" : "Confirm password";
 
-            passwordLabel = new TextBlock
-            {
-                Text = "Password:",
-                Margin = new Thickness(0, 8, 0, 4),
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Visibility = currentPasswordProtection == PasswordProtectionType.OwnPassword 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed
-            };
-
-            ownPasswordBox = new PasswordBox
-            {
-                PlaceholderText = currentPasswordHash != null 
-                    ? "Leave empty to keep current password" 
-                    : "Enter password",
-                Margin = new Thickness(0, 0, 0, 8),
-                Visibility = currentPasswordProtection == PasswordProtectionType.OwnPassword 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed
-            };
-
-            confirmPasswordLabel = new TextBlock
-            {
-                Text = "Confirm Password:",
-                Margin = new Thickness(0, 0, 0, 4),
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Visibility = currentPasswordProtection == PasswordProtectionType.OwnPassword 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed
-            };
-
-            confirmPasswordBox = new PasswordBox
-            {
-                PlaceholderText = currentPasswordHash != null 
-                    ? "Leave empty to keep current password" 
-                    : "Confirm password",
-                Margin = new Thickness(0, 0, 0, 8),
-                Visibility = currentPasswordProtection == PasswordProtectionType.OwnPassword 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed
-            };
-
-            // Handle password protection type changes
-            passwordProtectionComboBox.SelectionChanged += (s, args) =>
-            {
-                var selectedItem = passwordProtectionComboBox.SelectedItem as ComboBoxItem;
-                var protectionType = selectedItem?.Tag as PasswordProtectionType? ?? PasswordProtectionType.None;
-
-                var isOwnPassword = protectionType == PasswordProtectionType.OwnPassword;
-                if (passwordLabel != null) passwordLabel.Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed;
-                if (ownPasswordBox != null) ownPasswordBox.Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed;
-                if (confirmPasswordLabel != null) confirmPasswordLabel.Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed;
-                if (confirmPasswordBox != null) confirmPasswordBox.Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed;
-            };
-        }
-        else
+        var passwordLabel = new TextBlock
         {
-            System.Diagnostics.Debug.WriteLine($"BuildCategoryDialogUI: isRootCategory={isRootCategory}, NOT creating password controls");
-        }
+            Text = "Password:",
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed
+        };
 
+        var passwordBox = new PasswordBox
+        {
+            PlaceholderText = placeholderText,
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        var confirmLabel = new TextBlock
+        {
+            Text = "Confirm Password:",
+            Margin = new Thickness(0, 0, 0, 4),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        var confirmBox = new PasswordBox
+        {
+            PlaceholderText = confirmPlaceholder,
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = isOwnPassword ? Visibility.Visible : Visibility.Collapsed
+        };
+
+        comboBox.SelectionChanged += (s, args) =>
+        {
+            var selectedItem = comboBox.SelectedItem as ComboBoxItem;
+            var protectionType = selectedItem?.Tag as PasswordProtectionType? ?? PasswordProtectionType.None;
+            var showPassword = protectionType == PasswordProtectionType.OwnPassword;
+            var visibility = showPassword ? Visibility.Visible : Visibility.Collapsed;
+
+            passwordLabel.Visibility = visibility;
+            passwordBox.Visibility = visibility;
+            confirmLabel.Visibility = visibility;
+            confirmBox.Visibility = visibility;
+        };
+
+        return (comboBox, passwordBox, confirmBox, passwordLabel, confirmLabel);
+    }
+
+    private StackPanel AssembleDialogPanel(CategoryDialogControls controls, CategoryDialogOptions options, TextBlock? inheritedNote)
+    {
         var stackPanel = new StackPanel();
-        
-        // Category Name
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Name: *", 
-            new Thickness(0, 0, 0, 4)));
-        stackPanel.Children.Add(categoryNameTextBox);
-        
-        // Description
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", 
-            new Thickness(0, 8, 0, 4)));
-        stackPanel.Children.Add(categoryDescriptionTextBox);
 
-        // Keywords
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords:", 
-            new Thickness(0, 8, 0, 4)));
-        stackPanel.Children.Add(categoryKeywordsTextBox);
+        // Basic fields
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Name: *", new Thickness(0, 0, 0, 4)));
+        stackPanel.Children.Add(controls.NameTextBox);
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(controls.DescriptionTextBox);
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords:", new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(controls.KeywordsTextBox);
 
-        // Audit Logging (only for root categories and when logging is enabled) - FIRST CHECKBOX
-        if (isRootCategory && isAuditLoggingCheckBox != null)
+        // Audit Logging checkbox (root categories only)
+        if (controls.IsAuditLoggingCheckBox != null)
         {
-            stackPanel.Children.Add(isAuditLoggingCheckBox);
+            stackPanel.Children.Add(controls.IsAuditLoggingCheckBox);
         }
 
-        // URL Bookmarks checkbox - show for all categories, but hide if has non-URL children
-        if (isBookmarkCategoryCheckBox != null)
+        // Bookmark checkboxes
+        if (controls.IsBookmarkCategoryCheckBox != null)
         {
-            stackPanel.Children.Add(isBookmarkCategoryCheckBox);
-            
-            // Add helper text if it's inherited
+            stackPanel.Children.Add(controls.IsBookmarkCategoryCheckBox);
             if (inheritedNote != null)
             {
                 stackPanel.Children.Add(inheritedNote);
             }
-            
-            // Add bookmark lookup checkbox (shown conditionally)
-            if (isBookmarkLookupCheckBox != null)
+            if (controls.IsBookmarkLookupCheckBox != null)
             {
-                stackPanel.Children.Add(isBookmarkLookupCheckBox);
+                stackPanel.Children.Add(controls.IsBookmarkLookupCheckBox);
             }
         }
 
-        // Password Protection (only for root categories) - BEFORE ICON PICKER
-        if (isRootCategory && passwordProtectionComboBox != null)
+        // Password controls (root categories only)
+        if (options.IsRootCategory && controls.PasswordProtectionComboBox != null)
         {
-            System.Diagnostics.Debug.WriteLine("Adding password controls to stackPanel");
-            
-            var passwordSectionLabel = DialogHelpers.CreateLabel("Password Protection:", 
-                new Thickness(0, 16, 0, 4));
-            stackPanel.Children.Add(passwordSectionLabel);
-            stackPanel.Children.Add(passwordProtectionComboBox);
+            AddPasswordSection(stackPanel, controls);
+        }
 
-            if (passwordLabel != null) stackPanel.Children.Add(passwordLabel);
-            if (ownPasswordBox != null) stackPanel.Children.Add(ownPasswordBox);
-            if (confirmPasswordLabel != null) stackPanel.Children.Add(confirmPasswordLabel);
-            if (confirmPasswordBox != null) stackPanel.Children.Add(confirmPasswordBox);
-            
-            System.Diagnostics.Debug.WriteLine($"Password controls added. StackPanel child count: {stackPanel.Children.Count}");
-        }
-        else
+        // Icon picker
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Icon:", new Thickness(0, 16, 0, 4)));
+        stackPanel.Children.Add(new ScrollViewer
         {
-            System.Diagnostics.Debug.WriteLine($"NOT adding password controls. isRootCategory={isRootCategory}, comboBox null={passwordProtectionComboBox == null}");
-        }
-        
-        // Icon Picker - AT THE END
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category Icon:", 
-            new Thickness(0, 16, 0, 4)));
-        
-        var iconScrollViewer = new ScrollViewer
-        {
-            MaxHeight = 180,
+            Content = controls.IconGridView,
+            MaxHeight = IconPickerMaxHeight,
             Margin = new Thickness(0, 0, 0, 8)
-        };
-        iconScrollViewer.Content = iconGridView;
-        stackPanel.Children.Add(iconScrollViewer);
-        
-        System.Diagnostics.Debug.WriteLine($"Final stackPanel child count: {stackPanel.Children.Count}");
+        });
 
-        var controls = new CategoryDialogControls
+        return stackPanel;
+    }
+
+    private static void AddPasswordSection(StackPanel stackPanel, CategoryDialogControls controls)
+    {
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Password Protection:", new Thickness(0, 16, 0, 4)));
+        stackPanel.Children.Add(controls.PasswordProtectionComboBox!);
+
+        stackPanel.Children.Add(new TextBlock
         {
-            NameTextBox = categoryNameTextBox,
-            DescriptionTextBox = categoryDescriptionTextBox,
-            KeywordsTextBox = categoryKeywordsTextBox,
-            IconGridView = iconGridView,
-            IsBookmarkCategoryCheckBox = isBookmarkCategoryCheckBox,
-            IsBookmarkLookupCheckBox = isBookmarkLookupCheckBox,
-            IsAuditLoggingCheckBox = isAuditLoggingCheckBox,
-            PasswordProtectionComboBox = passwordProtectionComboBox,
-            OwnPasswordBox = ownPasswordBox,
-            ConfirmPasswordBox = confirmPasswordBox
-        };
+            Text = "⚠️ Note: Password protection only restricts access to viewing links in this category. It does not protect the actual files or folders that are linked.",
+            FontSize = 11,
+            FontStyle = FontStyle.Italic,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
 
-        return (stackPanel, controls);
+        if (controls.OwnPasswordBox != null)
+        {
+            // Add password label and box (visibility controlled by combo selection)
+            var passwordLabel = new TextBlock
+            {
+                Text = "Password:",
+                Margin = new Thickness(0, 8, 0, 4),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Visibility = controls.OwnPasswordBox.Visibility
+            };
+            stackPanel.Children.Add(passwordLabel);
+            stackPanel.Children.Add(controls.OwnPasswordBox);
+        }
+
+        if (controls.ConfirmPasswordBox != null)
+        {
+            var confirmLabel = new TextBlock
+            {
+                Text = "Confirm Password:",
+                Margin = new Thickness(0, 0, 0, 4),
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Visibility = controls.ConfirmPasswordBox.Visibility
+            };
+            stackPanel.Children.Add(confirmLabel);
+            stackPanel.Children.Add(controls.ConfirmPasswordBox);
+        }
     }
 
     private GridView BuildIconPicker(string? currentIcon)
@@ -501,10 +467,10 @@ public class CategoryDialogBuilder
         for (int i = 0; i < CategoryIcons.Count; i++)
         {
             var icon = CategoryIcons[i];
-            var iconButton = new Border
+            iconGridView.Items.Add(new Border
             {
-                Width = 50,
-                Height = 50,
+                Width = IconButtonSize,
+                Height = IconButtonSize,
                 Margin = new Thickness(4),
                 BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
                 BorderThickness = new Thickness(1),
@@ -512,12 +478,11 @@ public class CategoryDialogBuilder
                 Child = new TextBlock
                 {
                     Text = icon,
-                    FontSize = 28,
+                    FontSize = IconFontSize,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 }
-            };
-            iconGridView.Items.Add(iconButton);
+            });
 
             if (!string.IsNullOrEmpty(currentIcon) && icon == currentIcon)
             {
@@ -529,97 +494,95 @@ public class CategoryDialogBuilder
         return iconGridView;
     }
 
-    private async Task<CategoryEditResult?> CreateCategoryResultAsync(
-        CategoryDialogControls controls,
-        string? currentPasswordHash)
+    private async Task<CategoryEditResult?> CreateCategoryResultAsync(CategoryDialogControls controls, string? currentPasswordHash)
     {
         string categoryName = controls.NameTextBox.Text.Trim();
-        string categoryDescription = controls.DescriptionTextBox.Text.Trim();
-        string categoryKeywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty;
-        string selectedIcon = CategoryIcons[0];
-
-        if (controls.IconGridView.SelectedIndex >= 0 && controls.IconGridView.SelectedIndex < CategoryIcons.Count)
-        {
-            selectedIcon = CategoryIcons[controls.IconGridView.SelectedIndex];
-        }
-
         if (string.IsNullOrWhiteSpace(categoryName))
         {
             return null;
         }
 
-        var passwordProtection = PasswordProtectionType.None;
-        string? ownPassword = null;
+        string selectedIcon = controls.IconGridView.SelectedIndex >= 0 && controls.IconGridView.SelectedIndex < CategoryIcons.Count
+            ? CategoryIcons[controls.IconGridView.SelectedIndex]
+            : CategoryIcons[0];
 
-        if (controls.PasswordProtectionComboBox != null)
+        var passwordResult = await ValidateAndGetPasswordAsync(controls, currentPasswordHash);
+        if (passwordResult == null)
         {
-            var selectedItem = controls.PasswordProtectionComboBox.SelectedItem as ComboBoxItem;
-            passwordProtection = selectedItem?.Tag as PasswordProtectionType? ?? PasswordProtectionType.None;
-
-            // Check if Global Password is selected but not set
-            if (passwordProtection == PasswordProtectionType.GlobalPassword)
-            {
-                if (_configService == null || !_configService.HasGlobalPassword())
-                {
-                    await DialogHelpers.ShowErrorAsync(_xamlRoot,
-                        "Global Password Not Set",
-                        "A global password has not been configured yet. Please set a global password in the Security Setup (Configuration > Security Setup) before using this option.");
-                    return null;
-                }
-            }
-
-            if (passwordProtection == PasswordProtectionType.OwnPassword && 
-                controls.OwnPasswordBox != null && 
-                controls.ConfirmPasswordBox != null)
-            {
-                // Validate password
-                if (!string.IsNullOrEmpty(controls.OwnPasswordBox.Password) || 
-                    !string.IsNullOrEmpty(controls.ConfirmPasswordBox.Password))
-                {
-                    if (controls.OwnPasswordBox.Password != controls.ConfirmPasswordBox.Password)
-                    {
-                        await DialogHelpers.ShowErrorAsync(_xamlRoot,
-                            "Password Mismatch",
-                            "The passwords do not match. Please try again.");
-                        return null;
-                    }
-
-                    if (!string.IsNullOrEmpty(controls.OwnPasswordBox.Password))
-                    {
-                        ownPassword = controls.OwnPasswordBox.Password;
-                    }
-                }
-                else if (currentPasswordHash == null)
-                {
-                    // New category with own password but no password entered
-                    await DialogHelpers.ShowErrorAsync(_xamlRoot,
-                        "Password Required",
-                        "Please enter a password or select a different protection type.");
-                    return null;
-                }
-            }
+            return null;
         }
 
         return new CategoryEditResult
         {
             Name = categoryName,
-            Description = categoryDescription,
-            Keywords = categoryKeywords,
+            Description = controls.DescriptionTextBox.Text.Trim(),
+            Keywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty,
             Icon = selectedIcon,
-            PasswordProtection = passwordProtection,
-            OwnPassword = ownPassword,
+            PasswordProtection = passwordResult.Value.Protection,
+            OwnPassword = passwordResult.Value.Password,
             IsBookmarkCategory = controls.IsBookmarkCategoryCheckBox?.IsChecked ?? false,
             IsBookmarkLookup = controls.IsBookmarkLookupCheckBox?.IsChecked ?? false,
             IsAuditLoggingEnabled = controls.IsAuditLoggingCheckBox?.IsChecked ?? false
         };
     }
 
-    private class CategoryDialogControls
+    private async Task<(PasswordProtectionType Protection, string? Password)?> ValidateAndGetPasswordAsync(
+        CategoryDialogControls controls, 
+        string? currentPasswordHash)
     {
-        public TextBox NameTextBox { get; set; } = null!;
-        public TextBox DescriptionTextBox { get; set; } = null!;
-        public TextBox KeywordsTextBox { get; set; } = null!;
-        public GridView IconGridView { get; set; } = null!;
+        if (controls.PasswordProtectionComboBox == null)
+        {
+            return (PasswordProtectionType.None, null);
+        }
+
+        var selectedItem = controls.PasswordProtectionComboBox.SelectedItem as ComboBoxItem;
+        var passwordProtection = selectedItem?.Tag as PasswordProtectionType? ?? PasswordProtectionType.None;
+
+        if (passwordProtection == PasswordProtectionType.GlobalPassword)
+        {
+            if (_configService == null || !_configService.HasGlobalPassword())
+            {
+                await DialogHelpers.ShowErrorAsync(_xamlRoot,
+                    "Global Password Not Set",
+                    "A global password has not been configured yet. Please set a global password in the Security Setup (Configuration > Security Setup) before using this option.");
+                return null;
+            }
+            return (passwordProtection, null);
+        }
+
+        if (passwordProtection == PasswordProtectionType.OwnPassword &&
+            controls.OwnPasswordBox != null &&
+            controls.ConfirmPasswordBox != null)
+        {
+            var password = controls.OwnPasswordBox.Password;
+            var confirmPassword = controls.ConfirmPasswordBox.Password;
+
+            if (!string.IsNullOrEmpty(password) || !string.IsNullOrEmpty(confirmPassword))
+            {
+                if (password != confirmPassword)
+                {
+                    await DialogHelpers.ShowErrorAsync(_xamlRoot, "Password Mismatch", "The passwords do not match. Please try again.");
+                    return null;
+                }
+                return (passwordProtection, string.IsNullOrEmpty(password) ? null : password);
+            }
+            
+            if (currentPasswordHash == null)
+            {
+                await DialogHelpers.ShowErrorAsync(_xamlRoot, "Password Required", "Please enter a password or select a different protection type.");
+                return null;
+            }
+        }
+
+        return (passwordProtection, null);
+    }
+
+    private sealed class CategoryDialogControls
+    {
+        public required TextBox NameTextBox { get; init; }
+        public required TextBox DescriptionTextBox { get; init; }
+        public required TextBox KeywordsTextBox { get; init; }
+        public required GridView IconGridView { get; init; }
         public CheckBox? IsBookmarkCategoryCheckBox { get; set; }
         public CheckBox? IsBookmarkLookupCheckBox { get; set; }
         public CheckBox? IsAuditLoggingCheckBox { get; set; }

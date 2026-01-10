@@ -507,12 +507,6 @@ public class CategoryService
                     CatalogEntries = null
                 };
 
-                // Debug: Log zip file password protection status
-                if ((linkData.IsDirectory ?? false) && (linkData.Url ?? string.Empty).EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[CategoryService] Loaded zip link: '{linkData.Title}', IsZipPasswordProtected={linkData.IsZipPasswordProtected}");
-                }
-
                 // Process catalog entries (only for non-catalog-entry links)
                 if (child.Children.Count > 0 && !link.IsCatalogEntry)
                 {
@@ -685,16 +679,27 @@ public class CategoryService
                     UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty
                 };
 
-                // Debug: Log zip file password protection status
-                if (linkItem.IsDirectory && linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                {
-                    System.Diagnostics.Debug.WriteLine($"[CategoryService] Loaded zip link: '{linkItem.Title}', IsZipPasswordProtected={linkItem.IsZipPasswordProtected}");
-                }
-
                 if (linkData.CatalogEntries != null)
                 {
                     // Count only files (not subdirectories) for the file count
-                    linkItem.CatalogFileCount = linkData.CatalogEntries.Count(entry => entry.IsDirectory != true);
+                    // Also calculate total size
+                    int fileCount = 0;
+                    ulong totalSize = 0;
+                    
+                    foreach (var entry in linkData.CatalogEntries)
+                    {
+                        if (entry.IsDirectory != true)
+                        {
+                            fileCount++;
+                            if (entry.FileSize.HasValue)
+                            {
+                                totalSize += entry.FileSize.Value;
+                            }
+                        }
+                    }
+                    
+                    linkItem.CatalogFileCount = fileCount;
+                    linkItem.CatalogTotalSize = totalSize;
                 }
 
                 var linkNode = new TreeViewNode { Content = linkItem };
@@ -769,8 +774,7 @@ public class CategoryService
     /// </summary>
     private string SanitizeFileName(string fileName)
     {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        return string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
+        return FileUtilities.SanitizeFileName(fileName);
     }
 
     /// <summary>
@@ -910,22 +914,6 @@ public class CategoryService
     }
 
     /// <summary>
-    /// Formats file size in human-readable format.
-    /// </summary>
-    private string FormatFileSize(ulong bytes)
-    {
-        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
-    }
-
-    /// <summary>
     /// Checks if a node already has catalog entries.
     /// </summary>
     public bool HasCatalogEntries(TreeViewNode node)
@@ -956,7 +944,7 @@ public class CategoryService
     }
 
     /// <summary>
-    /// Updates the catalog file count for a link item based on its children.
+    /// Updates the catalog file count and total size for a link item based on its children.
     /// Counts only direct file children (not subdirectories).
     /// </summary>
     public void UpdateCatalogFileCount(TreeViewNode linkNode)
@@ -964,12 +952,25 @@ public class CategoryService
         if (linkNode.Content is LinkItem link && link.IsDirectory)
         {
             // Count only files that are direct children, exclude subdirectory entries
-            var fileCount = linkNode.Children.Count(child =>
-                child.Content is LinkItem catalogEntry &&
-                catalogEntry.IsCatalogEntry &&
-                !catalogEntry.IsDirectory);
+            int fileCount = 0;
+            ulong totalSize = 0;
+            
+            foreach (var child in linkNode.Children)
+            {
+                if (child.Content is LinkItem catalogEntry && 
+                    catalogEntry.IsCatalogEntry && 
+                    !catalogEntry.IsDirectory)
+                {
+                    fileCount++;
+                    if (catalogEntry.FileSize.HasValue)
+                    {
+                        totalSize += catalogEntry.FileSize.Value;
+                    }
+                }
+            }
 
             link.CatalogFileCount = fileCount;
+            link.CatalogTotalSize = totalSize;
         }
     }
 

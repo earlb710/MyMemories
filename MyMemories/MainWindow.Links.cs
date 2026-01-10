@@ -60,12 +60,28 @@ public sealed partial class MainWindow
             // Update parent categories' ModifiedDate and save
             await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
 
+            // Audit log the link addition
+            var rootNode = GetRootCategoryNode(result.CategoryNode);
+            if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkChangeAsync(
+                    rootCategory.Name,
+                    "added",
+                    result.Title,
+                    result.Url);
+            }
+
             StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
         }
     }
 
     private async Task EditLinkAsync(LinkItem link, TreeViewNode node)
     {
+        // Store original values for audit logging
+        var originalTitle = link.Title;
+        var originalUrl = link.Url;
+        var originalDescription = link.Description;
+        
         var editResult = await _linkDialog!.ShowEditAsync(link);
         
         if (editResult != null)
@@ -92,6 +108,28 @@ public sealed partial class MainWindow
             {
                 // Update parent categories' ModifiedDate and save
                 await UpdateParentCategoriesAndSaveAsync(parentCategory);
+                
+                // Audit log the link edit
+                var rootNode = GetRootCategoryNode(parentCategory);
+                if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+                {
+                    // Build change details
+                    var changes = new System.Text.StringBuilder();
+                    if (originalTitle != editResult.Title)
+                        changes.Append($"Title: '{originalTitle}' ? '{editResult.Title}'; ");
+                    if (originalUrl != editResult.Url)
+                        changes.Append($"URL changed; ");
+                    if (originalDescription != editResult.Description)
+                        changes.Append($"Description changed; ");
+                    
+                    var changeDetails = changes.Length > 0 ? changes.ToString().TrimEnd(' ', ';') : "Properties updated";
+                    
+                    await _configService!.AuditLogService!.LogLinkChangeAsync(
+                        rootCategory.Name,
+                        "edited",
+                        editResult.Title,
+                        changeDetails);
+                }
             }
 
             StatusText.Text = $"Updated link: {editResult.Title}";
@@ -124,6 +162,7 @@ public sealed partial class MainWindow
         if (result?.TargetCategoryNode != null)
         {
             var targetCategoryNode = result.TargetCategoryNode;
+            var sourceCategoryPath = _treeViewService!.GetCategoryPath(currentCategoryNode);
             var targetCategoryPath = _treeViewService!.GetCategoryPath(targetCategoryNode);
 
             link.CategoryPath = targetCategoryPath;
@@ -143,6 +182,28 @@ public sealed partial class MainWindow
             if (sourceRootNode != targetRootNode)
             {
                 await _categoryService!.SaveCategoryAsync(targetRootNode);
+            }
+
+            // Log the move operation to audit log if enabled
+            if (sourceRootNode.Content is CategoryItem sourceRootCategory && sourceRootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkMovedAsync(
+                    sourceRootCategory.Name, 
+                    link.Title, 
+                    sourceCategoryPath, 
+                    targetCategoryPath);
+            }
+            
+            // If moving to a different root category with audit logging enabled, log there too
+            if (sourceRootNode != targetRootNode && 
+                targetRootNode.Content is CategoryItem targetRootCategory && 
+                targetRootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkMovedAsync(
+                    targetRootCategory.Name, 
+                    link.Title, 
+                    sourceCategoryPath, 
+                    targetCategoryPath);
             }
 
             StatusText.Text = $"Moved link '{link.Title}' to '{targetCategoryPath}'";
@@ -225,6 +286,7 @@ public sealed partial class MainWindow
             if (result == ContentDialogResult.Primary && node.Parent != null)
             {
                 var parentCategory = node.Parent;
+                bool deletedFile = false;
                 
                 // Delete the physical file if checkbox is checked
                 if (deleteFileCheckBox.IsChecked == true)
@@ -232,6 +294,7 @@ public sealed partial class MainWindow
                     try
                     {
                         System.IO.File.Delete(link.Url);
+                        deletedFile = true;
                         StatusText.Text = $"Removed link and deleted zip file: {link.Title}";
                     }
                     catch (Exception ex)
@@ -258,6 +321,18 @@ public sealed partial class MainWindow
 
                 // Update parent categories' ModifiedDate and save
                 await UpdateParentCategoriesAndSaveAsync(parentCategory);
+                
+                // Audit log the link removal
+                var rootNode = GetRootCategoryNode(parentCategory);
+                if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+                {
+                    var details = deletedFile ? "Zip file deleted from disk" : "Zip file kept on disk";
+                    await _configService!.AuditLogService!.LogLinkChangeAsync(
+                        rootCategory.Name,
+                        "removed",
+                        link.Title,
+                        $"URL: {link.Url}, {details}");
+                }
 
                 if (LinksTreeView.SelectedNode == node)
                 {
@@ -287,6 +362,17 @@ public sealed partial class MainWindow
 
                 // Update parent categories' ModifiedDate and save
                 await UpdateParentCategoriesAndSaveAsync(parentCategory);
+                
+                // Audit log the link removal
+                var rootNode = GetRootCategoryNode(parentCategory);
+                if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+                {
+                    await _configService!.AuditLogService!.LogLinkChangeAsync(
+                        rootCategory.Name,
+                        "removed",
+                        link.Title,
+                        link.Url);
+                }
 
                 if (LinksTreeView.SelectedNode == node)
                 {

@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -47,7 +48,7 @@ public sealed partial class MainWindow
             infoPanel.Children.Add(new TextBlock
             {
                 Text = $"{lineCount:N0} lines",
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center
             });
@@ -55,7 +56,7 @@ public sealed partial class MainWindow
             infoPanel.Children.Add(new TextBlock
             {
                 Text = FormatFileSize(fileInfo.Length),
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center
             });
@@ -63,7 +64,7 @@ public sealed partial class MainWindow
             infoPanel.Children.Add(new TextBlock
             {
                 Text = $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}",
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center
             });
@@ -77,11 +78,11 @@ public sealed partial class MainWindow
                 IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                FontFamily = new FontFamily("Consolas"),
                 FontSize = 11,
                 Height = 400,
                 BorderThickness = new Thickness(1),
-                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Gray)
             };
 
             // Wrap in scroll viewer for horizontal scrolling
@@ -155,11 +156,77 @@ public sealed partial class MainWindow
                 MaxHeight = 700
             };
 
+            // Scroll to bottom after the dialog is shown and layout is complete
+            dialog.Opened += async (s, args) =>
+            {
+                // Wait for the visual tree to be fully built and layout to complete
+                await Task.Delay(100);
+                
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        // Force layout update
+                        logTextBox.UpdateLayout();
+                        
+                        // Find the internal ScrollViewer of the TextBox
+                        var internalScrollViewer = FindChildOfType<ScrollViewer>(logTextBox);
+                        if (internalScrollViewer != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[LogFileViewer] Found internal ScrollViewer, ScrollableHeight: {internalScrollViewer.ScrollableHeight}");
+                            // Scroll to bottom using ChangeView
+                            internalScrollViewer.ChangeView(null, internalScrollViewer.ScrollableHeight, null, false);
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[LogFileViewer] No internal ScrollViewer, using outer, ScrollableHeight: {scrollViewer.ScrollableHeight}");
+                            // Fallback: scroll the outer ScrollViewer
+                            scrollViewer.ChangeView(null, scrollViewer.ScrollableHeight, null, false);
+                        }
+                        
+                        // Alternative: Set selection to end of text to force scroll
+                        logTextBox.SelectionStart = logTextBox.Text.Length;
+                        logTextBox.SelectionLength = 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LogFileViewer] Error scrolling: {ex.Message}");
+                    }
+                });
+            };
+
             await dialog.ShowAsync();
         }
         catch (Exception ex)
         {
             await ShowErrorDialogAsync("Error Reading Log File", $"Failed to read log file:\n{ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Finds the first child of a specific type in the visual tree.
+    /// </summary>
+    private static T? FindChildOfType<T>(DependencyObject parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+
+        int childCount = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < childCount; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            
+            if (child is T typedChild)
+            {
+                return typedChild;
+            }
+
+            var result = FindChildOfType<T>(child);
+            if (result != null)
+            {
+                return result;
+            }
+        }
+
+        return null;
     }
 }

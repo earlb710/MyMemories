@@ -47,32 +47,8 @@ public class LinkDetailsDialog
     public Task<MoveLinkResult?> ShowMoveLinkAsync(IEnumerable<CategoryNode> allCategories, TreeViewNode currentCategoryNode, string linkTitle) => 
         _categoryDialogBuilder.ShowMoveLinkAsync(allCategories, currentCategoryNode, linkTitle);
 
-    public Task<CategoryEditResult?> ShowCategoryDialogAsync(
-        string title, 
-        string? currentName = null, 
-        string? currentDescription = null, 
-        string? currentIcon = null,
-        string? currentKeywords = null,
-        bool isRootCategory = true,
-        PasswordProtectionType currentPasswordProtection = PasswordProtectionType.None,
-        string? currentPasswordHash = null,
-        bool currentIsBookmarkCategory = false,
-        bool currentIsBookmarkLookup = false,
-        bool currentIsAuditLoggingEnabled = false,
-        bool hasNonUrlChildren = false) => 
-        _categoryDialogBuilder.ShowCategoryDialogAsync(
-            title, 
-            currentName, 
-            currentDescription, 
-            currentIcon,
-            currentKeywords,
-            isRootCategory, 
-            currentPasswordProtection, 
-            currentPasswordHash,
-            currentIsBookmarkCategory,
-            currentIsBookmarkLookup,
-            currentIsAuditLoggingEnabled,
-            hasNonUrlChildren);
+    public Task<CategoryEditResult?> ShowCategoryDialogAsync(string title, CategoryDialogOptions? options = null) => 
+        _categoryDialogBuilder.ShowCategoryDialogAsync(title, options);
 
     public Task<ZipFolderResult?> ShowZipFolderDialogAsync(string folderTitle, string defaultTargetDirectory, string sourceFolderPath) => 
         _zipDialogBuilder.ShowZipFolderDialogAsync(folderTitle, defaultTargetDirectory, sourceFolderPath);

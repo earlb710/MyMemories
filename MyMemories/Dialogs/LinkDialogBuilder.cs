@@ -149,7 +149,8 @@ public class LinkDialogBuilder
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            Height = 100,
+            MinWidth = 500,
+            Height = 150,
             Margin = new Thickness(0, 0, 0, 8)
         };
 
@@ -253,7 +254,8 @@ public class LinkDialogBuilder
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            Height = 100,
+            MinWidth = 500,
+            Height = 150,
             Margin = new Thickness(0, 0, 0, 8)
         };
 

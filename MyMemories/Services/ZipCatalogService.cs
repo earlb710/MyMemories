@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
+using MyMemories.Utilities;
 
 namespace MyMemories.Services;
 
@@ -181,7 +182,7 @@ public class ZipCatalogService
                 {
                     Title = entryName,
                     Url = $"{zipPath}::{fullName}",
-                    Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
+                    Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FileUtilities.FormatFileSize((ulong)length)})",
                     IsDirectory = isDirectory,
                     CategoryPath = zipLinkItem.CategoryPath,
                     CreatedDate = lastWrite,
@@ -308,7 +309,7 @@ public class ZipCatalogService
             {
                 Title = entryName,
                 Url = $"{zipPath}::{fullName}",
-                Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FormatFileSize((ulong)length)})",
+                Description = isDirectory ? "Folder in zip archive" : $"File in zip archive ({FileUtilities.FormatFileSize((ulong)length)})",
                 IsDirectory = isDirectory,
                 CategoryPath = zipLinkItem.CategoryPath,
                 CreatedDate = lastWrite,
@@ -328,21 +329,5 @@ public class ZipCatalogService
 
             parentNode.Children.Add(catalogNode);
         }
-    }
-
-    /// <summary>
-    /// Formats file size in human-readable format.
-    /// </summary>
-    private string FormatFileSize(ulong bytes)
-    {
-        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
     }
 }

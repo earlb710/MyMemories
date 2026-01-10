@@ -102,6 +102,7 @@ public class CategoryItem
 public class LinkItem : INotifyPropertyChanged
 {
     private int _catalogFileCount;
+    private ulong _catalogTotalSize;
     private DateTime? _lastCatalogUpdate;
     private bool _isZipPasswordProtected;
     private UrlStatus _urlStatus = UrlStatus.Unknown;
@@ -327,6 +328,22 @@ public class LinkItem : INotifyPropertyChanged
         }
     }
 
+    // Internal property to store total size of catalog files for display
+    [JsonIgnore]
+    public ulong CatalogTotalSize
+    {
+        get => _catalogTotalSize;
+        set
+        {
+            if (_catalogTotalSize != value)
+            {
+                _catalogTotalSize = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(DisplayText));
+            }
+        }
+    }
+
     /// <summary>
     /// Gets the display text for the tree node (without icon)
     /// </summary>
@@ -335,15 +352,23 @@ public class LinkItem : INotifyPropertyChanged
     {
         get
         {
-            // Show file count for catalog folders
+            // Show file count and size for catalog folders
             if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
             {
-                var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
-                return $"{Title}{catalogInfo}";
+                var sizeText = FormatFileSize(CatalogTotalSize);
+                return $"{Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
             }
 
             return Title;
         }
+    }
+
+    /// <summary>
+    /// Formats file size in human-readable format.
+    /// </summary>
+    private static string FormatFileSize(ulong bytes)
+    {
+        return Utilities.FileUtilities.FormatFileSize(bytes);
     }
 
     /// <summary>
@@ -571,11 +596,11 @@ public class LinkItem : INotifyPropertyChanged
     {
         var icon = GetIconWithoutBadge();
 
-        // Show file count for catalog folders
+        // Show file count and size for catalog folders
         if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
         {
-            var catalogInfo = $" ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")})";
-            return $"{icon} {Title}{catalogInfo}";
+            var sizeText = FormatFileSize(CatalogTotalSize);
+            return $"{icon} {Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
         }
 
         return $"{icon} {Title}";

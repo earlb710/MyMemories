@@ -40,7 +40,7 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                // Store original position for potential undo
+                // Store original position for potential undo and audit logging
                 var parent = node.Parent;
                 int index = parent?.Children.IndexOf(node) ?? LinksTreeView.RootNodes.IndexOf(node);
                 _dragOriginalPositions[node] = (parent, index);
@@ -126,27 +126,57 @@ public sealed partial class MainWindow
                 return;
             }
 
-            // Collect all root categories that need to be saved
+            // Collect all root categories that need to be saved and audit log entries
             var affectedRootCategories = new HashSet<TreeViewNode>();
+            var auditLogEntries = new List<(string categoryName, string itemType, string itemName, string fromPath, string toPath)>();
 
             foreach (var item in args.Items)
             {
                 if (item is TreeViewNode node)
                 {
+                    // Capture original path for audit logging before updating
+                    string originalPath = string.Empty;
+                    TreeViewNode? originalRootCategory = null;
+                    
+                    if (_dragOriginalPositions.TryGetValue(node, out var original) && original.Parent != null)
+                    {
+                        originalPath = _treeViewService!.GetCategoryPath(original.Parent);
+                        originalRootCategory = GetRootCategoryNode(original.Parent);
+                        
+                        if (originalRootCategory != null && !affectedRootCategories.Contains(originalRootCategory))
+                        {
+                            affectedRootCategories.Add(originalRootCategory);
+                        }
+                    }
+
                     // Find the root category for this node
                     var rootCategory = GetRootCategoryNode(node);
                     affectedRootCategories.Add(rootCategory);
 
                     // If the node was moved to a new parent, we need to update its CategoryPath
                     UpdateNodeCategoryPaths(node);
-
-                    // Also save the original root category if different (for moves between categories)
-                    if (_dragOriginalPositions.TryGetValue(node, out var original) && original.Parent != null)
+                    
+                    // Get new path after update
+                    string newPath = node.Parent != null ? _treeViewService!.GetCategoryPath(node.Parent) : "(root)";
+                    
+                    // Check if this is actually a move (not just reordering within the same parent)
+                    if (!string.IsNullOrEmpty(originalPath) && originalPath != newPath)
                     {
-                        var originalRootCategory = GetRootCategoryNode(original.Parent);
-                        if (originalRootCategory != null && !affectedRootCategories.Contains(originalRootCategory))
+                        string itemType = node.Content is CategoryItem ? "Subcategory" : "Link";
+                        string itemName = node.Content is CategoryItem cat ? cat.Name : 
+                                         (node.Content is LinkItem link ? link.Title : "Unknown");
+                        
+                        // Add audit log entry for both source and destination root categories
+                        if (originalRootCategory?.Content is CategoryItem srcCat && srcCat.IsAuditLoggingEnabled)
                         {
-                            affectedRootCategories.Add(originalRootCategory);
+                            auditLogEntries.Add((srcCat.Name, itemType, itemName, originalPath, newPath));
+                        }
+                        
+                        if (originalRootCategory != rootCategory && 
+                            rootCategory.Content is CategoryItem dstCat && 
+                            dstCat.IsAuditLoggingEnabled)
+                        {
+                            auditLogEntries.Add((dstCat.Name, itemType, itemName, originalPath, newPath));
                         }
                     }
                 }
@@ -160,6 +190,12 @@ public sealed partial class MainWindow
                     category.ModifiedDate = DateTime.Now;
                     await _categoryService!.SaveCategoryAsync(rootCategory);
                 }
+            }
+
+            // Write audit log entries
+            foreach (var (categoryName, itemType, itemName, fromPath, toPath) in auditLogEntries)
+            {
+                await _configService!.AuditLogService!.LogDragDropMoveAsync(categoryName, itemType, itemName, fromPath, toPath);
             }
 
             _dragOriginalPositions.Clear();

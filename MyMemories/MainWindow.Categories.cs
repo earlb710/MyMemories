@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using MyMemories.Dialogs; // Add this line
+using MyMemories.Dialogs;
 using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
@@ -21,16 +21,11 @@ public sealed partial class MainWindow
         
         var result = await _linkDialog!.ShowCategoryDialogAsync(
             title: "Create New Category",
-            currentName: null,
-            currentDescription: null,
-            currentIcon: null,
-            currentKeywords: null,
-            isRootCategory: true,
-            currentPasswordProtection: PasswordProtectionType.None,
-            currentPasswordHash: null,
-            currentIsBookmarkCategory: false,
-            currentIsBookmarkLookup: false,
-            currentIsAuditLoggingEnabled: false);
+            options: new CategoryDialogOptions
+            {
+                IsRootCategory = true,
+                CurrentIsAuditLoggingEnabled = false
+            });
 
         if (result != null)
         {
@@ -38,10 +33,6 @@ public sealed partial class MainWindow
             if (result.PasswordProtection == PasswordProtectionType.OwnPassword && result.OwnPassword != null)
             {
                 _categoryService!.CacheCategoryPassword(result.Name, result.OwnPassword);
-            }
-            else if (result.PasswordProtection == PasswordProtectionType.GlobalPassword)
-            {
-                // Global password should already be cached from startup or Security Setup
             }
             
             var categoryNode = new TreeViewNode
@@ -65,32 +56,15 @@ public sealed partial class MainWindow
             };
 
             _treeViewService!.InsertCategoryNode(categoryNode);
-            
-            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Category node inserted: '{result.Name}'");
-            
             await _categoryService!.SaveCategoryAsync(categoryNode);
-            
-            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Category saved to file");
 
             // Log the category creation to the category's own log
-            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] About to log category creation");
-            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] IsLoggingEnabled: {_configService?.IsLoggingEnabled()}");
-            System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] AuditLogService != null: {_configService?.AuditLogService != null}");
-            
             if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Calling LogCategoryAddedAsync for '{result.Name}', Description: '{result.Description}'");
                 await _configService.AuditLogService.LogCategoryAddedAsync(result.Name, result.Description);
-                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] LogCategoryAddedAsync completed");
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine($"[CreateCategoryButton_Click] Logging SKIPPED - IsLoggingEnabled: {_configService?.IsLoggingEnabled()}, AuditLogService: {_configService?.AuditLogService != null}");
             }
 
             StatusText.Text = $"Created category: {result.Name}";
-            
-            // Update bookmark lookup categories in case new category has lookup enabled
             UpdateBookmarkLookupCategories();
         }
     }
@@ -99,8 +73,6 @@ public sealed partial class MainWindow
     {
         var parentCategoryPath = _treeViewService!.GetCategoryPath(parentNode);
         var parentCategory = parentNode.Content as CategoryItem;
-        
-        // Check if parent is a bookmark category - if so, inherit the flag
         bool parentIsBookmarkCategory = parentCategory?.IsBookmarkCategory ?? false;
         
         // Ensure _linkDialog has the latest _configService reference
@@ -111,14 +83,11 @@ public sealed partial class MainWindow
         
         var result = await _linkDialog!.ShowCategoryDialogAsync(
             title: $"Create Sub Category under '{parentCategoryPath}'",
-            currentName: null,
-            currentDescription: null,
-            currentIcon: null,
-            currentKeywords: null,
-            isRootCategory: false,
-            currentPasswordProtection: PasswordProtectionType.None,
-            currentPasswordHash: null,
-            currentIsBookmarkCategory: parentIsBookmarkCategory);
+            options: new CategoryDialogOptions
+            {
+                IsRootCategory = false,
+                CurrentIsBookmarkCategory = parentIsBookmarkCategory
+            });
 
         if (result != null)
         {
@@ -148,7 +117,6 @@ public sealed partial class MainWindow
                 var rootNode = GetRootCategoryNode(parentNode);
                 if (rootNode?.Content is CategoryItem rootCategory)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[CreateSubCategoryAsync] Logging subcategory creation to root '{rootCategory.Name}.log'");
                     await _configService.AuditLogService.LogAsync(
                         rootCategory.Name,
                         Services.AuditLogType.Add,
@@ -158,8 +126,6 @@ public sealed partial class MainWindow
             }
             
             StatusText.Text = $"Created sub category: {fullPath}";
-            
-            // Update bookmark lookup categories in case new subcategory has lookup enabled
             UpdateBookmarkLookupCategories();
         }
     }
@@ -184,14 +150,8 @@ public sealed partial class MainWindow
     {
         string oldCategoryName = category.Name;
         var oldPasswordProtection = category.PasswordProtection;
-
-        // Check if node is a root category by checking if it's in RootNodes collection
         bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
-
-        // Check if category has non-URL children (files, folders, directories)
         bool hasNonUrlChildren = HasNonUrlChildrenRecursive(node);
-
-        System.Diagnostics.Debug.WriteLine($"EditCategoryAsync: category='{category.Name}', node.Parent={node.Parent}, node in RootNodes={isRootCategory}, hasNonUrlChildren={hasNonUrlChildren}");
 
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
@@ -201,17 +161,20 @@ public sealed partial class MainWindow
 
         var result = await _linkDialog!.ShowCategoryDialogAsync(
             title: "Edit Category",
-            currentName: category.Name,
-            currentDescription: category.Description,
-            currentIcon: category.Icon,
-            currentKeywords: category.Keywords,
-            isRootCategory: isRootCategory,
-            currentPasswordProtection: category.PasswordProtection,
-            currentPasswordHash: category.OwnPasswordHash,
-            currentIsBookmarkCategory: category.IsBookmarkCategory,
-            currentIsBookmarkLookup: category.IsBookmarkLookup,
-            currentIsAuditLoggingEnabled: category.IsAuditLoggingEnabled,
-            hasNonUrlChildren: hasNonUrlChildren);
+            options: new CategoryDialogOptions
+            {
+                CurrentName = category.Name,
+                CurrentDescription = category.Description,
+                CurrentIcon = category.Icon,
+                CurrentKeywords = category.Keywords,
+                IsRootCategory = isRootCategory,
+                CurrentPasswordProtection = category.PasswordProtection,
+                CurrentPasswordHash = category.OwnPasswordHash,
+                CurrentIsBookmarkCategory = category.IsBookmarkCategory,
+                CurrentIsBookmarkLookup = category.IsBookmarkLookup,
+                CurrentIsAuditLoggingEnabled = category.IsAuditLoggingEnabled,
+                HasNonUrlChildren = hasNonUrlChildren
+            });
 
         if (result != null)
         {
@@ -240,7 +203,6 @@ public sealed partial class MainWindow
                     if (root?.Content is CategoryItem rootCat)
                     {
                         var newPath = _treeViewService!.GetCategoryPath(node).Replace(oldCategoryName, result.Name);
-                        System.Diagnostics.Debug.WriteLine($"[EditCategoryAsync] Logging subcategory rename to root '{rootCat.Name}.log'");
                         await _configService.AuditLogService.LogAsync(
                             rootCat.Name,
                             Services.AuditLogType.Change,
@@ -275,11 +237,7 @@ public sealed partial class MainWindow
                                     Text = "This category uses the global password. Please enter it to continue:",
                                     TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap
                                 },
-                                new PasswordBox
-                                {
-                                    Name = "GlobalPasswordInput",
-                                    PlaceholderText = "Enter global password"
-                                }
+                                new PasswordBox { PlaceholderText = "Enter global password" }
                             }
                         },
                         PrimaryButtonText = "OK",
@@ -292,9 +250,7 @@ public sealed partial class MainWindow
 
                     if (dialogResult == ContentDialogResult.Primary)
                     {
-                        var passwordBox = (globalPasswordDialog.Content as StackPanel)
-                            ?.Children.OfType<PasswordBox>()
-                            .FirstOrDefault();
+                        var passwordBox = (globalPasswordDialog.Content as StackPanel)?.Children.OfType<PasswordBox>().FirstOrDefault();
 
                         if (passwordBox != null && !string.IsNullOrEmpty(passwordBox.Password))
                         {
@@ -307,17 +263,13 @@ public sealed partial class MainWindow
                             }
                             else
                             {
-                                await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
-                                    "Incorrect Password",
-                                    "The global password you entered is incorrect.");
+                                await DialogHelpers.ShowErrorAsync(Content.XamlRoot, "Incorrect Password", "The global password you entered is incorrect.");
                                 return;
                             }
                         }
                         else
                         {
-                            await DialogHelpers.ShowErrorAsync(Content.XamlRoot,
-                                "Password Required",
-                                "You must enter the global password to save this category.");
+                            await DialogHelpers.ShowErrorAsync(Content.XamlRoot, "Password Required", "You must enter the global password to save this category.");
                             return;
                         }
                     }
@@ -364,8 +316,6 @@ public sealed partial class MainWindow
             }
 
             StatusText.Text = $"Updated category: {result.Name}";
-            
-            // Update bookmark lookup categories in case IsBookmarkLookup changed
             UpdateBookmarkLookupCategories();
 
             if (LinksTreeView.SelectedNode == newNode)
@@ -432,17 +382,12 @@ public sealed partial class MainWindow
             // Check if this is a root category by checking the RootNodes collection
             bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
             
-            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Starting delete for '{category.Name}'");
-            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] IsRootCategory: {isRootCategory}");
-            System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Total links: {totalLinks}, Total subcategories: {totalSubcategories}");
-
             // Log the removal - for root categories log to their own log, for subcategories log to root's log
             if (_configService?.IsLoggingEnabled() == true && _configService.AuditLogService != null)
             {
                 if (isRootCategory)
                 {
                     // Root category - log to its own log before deletion
-                    System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Logging root category removal to '{category.Name}.log'");
                     
                     // Build detailed deletion summary
                     string deletionDetails = $"Links: {totalLinks}, Subcategories: {totalSubcategories}";
@@ -465,7 +410,6 @@ public sealed partial class MainWindow
                     if (rootNode?.Content is CategoryItem rootCategory)
                     {
                         var categoryPath = _treeViewService!.GetCategoryPath(node);
-                        System.Diagnostics.Debug.WriteLine($"[DeleteCategoryAsync] Logging subcategory removal to root '{rootCategory.Name}.log'");
                         
                         string deletionDetails = $"Path: {categoryPath}";
                         if (totalLinks > 0 || totalSubcategories > 0)

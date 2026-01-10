@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -132,8 +133,9 @@ public class DetailsViewService
 
     /// <summary>
     /// Shows link header in the header panel with icon on the left and optional link badge.
+    /// Includes file size and timestamps for compact display.
     /// </summary>
-    public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false)
+    public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false, ulong? fileSize = null, DateTime? createdDate = null, DateTime? modifiedDate = null)
     {
         _headerPanel?.Children.Clear();
 
@@ -146,14 +148,14 @@ public class DetailsViewService
         var horizontalPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 16
+            Spacing = 12
         };
 
-        // Add large icon on the left
+        // Add icon on the left (smaller size)
         var iconText = new TextBlock
         {
             Text = icon,
-            FontSize = 48,
+            FontSize = 32,
             VerticalAlignment = VerticalAlignment.Top
         };
         horizontalPanel.Children.Add(iconText);
@@ -161,24 +163,52 @@ public class DetailsViewService
         // Add text content on the right
         var textPanel = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 2,
             VerticalAlignment = VerticalAlignment.Center
         };
 
+        // Build title with optional size
+        var titleText = linkTitle;
+        if (fileSize.HasValue)
+        {
+            titleText += $" ({FileViewerService.FormatFileSize(fileSize.Value)})";
+        }
+
         textPanel.Children.Add(new TextBlock
         {
-            Text = linkTitle,
-            FontSize = 20,
+            Text = titleText,
+            FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
+
+        // Add timestamps line if available
+        if (createdDate.HasValue || modifiedDate.HasValue)
+        {
+            var timestampParts = new List<string>();
+            if (createdDate.HasValue)
+            {
+                timestampParts.Add($"Created: {createdDate.Value:yyyy-MM-dd HH:mm}");
+            }
+            if (modifiedDate.HasValue)
+            {
+                timestampParts.Add($"Modified: {modifiedDate.Value:yyyy-MM-dd HH:mm}");
+            }
+            
+            textPanel.Children.Add(new TextBlock
+            {
+                Text = string.Join(" | ", timestampParts),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
 
         if (!string.IsNullOrWhiteSpace(description))
         {
             textPanel.Children.Add(new TextBlock
             {
                 Text = description,
-                FontSize = 14,
+                FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Colors.Gray)
             });
@@ -193,11 +223,11 @@ public class DetailsViewService
             var linkBadge = new Border
             {
                 Background = new SolidColorBrush(Colors.DodgerBlue),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(8, 4, 8, 4),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(6, 2, 6, 2),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0, 0, 8, 4),
+                Margin = new Thickness(0, 0, 8, 2),
                 Child = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -207,13 +237,13 @@ public class DetailsViewService
                         new FontIcon 
                         { 
                             Glyph = "\uE71B", // Link icon
-                            FontSize = 12,
+                            FontSize = 10,
                             Foreground = new SolidColorBrush(Colors.White)
                         },
                         new TextBlock 
                         { 
                             Text = "Link Only",
-                            FontSize = 10,
+                            FontSize = 9,
                             Foreground = new SolidColorBrush(Colors.White),
                             VerticalAlignment = VerticalAlignment.Center
                         }
@@ -554,24 +584,42 @@ public class DetailsViewService
         TreeViewNode? node, 
         Func<Task> onCreateCatalog, 
         Func<Task> onRefreshCatalog, 
-        Func<Task>? onRefreshArchive = null)
+        Func<Task>? onRefreshArchive = null,
+        Func<Task>? onSaveCategory = null)
     {
         _detailsPanel.Children.Clear();
 
         Button? createButton = null;
         Button? refreshButton = null;
 
+        // Check if this is a zip entry URL (contains ::)
+        bool isZipEntryUrl = !string.IsNullOrEmpty(linkItem.Url) && linkItem.Url.Contains("::");
+        
+        // For zip entry URLs, show simplified details without catalog buttons
+        if (isZipEntryUrl)
+        {
+            // Show zip entry file information
+            await AddZipEntryInfoAsync(linkItem);
+            return (null, null);
+        }
+
         // Check if it's a zip file
-        bool isZipFile = linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
-                       File.Exists(linkItem.Url);
+        bool isZipFile = !string.IsNullOrEmpty(linkItem.Url) &&
+                         linkItem.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && 
+                         File.Exists(linkItem.Url);
 
         // Check if it's a Link Only folder (should not show catalog buttons)
         bool isLinkOnlyFolder = linkItem.IsDirectory && 
                                linkItem.FolderType == FolderLinkType.LinkOnly;
 
+        // Check if directory exists (only for non-zip-entry URLs)
+        bool directoryExists = linkItem.IsDirectory && 
+                               !string.IsNullOrEmpty(linkItem.Url) && 
+                               Directory.Exists(linkItem.Url);
+
         // Add catalog buttons for directories AND zip files at the top (only if we have a valid node)
         // Modified condition: Show buttons for any zip file OR for directories (EXCEPT Link Only folders)
-        if (node != null && !isLinkOnlyFolder && ((linkItem.IsDirectory && Directory.Exists(linkItem.Url)) || isZipFile))
+        if (node != null && !isLinkOnlyFolder && (directoryExists || isZipFile))
         {
             var buttonPanel = new StackPanel
             {
@@ -704,16 +752,35 @@ public class DetailsViewService
                 autoRefreshCheckBox.Checked += async (s, e) =>
                 {
                     linkItem.AutoRefreshCatalog = true;
-                    // Trigger save through callback if needed
-                    if (node != null)
+                    // Save the category to persist the change
+                    if (onSaveCategory != null)
                     {
-                        // We'll need to add a callback parameter for this
+                        try
+                        {
+                            await onSaveCategory();
+                        }
+                        catch
+                        {
+                            // Silently handle errors
+                        }
                     }
                 };
 
-                autoRefreshCheckBox.Unchecked += (s, e) =>
+                autoRefreshCheckBox.Unchecked += async (s, e) =>
                 {
                     linkItem.AutoRefreshCatalog = false;
+                    // Save the category to persist the change
+                    if (onSaveCategory != null)
+                    {
+                        try
+                        {
+                            await onSaveCategory();
+                        }
+                        catch
+                        {
+                            // Silently handle errors
+                        }
+                    }
                 };
 
                 _detailsPanel.Children.Add(autoRefreshCheckBox);
@@ -823,6 +890,118 @@ public class DetailsViewService
         await AddFileSystemInfoAsync(linkItem, isZipFile);
 
         return (createButton, refreshButton);
+    }
+
+    /// <summary>
+    /// Adds information for a file entry inside a zip archive.
+    /// </summary>
+    private async Task AddZipEntryInfoAsync(LinkItem linkItem)
+    {
+        try
+        {
+            // Parse the zip entry URL (format: "zipPath::entryPath")
+            var parts = linkItem.Url.Split(new[] { "::" }, 2, StringSplitOptions.None);
+            if (parts.Length != 2)
+            {
+                AddWarning("⚠️ Invalid zip entry URL format");
+                return;
+            }
+
+            var zipPath = parts[0];
+            var entryPath = parts[1];
+            
+            // Safely get file name and extension
+            string fileName;
+            string extension;
+            try
+            {
+                fileName = Path.GetFileName(entryPath.Replace('/', Path.DirectorySeparatorChar));
+                extension = Path.GetExtension(entryPath);
+            }
+            catch
+            {
+                // If path parsing fails, use the raw entry path
+                fileName = entryPath;
+                extension = string.Empty;
+            }
+
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Zip Entry Information",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+
+            // File name
+            infoPanel.Children.Add(CreateStatLine($"📄 File Name: {fileName}"));
+            
+            // Extension
+            if (!string.IsNullOrEmpty(extension))
+            {
+                infoPanel.Children.Add(CreateStatLine($"📂 Extension: {extension}"));
+            }
+
+            // Entry path within zip
+            infoPanel.Children.Add(CreateStatLine($"📁 Path in Archive: {entryPath}"));
+
+            // Try to get file size from the linkItem or from the archive
+            if (linkItem.FileSize.HasValue)
+            {
+                infoPanel.Children.Add(CreateStatLine($"📦 Size: {FileViewerService.FormatFileSize(linkItem.FileSize.Value)}"));
+            }
+            else
+            {
+                // Try to get size from the zip archive
+                try
+                {
+                    if (File.Exists(zipPath))
+                    {
+                        var entryInfo = await Task.Run(() =>
+                        {
+                            try
+                            {
+                                using var archive = ZipFile.OpenRead(zipPath);
+                                var normalizedPath = entryPath.Replace('\\', '/');
+                                var entry = archive.GetEntry(normalizedPath) ?? archive.GetEntry(entryPath);
+                                if (entry != null)
+                                {
+                                    return (found: true, size: (ulong)entry.Length, modified: entry.LastWriteTime.DateTime);
+                                }
+                            }
+                            catch { }
+                            return (found: false, size: 0UL, modified: DateTime.MinValue);
+                        });
+
+                        if (entryInfo.found)
+                        {
+                            infoPanel.Children.Add(CreateStatLine($"📦 Size: {FileViewerService.FormatFileSize(entryInfo.size)}"));
+                            infoPanel.Children.Add(CreateStatLine($"📝 Last Modified: {entryInfo.modified:yyyy-MM-dd HH:mm:ss}"));
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore errors getting entry info
+                }
+            }
+
+            // Source archive path
+            _detailsPanel.Children.Add(infoPanel);
+
+            // Add section for source archive
+            AddSection("Source Archive", zipPath, isSelectable: true);
+
+            // Add link timestamps
+            AddTimestamps(linkItem);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AddZipEntryInfoAsync] Error: {ex.Message}");
+            AddWarning($"⚠️ Error displaying zip entry information: {ex.Message}");
+        }
     }
 
     /// <summary>

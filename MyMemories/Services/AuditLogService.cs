@@ -410,8 +410,15 @@ public class AuditLogService
     /// </summary>
     private static string SanitizeFileName(string fileName)
     {
-        var invalidChars = Path.GetInvalidFileNameChars();
-        return string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
+        return FileUtilities.SanitizeFileName(fileName);
+    }
+
+    /// <summary>
+    /// Formats a file size in bytes to a human-readable string.
+    /// </summary>
+    private static string FormatFileSize(long bytes)
+    {
+        return FileUtilities.FormatFileSize(bytes);
     }
 
     /// <summary>
@@ -766,6 +773,42 @@ public class AuditLogService
     }
 
     /// <summary>
+    /// Logs a link move operation.
+    /// </summary>
+    public async Task LogLinkMovedAsync(string categoryName, string linkTitle, string fromPath, string toPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Change, 
+            $"Link moved: {linkTitle}", 
+            $"From: {fromPath} -> To: {toPath}");
+    }
+
+    /// <summary>
+    /// Logs a subcategory move operation.
+    /// </summary>
+    public async Task LogSubcategoryMovedAsync(string categoryName, string subcategoryName, string fromPath, string toPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Change, 
+            $"Subcategory moved: {subcategoryName}", 
+            $"From: {fromPath} -> To: {toPath}");
+    }
+
+    /// <summary>
+    /// Logs a drag-and-drop move operation (for multiple items).
+    /// </summary>
+    public async Task LogDragDropMoveAsync(string categoryName, string itemType, string itemName, string fromPath, string toPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Change, 
+            $"{itemType} moved (drag-drop): {itemName}", 
+            $"From: {fromPath} -> To: {toPath}");
+    }
+
+    /// <summary>
     /// Logs a catalog refresh operation.
     /// </summary>
     public async Task LogCatalogRefreshAsync(string categoryName, string linkTitle, int fileCount)
@@ -775,5 +818,205 @@ public class AuditLogService
             AuditLogType.Change, 
             $"Catalog refreshed: {linkTitle}", 
             $"Files: {fileCount}");
+    }
+
+    /// <summary>
+    /// Logs a folder link being added.
+    /// </summary>
+    public async Task LogFolderAddedAsync(string categoryName, string folderTitle, string folderPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Folder added: {folderTitle}", 
+            $"Path: {folderPath}");
+    }
+
+    /// <summary>
+    /// Logs a folder link being removed.
+    /// </summary>
+    public async Task LogFolderRemovedAsync(string categoryName, string folderTitle, string folderPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Remove, 
+            $"Folder removed: {folderTitle}", 
+            $"Path: {folderPath}");
+    }
+
+    /// <summary>
+    /// Logs a folder catalog being created.
+    /// </summary>
+    public async Task LogCatalogCreatedAsync(string categoryName, string folderTitle, int fileCount, int folderCount)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Catalog created: {folderTitle}", 
+            $"Files: {fileCount}, Folders: {folderCount}");
+    }
+
+    /// <summary>
+    /// Logs a zip file being created.
+    /// </summary>
+    public async Task LogZipCreatedAsync(string categoryName, string zipFileName, string sourcePath, long? fileSizeBytes = null)
+    {
+        var sizeInfo = fileSizeBytes.HasValue 
+            ? $", Size: {FormatFileSize(fileSizeBytes.Value)}" 
+            : "";
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Zip file created: {zipFileName}", 
+            $"Source: {sourcePath}{sizeInfo}");
+    }
+
+    /// <summary>
+    /// Logs a zip file being extracted.
+    /// </summary>
+    public async Task LogZipExtractedAsync(string categoryName, string zipFileName, string extractPath, int fileCount)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Change, 
+            $"Zip file extracted: {zipFileName}", 
+            $"Destination: {extractPath}, Files: {fileCount}");
+    }
+
+    /// <summary>
+    /// Logs a zip file link being added to the category.
+    /// </summary>
+    public async Task LogZipLinkAddedAsync(string categoryName, string zipTitle, string zipPath, long? fileSizeBytes = null)
+    {
+        var sizeInfo = fileSizeBytes.HasValue 
+            ? $", Size: {FormatFileSize(fileSizeBytes.Value)}" 
+            : "";
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Zip link added: {zipTitle}", 
+            $"Path: {zipPath}{sizeInfo}");
+    }
+
+    /// <summary>
+    /// Logs a zip file being deleted from disk.
+    /// </summary>
+    public async Task LogZipDeletedAsync(string categoryName, string zipFileName, string zipPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Remove, 
+            $"Zip file deleted from disk: {zipFileName}", 
+            $"Path: {zipPath}");
+    }
+
+    /// <summary>
+    /// Logs a zip file link being removed (link only, file kept).
+    /// </summary>
+    public async Task LogZipLinkRemovedAsync(string categoryName, string zipTitle, string zipPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Remove, 
+            $"Zip link removed (file kept): {zipTitle}", 
+            $"Path: {zipPath}");
+    }
+
+    /// <summary>
+    /// Logs a zip catalog being refreshed.
+    /// </summary>
+    public async Task LogZipCatalogRefreshAsync(string categoryName, string zipTitle, int fileCount)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Change, 
+            $"Zip catalog refreshed: {zipTitle}", 
+            $"Files: {fileCount}");
+    }
+
+    /// <summary>
+    /// Logs a folder being zipped (category zip operation).
+    /// </summary>
+    public async Task LogCategoryZippedAsync(string categoryName, string zipFileName, int folderCount, long? fileSizeBytes = null)
+    {
+        var sizeInfo = fileSizeBytes.HasValue 
+            ? $", Size: {FormatFileSize(fileSizeBytes.Value)}" 
+            : "";
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Category folders zipped: {zipFileName}", 
+            $"Folders: {folderCount}{sizeInfo}");
+    }
+
+    /// <summary>
+    /// Logs a password-protected zip being created.
+    /// </summary>
+    public async Task LogPasswordProtectedZipCreatedAsync(string categoryName, string zipFileName, string sourcePath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Password-protected zip created: {zipFileName}", 
+            $"Source: {sourcePath}");
+    }
+
+    /// <summary>
+    /// Logs a zip password being verified.
+    /// </summary>
+    public async Task LogZipPasswordVerifiedAsync(string categoryName, string zipTitle)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Security, 
+            $"Zip password verified: {zipTitle}");
+    }
+
+    /// <summary>
+    /// Logs a failed zip password attempt.
+    /// </summary>
+    public async Task LogZipPasswordFailedAsync(string categoryName, string zipTitle)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Security, 
+            $"Invalid zip password entered: {zipTitle}");
+    }
+
+    /// <summary>
+    /// Logs a folder catalog entry being added.
+    /// </summary>
+    public async Task LogCatalogEntryAddedAsync(string categoryName, string parentFolder, string entryName, bool isDirectory)
+    {
+        var entryType = isDirectory ? "Folder" : "File";
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Add, 
+            $"Catalog entry added: {entryName}", 
+            $"Type: {entryType}, Parent: {parentFolder}");
+    }
+
+    /// <summary>
+    /// Logs a file being launched/opened from a catalog.
+    /// </summary>
+    public async Task LogFileOpenedAsync(string categoryName, string fileName, string filePath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Info, 
+            $"File opened: {fileName}", 
+            $"Path: {filePath}");
+    }
+
+    /// <summary>
+    /// Logs a folder being opened in Explorer.
+    /// </summary>
+    public async Task LogFolderOpenedInExplorerAsync(string categoryName, string folderTitle, string folderPath)
+    {
+        await LogAsync(
+            categoryName, 
+            AuditLogType.Info, 
+            $"Folder opened in Explorer: {folderTitle}", 
+            $"Path: {folderPath}");
     }
 }

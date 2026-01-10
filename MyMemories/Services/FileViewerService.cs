@@ -47,7 +47,7 @@ public class FileViewerService
             else if (extension == ".pdf")
             {
                 await LoadPdfAsync(file);
-                return new FileLoadResult(FileViewerType.Web, file.Name, null);
+                return new FileLoadResult(FileViewerType.Document, file.Name, null);  // Use Document type for PDFs
             }
             else if (IsTextFile(extension))
             {
@@ -123,7 +123,7 @@ public class FileViewerService
             else if (extension == ".pdf")
             {
                 await LoadPdfFromZipAsync(zipPath, entryPath, password);
-                return new FileLoadResult(FileViewerType.Web, fileName, null);
+                return new FileLoadResult(FileViewerType.Document, fileName, null);  // Use Document type for PDFs
             }
             else if (extension is ".html" or ".htm")
             {
@@ -317,26 +317,17 @@ public class FileViewerService
 
     private static bool IsImageFile(string extension)
     {
-        return extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".ico";
+        return FileUtilities.IsImageFile(extension);
     }
 
     private static bool IsTextFile(string extension)
     {
-        return extension is ".txt" or ".xml" or ".json" or ".md" or ".log" or ".cs"
-            or ".xaml" or ".config" or ".ini" or ".yaml" or ".yml" or ".csv";
+        return FileUtilities.IsTextFile(extension);
     }
 
     public static string FormatFileSize(ulong bytes)
     {
-        string[] sizes = { "B", "KB", "MB", "GB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.##} {sizes[order]}";
+        return FileUtilities.FormatFileSize(bytes);
     }
 }
 
@@ -352,5 +343,6 @@ public enum FileViewerType
 {
     Image,
     Web,
-    Text
+    Text,
+    Document  // For PDFs and other documents that use WebView2 but show header info
 }

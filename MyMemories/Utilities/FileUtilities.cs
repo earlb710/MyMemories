@@ -10,6 +10,9 @@ public static class FileUtilities
     /// </summary>
     public static string FormatFileSize(ulong bytes)
     {
+        if (bytes == 0)
+            return "0 B";
+
         string[] sizes = { "B", "KB", "MB", "GB", "TB" };
         double len = bytes;
         int order = 0;
@@ -22,11 +25,21 @@ public static class FileUtilities
     }
 
     /// <summary>
+    /// Formats file size in human-readable format (B, KB, MB, GB, TB) - overload for long.
+    /// </summary>
+    public static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0)
+            return "0 B";
+        return FormatFileSize((ulong)bytes);
+    }
+
+    /// <summary>
     /// Checks if file extension represents an image file.
     /// </summary>
     public static bool IsImageFile(string extension)
     {
-        return extension is ".jpg" or ".jpeg" or ".png" or ".gif"
+        return extension.ToLowerInvariant() is ".jpg" or ".jpeg" or ".png" or ".gif"
             or ".bmp" or ".ico" or ".webp";
     }
 
@@ -35,7 +48,7 @@ public static class FileUtilities
     /// </summary>
     public static bool IsTextFile(string extension)
     {
-        return extension is ".txt" or ".xml" or ".json" or ".md" or ".log"
+        return extension.ToLowerInvariant() is ".txt" or ".xml" or ".json" or ".md" or ".log"
             or ".cs" or ".xaml" or ".config" or ".ini" or ".yaml"
             or ".yml" or ".csv";
     }

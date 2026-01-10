@@ -2,9 +2,11 @@
 using MyMemories.Services;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Windows.System;
 
 namespace MyMemories;
@@ -41,14 +43,26 @@ public sealed partial class MainWindow
         {
             case FileViewerType.Image:
                 ImageViewer.Visibility = Visibility.Visible;
+                HeaderViewerScroll.Visibility = Visibility.Visible;
+                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for images - they overlap
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Web:
                 WebViewer.Visibility = Visibility.Visible;
+                HeaderViewerScroll.Visibility = Visibility.Collapsed; // Don't show header - URL bar takes its place
+                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for web
                 UrlBarPanel.Visibility = Visibility.Visible;
+                break;
+            case FileViewerType.Document:
+                WebViewer.Visibility = Visibility.Visible;
+                HeaderViewerScroll.Visibility = Visibility.Visible; // Show header for documents (PDFs, etc.)
+                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details - they overlap
+                UrlBarPanel.Visibility = Visibility.Collapsed; // No URL bar for documents
                 break;
             case FileViewerType.Text:
                 TextViewerScroll.Visibility = Visibility.Visible;
+                HeaderViewerScroll.Visibility = Visibility.Visible;
+                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for text - they overlap
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
         }
@@ -209,6 +223,9 @@ public sealed partial class MainWindow
         ExpandParentNodes(result.Node);
         LinksTreeView.SelectedNode = result.Node;
 
+        // Scroll the TreeView to bring the selected node into view
+        ScrollToSelectedNode(result.Node);
+
         if (clearSearch)
         {
             SearchComboBox.Text = string.Empty;
@@ -219,6 +236,80 @@ public sealed partial class MainWindow
             _lastSearchText = string.Empty;
             StatusText.Text = $"Navigated to: {result.DisplayText}";
         }
+    }
+
+    /// <summary>
+    /// Scrolls the TreeView to bring the specified node into view.
+    /// </summary>
+    private void ScrollToSelectedNode(TreeViewNode node)
+    {
+        System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] Called for node");
+        
+        // Give the TreeView time to create containers after expanding parent nodes
+        // Then scroll on the UI thread
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            // Wait for layout to settle after expansion
+            await Task.Delay(200);
+            
+            // Force layout update to ensure visual tree is ready
+            LinksTreeView.UpdateLayout();
+            
+            // Find the ListControl inside the TreeView by name
+            var listControl = FindChildByName(LinksTreeView, "ListControl") as ListViewBase;
+            
+            if (listControl != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] Found ListControl: {listControl.GetType().Name}");
+                try
+                {
+                    listControl.ScrollIntoView(node);
+                    System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] ScrollIntoView called on node");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] ScrollIntoView failed: {ex.Message}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] ListControl not found, trying container approach");
+                
+                // Fallback: try using StartBringIntoView on the container
+                var container = LinksTreeView.ContainerFromNode(node);
+                System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] Container: {container?.GetType().Name ?? "null"}");
+                
+                if (container is UIElement uiElement)
+                {
+                    uiElement.StartBringIntoView(new BringIntoViewOptions
+                    {
+                        AnimationDesired = true,
+                        VerticalAlignmentRatio = 0.5
+                    });
+                    System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] StartBringIntoView called");
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Finds a child element by name using VisualTreeHelper.
+    /// </summary>
+    private static DependencyObject? FindChildByName(DependencyObject parent, string controlName)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is FrameworkElement fe && fe.Name == controlName)
+                return child;
+
+            var findResult = FindChildByName(child, controlName);
+            if (findResult != null)
+                return findResult;
+        }
+        return null;
     }
 
     private void ExpandParentNodes(TreeViewNode node)

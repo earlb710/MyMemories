@@ -164,34 +164,31 @@ public class UrlStateCheckerService
             using var request = new HttpRequestMessage(HttpMethod.Head, url);
             using var response = await _httpClient.SendAsync(request, CancellationToken.None);
 
+            var statusCode = (int)response.StatusCode;
+
             if (response.IsSuccessStatusCode)
             {
-                return (UrlStatus.Accessible, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                return (UrlStatus.Accessible, $"HTTP {statusCode} {response.ReasonPhrase}");
             }
-            else if ((int)response.StatusCode == 404 || (int)response.StatusCode == 410)
+            else if (statusCode == 404 || statusCode == 410)
             {
-                // 404 Not Found or 410 Gone
-                return (UrlStatus.NotFound, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                return (UrlStatus.NotFound, $"HTTP {statusCode} {response.ReasonPhrase}");
             }
             else
             {
-                // Other HTTP errors (403, 500, etc.)
-                return (UrlStatus.Error, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                return (UrlStatus.Error, $"HTTP {statusCode} {response.ReasonPhrase}");
             }
         }
         catch (HttpRequestException ex)
         {
-            // DNS failure, connection refused, etc.
             return (UrlStatus.NotFound, $"Connection failed: {ex.Message}");
         }
         catch (TaskCanceledException)
         {
-            // Timeout
             return (UrlStatus.Error, "Request timed out");
         }
         catch (Exception ex)
         {
-            // Other errors (invalid URL, etc.)
             return (UrlStatus.Error, $"Error: {ex.Message}");
         }
     }
