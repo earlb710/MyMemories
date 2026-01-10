@@ -36,7 +36,7 @@ public sealed partial class MainWindow
             await _detailsViewService!.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState);
 
             var categoryPath = _treeViewService!.GetCategoryPath(node);
-            _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);
+            _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
 
             ShowDetailsViewers();
             StatusText.Text = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";

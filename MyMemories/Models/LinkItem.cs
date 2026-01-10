@@ -51,6 +51,7 @@ public class LinkItem : INotifyPropertyChanged
     
     /// <summary>
     /// Gets formatted display text showing all tags with their names.
+    /// Format: [tag icon] TagName  [tag icon] TagName2
     /// </summary>
     [JsonIgnore]
     public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(TagIds) ?? string.Empty;
@@ -62,10 +63,10 @@ public class LinkItem : INotifyPropertyChanged
     public Visibility HasTags => TagIds.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     
     /// <summary>
-    /// Gets a tag indicator string showing number of tags.
+    /// Gets tag icons only for tree node display (no names).
     /// </summary>
     [JsonIgnore]
-    public string TagIndicator => TagIds.Count > 0 ? $"[{TagIds.Count} tag{(TagIds.Count > 1 ? "s" : "")}]" : string.Empty;
+    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(TagIds) ?? string.Empty;
     
     public bool IsDirectory { get; set; }
     public string CategoryPath { get; set; } = string.Empty;
@@ -160,9 +161,9 @@ public class LinkItem : INotifyPropertyChanged
         {
             return UrlStatus switch
             {
-                UrlStatus.Accessible => "? URL is accessible",
-                UrlStatus.Error => "? URL returned an error",
-                UrlStatus.NotFound => "? URL not found",
+                UrlStatus.Accessible => "\u2705 URL is accessible", // ?
+                UrlStatus.Error => "\u26A0 URL returned an error", // ?
+                UrlStatus.NotFound => "\u274C URL not found", // ?
                 UrlStatus.Unknown => "URL status not checked",
                 _ => "URL status unknown"
             };
@@ -179,16 +180,16 @@ public class LinkItem : INotifyPropertyChanged
         {
             var baseTooltip = UrlStatus switch
             {
-                UrlStatus.Accessible => "? URL is accessible\n\nClick to view the webpage",
-                UrlStatus.Error => "? URL returned an error\n\nThe server responded with an error status.\nHover over the link item for details.",
-                UrlStatus.NotFound => "? URL not found\n\nThe page does not exist or the server is unreachable.\nHover over the link item for details.",
-                UrlStatus.Unknown => "? URL status unknown\n\nClick 'Refresh URL State' on the category\nto check URL accessibility.",
+                UrlStatus.Accessible => "\u2705 URL is accessible\n\nClick to view the webpage", // ?
+                UrlStatus.Error => "\u26A0 URL returned an error\n\nThe server responded with an error status.\nHover over the link item for details.", // ?
+                UrlStatus.NotFound => "\u274C URL not found\n\nThe page does not exist or the server is unreachable.\nHover over the link item for details.", // ?
+                UrlStatus.Unknown => "\u2753 URL status unknown\n\nClick 'Refresh URL State' on the category\nto check URL accessibility.", // ?
                 _ => "URL status unknown"
             };
 
             if (UrlStatus != UrlStatus.Error && UrlStatus != UrlStatus.NotFound && !string.IsNullOrWhiteSpace(Description))
             {
-                baseTooltip += $"\n\n?? {Description}";
+                baseTooltip += $"\n\n\U0001F4DD {Description}"; // ??
             }
 
             return baseTooltip;
@@ -284,11 +285,27 @@ public class LinkItem : INotifyPropertyChanged
     {
         get
         {
+            // Main folder with catalog
             if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
             {
                 var sizeText = FormatFileSize(CatalogTotalSize);
                 return $"{Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
             }
+            
+            // Catalog entry - subdirectory with file count
+            if (IsDirectory && IsCatalogEntry && CatalogFileCount > 0)
+            {
+                var sizeText = FormatFileSize(CatalogTotalSize);
+                return $"{Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
+            }
+            
+            // Catalog entry - file with size
+            if (!IsDirectory && IsCatalogEntry && FileSize.HasValue)
+            {
+                var sizeText = FormatFileSize(FileSize.Value);
+                return $"{Title} ({sizeText})";
+            }
+            
             return Title;
         }
     }
@@ -402,7 +419,7 @@ public class LinkItem : INotifyPropertyChanged
         {
             char firstChar = Title[0];
             if (char.IsHighSurrogate(firstChar) || 
-                firstChar == '?' || firstChar == '?' || firstChar == '?' || firstChar == '?' ||
+                firstChar == '\u2B50' || firstChar == '\u2764' || firstChar == '\u2705' || firstChar == '\u26A0' ||
                 (firstChar >= 0x2600 && firstChar <= 0x26FF) ||
                 (firstChar >= 0x2700 && firstChar <= 0x27BF) ||
                 (firstChar >= 0x1F300 && firstChar <= 0x1F9FF))
@@ -416,35 +433,35 @@ public class LinkItem : INotifyPropertyChanged
         if (IsDirectory)
         {
             if (isZipArchive)
-                return "??";
+                return "\U0001F4E6"; // ?? Package
 
             if (IsCatalogEntry)
-                return "??";
+                return "\U0001F4C1"; // ?? Folder
 
             return FolderType switch
             {
-                FolderLinkType.LinkOnly => "??",
-                FolderLinkType.CatalogueFiles => "??",
-                FolderLinkType.FilteredCatalogue => "???",
-                _ => "??"
+                FolderLinkType.LinkOnly => "\U0001F4C2", // ?? Open Folder
+                FolderLinkType.CatalogueFiles => "\U0001F4C1", // ?? Folder
+                FolderLinkType.FilteredCatalogue => "\U0001F50D", // ?? Magnifying Glass
+                _ => "\U0001F4C1" // ?? Folder
             };
         }
 
         if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)
-            return "??";
+            return "\U0001F310"; // ?? Globe
 
         var extension = Path.GetExtension(Url).ToLowerInvariant();
         return extension switch
         {
-            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "???",
-            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "??",
-            ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "??",
-            ".pdf" => "??",
-            ".doc" or ".docx" => "??",
-            ".xls" or ".xlsx" => "??",
-            ".zip" or ".rar" or ".7z" => "??",
-            ".txt" or ".md" => "??",
-            _ => "??"
+            ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".webp" => "\U0001F5BC", // ?? Framed Picture
+            ".mp4" or ".avi" or ".mkv" or ".mov" or ".wmv" => "\U0001F3AC", // ?? Clapper Board
+            ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "\U0001F3B5", // ?? Musical Note
+            ".pdf" => "\U0001F4D5", // ?? Closed Book (red, recognizable for PDF)
+            ".doc" or ".docx" => "\U0001F4DD", // ?? Memo
+            ".xls" or ".xlsx" => "\U0001F4CA", // ?? Bar Chart
+            ".zip" or ".rar" or ".7z" => "\U0001F4E6", // ?? Package
+            ".txt" or ".md" => "\U0001F4C4", // ?? Page Facing Up
+            _ => "\U0001F4C4" // ?? Page Facing Up
         };
     }
 
@@ -465,10 +482,25 @@ public class LinkItem : INotifyPropertyChanged
     {
         var icon = GetIconWithoutBadge();
 
+        // Main folder with catalog
         if (IsDirectory && !IsCatalogEntry && CatalogFileCount > 0)
         {
             var sizeText = FormatFileSize(CatalogTotalSize);
             return $"{icon} {Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
+        }
+        
+        // Catalog entry - subdirectory with file count
+        if (IsDirectory && IsCatalogEntry && CatalogFileCount > 0)
+        {
+            var sizeText = FormatFileSize(CatalogTotalSize);
+            return $"{icon} {Title} ({CatalogFileCount} file{(CatalogFileCount != 1 ? "s" : "")}, {sizeText})";
+        }
+        
+        // Catalog entry - file with size
+        if (!IsDirectory && IsCatalogEntry && FileSize.HasValue)
+        {
+            var sizeText = FormatFileSize(FileSize.Value);
+            return $"{icon} {Title} ({sizeText})";
         }
 
         return $"{icon} {Title}";

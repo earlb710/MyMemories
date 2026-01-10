@@ -12,7 +12,7 @@ public class CategoryItem
 {
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Icon { get; set; } = "??";
+    public string Icon { get; set; } = "\U0001F4C1"; // ?? Folder
     public DateTime CreatedDate { get; set; } = DateTime.Now;
     public DateTime ModifiedDate { get; set; } = DateTime.Now;
     public PasswordProtectionType PasswordProtection { get; set; } = PasswordProtectionType.None;
@@ -31,6 +31,7 @@ public class CategoryItem
     
     /// <summary>
     /// Gets formatted display text showing all tags with their names.
+    /// Format: [tag icon] TagName  [tag icon] TagName2
     /// </summary>
     [JsonIgnore]
     public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(TagIds) ?? string.Empty;
@@ -42,10 +43,10 @@ public class CategoryItem
     public Visibility HasTags => TagIds.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     
     /// <summary>
-    /// Gets a tag indicator string showing number of tags.
+    /// Gets tag icons only for tree node display (no names).
     /// </summary>
     [JsonIgnore]
-    public string TagIndicator => TagIds.Count > 0 ? $"[{TagIds.Count} tag{(TagIds.Count > 1 ? "s" : "")}]" : string.Empty;
+    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(TagIds) ?? string.Empty;
     
     // Bookmark import metadata
     public bool IsBookmarkImport { get; set; } = false;

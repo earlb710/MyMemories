@@ -5,6 +5,11 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.UI;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 
 namespace MyMemories.Services;
 
@@ -15,6 +20,7 @@ public class TagManagementService
 {
     private const string TagsFileName = "tags.json";
     private const int MaxTags = 20;
+    private const string TagIconGlyph = "\U0001F3F7"; // ??? Label/Tag emoji
     
     private readonly string _tagsFilePath;
     private TagCollection _tagCollection;
@@ -182,7 +188,8 @@ public class TagManagementService
 
     /// <summary>
     /// Gets formatted display text for a list of tag IDs.
-    /// Each tag is shown with a tag indicator followed by the name.
+    /// Format: [tag icon] TagName  [tag icon] TagName2
+    /// For use in tooltips and detail views.
     /// </summary>
     public string GetTagDisplayText(IEnumerable<string> tagIds)
     {
@@ -197,31 +204,103 @@ public class TagManagementService
             {
                 if (sb.Length > 0)
                     sb.Append("  ");
-                // Use a bullet character as tag indicator (renders reliably)
-                sb.Append($"\u2022 {tag.Name}");
+                sb.Append($"{TagIconGlyph} {tag.Name}");
             }
         }
         return sb.ToString();
     }
 
     /// <summary>
-    /// Gets tag information for display (name and color) for a list of tag IDs.
-    /// Returns a list of tuples with (Name, Color) for each valid tag.
+    /// Creates a styled StackPanel with tag badges for display in UI.
+    /// Each tag shows: [tag icon] TagName with tag color background and white text.
     /// </summary>
-    public List<(string Name, string Color)> GetTagsInfo(IEnumerable<string> tagIds)
+    public StackPanel CreateTagBadgesPanel(IEnumerable<string> tagIds, double fontSize = 11, double spacing = 6)
     {
-        var result = new List<(string Name, string Color)>();
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = spacing
+        };
+
         if (tagIds == null)
-            return result;
+            return panel;
 
         foreach (var tagId in tagIds)
         {
             var tag = GetTag(tagId);
             if (tag != null)
             {
-                result.Add((tag.Name, tag.Color));
+                var badge = CreateTagBadge(tag, fontSize);
+                panel.Children.Add(badge);
             }
         }
-        return result;
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Creates a single tag badge with icon, name, colored background, and white text.
+    /// </summary>
+    public Border CreateTagBadge(TagItem tag, double fontSize = 11)
+    {
+        var backgroundColor = ParseColor(tag.Color);
+        
+        var contentPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4
+        };
+
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = TagIconGlyph,
+            FontSize = fontSize,
+            Foreground = new SolidColorBrush(Colors.White),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        contentPanel.Children.Add(new TextBlock
+        {
+            Text = tag.Name,
+            FontSize = fontSize,
+            Foreground = new SolidColorBrush(Colors.White),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        return new Border
+        {
+            Background = new SolidColorBrush(backgroundColor),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 2, 6, 2),
+            Child = contentPanel
+        };
+    }
+
+    /// <summary>
+    /// Creates a tag badge from a tag ID.
+    /// </summary>
+    public Border? CreateTagBadgeById(string tagId, double fontSize = 11)
+    {
+        var tag = GetTag(tagId);
+        return tag != null ? CreateTagBadge(tag, fontSize) : null;
+    }
+
+    private static Color ParseColor(string hex)
+    {
+        try
+        {
+            hex = hex.TrimStart('#');
+            if (hex.Length == 6)
+            {
+                return Color.FromArgb(
+                    255,
+                    Convert.ToByte(hex.Substring(0, 2), 16),
+                    Convert.ToByte(hex.Substring(2, 2), 16),
+                    Convert.ToByte(hex.Substring(4, 2), 16));
+            }
+        }
+        catch { }
+        
+        return Colors.DodgerBlue;
     }
 }

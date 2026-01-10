@@ -137,6 +137,9 @@ public class CatalogService
         {
             var subCatalogEntries = await _categoryService.CreateSubdirectoryCatalogEntriesAsync(subdirItem.Url, categoryPath);
 
+            int fileCount = 0;
+            ulong totalSize = 0;
+
             foreach (var subEntry in subCatalogEntries)
             {
                 var subEntryNode = new TreeViewNode { Content = subEntry };
@@ -144,10 +147,27 @@ public class CatalogService
                 if (subEntry.IsDirectory)
                 {
                     await PopulateSubdirectoryAsync(subEntryNode, subEntry, categoryPath);
+                    
+                    // Add the subdirectory's file count and size to this directory's totals
+                    fileCount += subEntry.CatalogFileCount;
+                    totalSize += subEntry.CatalogTotalSize;
+                }
+                else
+                {
+                    // Count files and their sizes
+                    fileCount++;
+                    if (subEntry.FileSize.HasValue)
+                    {
+                        totalSize += subEntry.FileSize.Value;
+                    }
                 }
 
                 subdirNode.Children.Add(subEntryNode);
             }
+
+            // Set the file count and total size for this subdirectory
+            subdirItem.CatalogFileCount = fileCount;
+            subdirItem.CatalogTotalSize = totalSize;
         }
         catch (Exception ex)
         {
@@ -194,6 +214,14 @@ public class CatalogService
                 await _categoryService.SaveCategoryAsync(rootNode);
             }
         };
+        
+        // Save the catalog to persist it
+        var rootCategoryNode = GetRootCategoryNode(refreshedNode);
+        if (rootCategoryNode != null)
+        {
+            await _categoryService.SaveCategoryAsync(rootCategoryNode);
+            Debug.WriteLine($"[FinalizeCatalogCreationAsync] Saved catalog for '{linkItem.Title}' to category");
+        }
         
         await _detailsViewService.ShowLinkDetailsAsync(linkItem, refreshedNode,
             async () => await CreateCatalogAsync(linkItem, refreshedNode),

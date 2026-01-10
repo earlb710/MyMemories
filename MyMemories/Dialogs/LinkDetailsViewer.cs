@@ -48,6 +48,7 @@ public class LinkDetailsViewer
         var detailsPanel = new StackPanel { Spacing = 12 };
 
         AddTitleSection(detailsPanel, link);
+        AddTagsSection(detailsPanel, link);
         AddUrlSection(detailsPanel, link);
         
         if (!string.IsNullOrWhiteSpace(link.Description))
@@ -74,6 +75,24 @@ public class LinkDetailsViewer
         panel.Children.Add(new TextBlock
         {
             Text = link.Title,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+    }
+
+    private void AddTagsSection(StackPanel panel, LinkItem link)
+    {
+        if (link.TagIds.Count == 0)
+            return;
+
+        var tagText = Services.TagManagementService.Instance?.GetTagDisplayText(link.TagIds);
+        if (string.IsNullOrEmpty(tagText))
+            return;
+
+        panel.Children.Add(DialogHelpers.CreateLabel("Tags:"));
+        panel.Children.Add(new TextBlock
+        {
+            Text = tagText,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
             Margin = new Thickness(0, 0, 0, 8)
         });
     }

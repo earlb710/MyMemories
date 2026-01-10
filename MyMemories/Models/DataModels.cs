@@ -107,6 +107,18 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ulong? FileSize { get; set; }
+    
+    /// <summary>
+    /// Number of files in a catalog subdirectory (for display purposes).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CatalogFileCount { get; set; }
+    
+    /// <summary>
+    /// Total size of files in a catalog subdirectory (for display purposes).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ulong? CatalogTotalSize { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AutoRefreshCatalog { get; set; }

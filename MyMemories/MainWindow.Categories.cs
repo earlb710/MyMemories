@@ -321,7 +321,7 @@ public sealed partial class MainWindow
             if (LinksTreeView.SelectedNode == newNode)
             {
                 await _detailsViewService!.ShowCategoryDetailsAsync(updatedCategory, newNode);
-                _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon);
+                _detailsViewService.ShowCategoryHeader(_treeViewService!.GetCategoryPath(newNode), updatedCategory.Description, updatedCategory.Icon, updatedCategory);
                 HeaderViewerScroll.Visibility = Visibility.Visible;
             }
         }

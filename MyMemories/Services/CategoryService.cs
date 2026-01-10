@@ -540,6 +540,9 @@ public class CategoryService
                                 IsCatalogEntry = null,
                                 LastCatalogUpdate = null,
                                 FileSize = catalogEntry.FileSize,
+                                // Save subdirectory file count and size for display
+                                CatalogFileCount = catalogEntry.IsDirectory && catalogEntry.CatalogFileCount > 0 ? catalogEntry.CatalogFileCount : null,
+                                CatalogTotalSize = catalogEntry.IsDirectory && catalogEntry.CatalogTotalSize > 0 ? catalogEntry.CatalogTotalSize : null,
                                 CatalogEntries = null
                             };
 
@@ -570,6 +573,9 @@ public class CategoryService
                                             CreatedDate = subCatalogEntry.CreatedDate,
                                             ModifiedDate = subCatalogEntry.ModifiedDate,
                                             FileSize = subCatalogEntry.FileSize,
+                                            // Save subdirectory file count and size for display
+                                            CatalogFileCount = subCatalogEntry.IsDirectory && subCatalogEntry.CatalogFileCount > 0 ? subCatalogEntry.CatalogFileCount : null,
+                                            CatalogTotalSize = subCatalogEntry.IsDirectory && subCatalogEntry.CatalogTotalSize > 0 ? subCatalogEntry.CatalogTotalSize : null,
                                             CatalogEntries = null  // IMPORTANT: Don't go deeper than 2 levels
                                         });
                                     }
@@ -739,7 +745,10 @@ public class CategoryService
                             FileFilters = string.Empty,
                             IsCatalogEntry = true,
                             LastCatalogUpdate = null,
-                            FileSize = catalogData.FileSize
+                            FileSize = catalogData.FileSize,
+                            // Restore subdirectory file count and size for display
+                            CatalogFileCount = catalogData.CatalogFileCount ?? 0,
+                            CatalogTotalSize = catalogData.CatalogTotalSize ?? 0
                         };
 
                         var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
@@ -763,7 +772,10 @@ public class CategoryService
                                     FolderType = FolderLinkType.LinkOnly,
                                     FileFilters = string.Empty,
                                     IsCatalogEntry = true,
-                                    FileSize = subCatalogData.FileSize
+                                    FileSize = subCatalogData.FileSize,
+                                    // Restore subdirectory file count and size for display
+                                    CatalogFileCount = subCatalogData.CatalogFileCount ?? 0,
+                                    CatalogTotalSize = subCatalogData.CatalogTotalSize ?? 0
                                 };
 
                                 var subCatalogEntryNode = new TreeViewNode { Content = subCatalogEntry };
@@ -790,6 +802,31 @@ public class CategoryService
         return FileUtilities.SanitizeFileName(fileName);
     }
 
+    // Directories to skip during cataloging (common large/irrelevant folders)
+    private static readonly HashSet<string> SkipDirectories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "node_modules",
+        ".git",
+        ".vs",
+        ".idea",
+        "bin",
+        "obj",
+        "packages",
+        ".nuget",
+        "__pycache__",
+        ".cache",
+        "bower_components",
+        "vendor"
+    };
+
+    /// <summary>
+    /// Checks if a directory should be skipped during cataloging.
+    /// </summary>
+    private static bool ShouldSkipDirectory(string directoryName)
+    {
+        return SkipDirectories.Contains(directoryName);
+    }
+
     /// <summary>
     /// Creates a catalog of all files and subdirectories in a directory recursively.
     /// Returns LinkItems with full paths for TreeView usage, with ALL subdirectory contents pre-loaded recursively.
@@ -806,54 +843,114 @@ public class CategoryService
         try
         {
             // First, add all subdirectories as folder entries WITH their contents recursively
-            var directories = Directory.GetDirectories(directoryPath);
+            string[] directories;
+            try
+            {
+                directories = Directory.GetDirectories(directoryPath);
+            }
+            catch (PathTooLongException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] PathTooLong: Skipping directories in {directoryPath}");
+                directories = Array.Empty<string>();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Unauthorized: Skipping directories in {directoryPath}");
+                directories = Array.Empty<string>();
+            }
+
             foreach (var subDirPath in directories)
             {
-                var dirInfo = new DirectoryInfo(subDirPath);
-
-                var subDirEntry = new LinkItem
+                try
                 {
-                    Title = dirInfo.Name,
-                    Url = subDirPath,
-                    Description = $"Subfolder",
-                    IsDirectory = true,
-                    CategoryPath = categoryPath,
-                    CreatedDate = dirInfo.CreationTime,
-                    ModifiedDate = dirInfo.LastWriteTime,
-                    FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true
-                };
+                    var dirInfo = new DirectoryInfo(subDirPath);
+                    
+                    // Skip problematic directories
+                    if (ShouldSkipDirectory(dirInfo.Name))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Skipping directory: {dirInfo.Name}");
+                        continue;
+                    }
 
-                catalogEntries.Add(subDirEntry);
+                    var subDirEntry = new LinkItem
+                    {
+                        Title = dirInfo.Name,
+                        Url = subDirPath,
+                        Description = $"Subfolder",
+                        IsDirectory = true,
+                        CategoryPath = categoryPath,
+                        CreatedDate = dirInfo.CreationTime,
+                        ModifiedDate = dirInfo.LastWriteTime,
+                        FolderType = FolderLinkType.LinkOnly,
+                        IsCatalogEntry = true
+                    };
+
+                    catalogEntries.Add(subDirEntry);
+                }
+                catch (PathTooLongException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] PathTooLong: Skipping {subDirPath}");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Unauthorized: Skipping {subDirPath}");
+                }
             }
 
             // Then, add all files in the current directory
-            var files = Directory.GetFiles(directoryPath);
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directoryPath);
+            }
+            catch (PathTooLongException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] PathTooLong: Skipping files in {directoryPath}");
+                files = Array.Empty<string>();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Unauthorized: Skipping files in {directoryPath}");
+                files = Array.Empty<string>();
+            }
+
             foreach (var filePath in files)
             {
-                var fileInfo = new FileInfo(filePath);
-
-                // Generate rich description based on file type
-                var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
-
-                catalogEntries.Add(new LinkItem
+                try
                 {
-                    Title = fileInfo.Name,
-                    Url = filePath,
-                    Description = description,
-                    IsDirectory = false,
-                    CategoryPath = categoryPath,
-                    CreatedDate = fileInfo.CreationTime,
-                    ModifiedDate = fileInfo.LastWriteTime,
-                    FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true,
-                    FileSize = (ulong)fileInfo.Length
-                });
+                    var fileInfo = new FileInfo(filePath);
+
+                    // Generate rich description based on file type
+                    var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
+
+                    catalogEntries.Add(new LinkItem
+                    {
+                        Title = fileInfo.Name,
+                        Url = filePath,
+                        Description = description,
+                        IsDirectory = false,
+                        CategoryPath = categoryPath,
+                        CreatedDate = fileInfo.CreationTime,
+                        ModifiedDate = fileInfo.LastWriteTime,
+                        FolderType = FolderLinkType.LinkOnly,
+                        IsCatalogEntry = true,
+                        FileSize = (ulong)fileInfo.Length
+                    });
+                }
+                catch (PathTooLongException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] PathTooLong: Skipping file {filePath}");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Unauthorized: Skipping file {filePath}");
+                }
             }
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Error creating catalog for {directoryPath}: {ex.Message}", ex);
+            System.Diagnostics.Debug.WriteLine($"[CreateCatalogEntriesAsync] Error: {ex.Message}");
+            // Return what we have so far instead of throwing
         }
 
         return catalogEntries;
@@ -863,7 +960,7 @@ public class CategoryService
     /// Recursively catalogs a subdirectory and returns its entries with children populated.
     /// Used when expanding a catalog subdirectory for the first time.
     /// </summary>
-    public async Task<List<LinkItem>> CreateSubdirectoryCatalogEntriesAsync(String directoryPath, string categoryPath)
+    public async Task<List<LinkItem>> CreateSubdirectoryCatalogEntriesAsync(string directoryPath, string categoryPath)
     {
         var catalogEntries = new List<LinkItem>();
 
@@ -875,52 +972,112 @@ public class CategoryService
         try
         {
             // Add all files in this subdirectory
-            var files = Directory.GetFiles(directoryPath);
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(directoryPath);
+            }
+            catch (PathTooLongException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] PathTooLong: Skipping files in {directoryPath}");
+                files = Array.Empty<string>();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Unauthorized: Skipping files in {directoryPath}");
+                files = Array.Empty<string>();
+            }
+
             foreach (var filePath in files)
             {
-                var fileInfo = new FileInfo(filePath);
-
-                // Generate rich description based on file type
-                var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
-
-                catalogEntries.Add(new LinkItem
+                try
                 {
-                    Title = fileInfo.Name,
-                    Url = filePath,
-                    Description = description,
-                    IsDirectory = false,
-                    CategoryPath = categoryPath,
-                    CreatedDate = fileInfo.CreationTime,
-                    ModifiedDate = fileInfo.LastWriteTime,
-                    FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true,
-                    FileSize = (ulong)fileInfo.Length
-                });
+                    var fileInfo = new FileInfo(filePath);
+
+                    // Generate rich description based on file type
+                    var description = await FileMetadataService.GenerateFileDescriptionAsync(filePath);
+
+                    catalogEntries.Add(new LinkItem
+                    {
+                        Title = fileInfo.Name,
+                        Url = filePath,
+                        Description = description,
+                        IsDirectory = false,
+                        CategoryPath = categoryPath,
+                        CreatedDate = fileInfo.CreationTime,
+                        ModifiedDate = fileInfo.LastWriteTime,
+                        FolderType = FolderLinkType.LinkOnly,
+                        IsCatalogEntry = true,
+                        FileSize = (ulong)fileInfo.Length
+                    });
+                }
+                catch (PathTooLongException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] PathTooLong: Skipping file {filePath}");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Unauthorized: Skipping file {filePath}");
+                }
             }
 
             // Add subdirectories (without recursing into them)
-            var directories = Directory.GetDirectories(directoryPath);
+            string[] directories;
+            try
+            {
+                directories = Directory.GetDirectories(directoryPath);
+            }
+            catch (PathTooLongException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] PathTooLong: Skipping directories in {directoryPath}");
+                directories = Array.Empty<string>();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Unauthorized: Skipping directories in {directoryPath}");
+                directories = Array.Empty<string>();
+            }
+
             foreach (var subDirPath in directories)
             {
-                var dirInfo = new DirectoryInfo(subDirPath);
-
-                catalogEntries.Add(new LinkItem
+                try
                 {
-                    Title = dirInfo.Name,
-                    Url = subDirPath,
-                    Description = $"Subfolder",
-                    IsDirectory = true,
-                    CategoryPath = categoryPath,
-                    CreatedDate = dirInfo.CreationTime,
-                    ModifiedDate = dirInfo.LastWriteTime,
-                    FolderType = FolderLinkType.LinkOnly,
-                    IsCatalogEntry = true
-                });
+                    var dirInfo = new DirectoryInfo(subDirPath);
+
+                    // Skip problematic directories
+                    if (ShouldSkipDirectory(dirInfo.Name))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Skipping directory: {dirInfo.Name}");
+                        continue;
+                    }
+
+                    catalogEntries.Add(new LinkItem
+                    {
+                        Title = dirInfo.Name,
+                        Url = subDirPath,
+                        Description = $"Subfolder",
+                        IsDirectory = true,
+                        CategoryPath = categoryPath,
+                        CreatedDate = dirInfo.CreationTime,
+                        ModifiedDate = dirInfo.LastWriteTime,
+                        FolderType = FolderLinkType.LinkOnly,
+                        IsCatalogEntry = true
+                    });
+                }
+                catch (PathTooLongException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] PathTooLong: Skipping {subDirPath}");
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Unauthorized: Skipping {subDirPath}");
+                }
             }
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Error creating catalog for subdirectory {directoryPath}: {ex.Message}", ex);
+            System.Diagnostics.Debug.WriteLine($"[CreateSubdirectoryCatalogEntriesAsync] Error: {ex.Message}");
+            // Return what we have so far instead of throwing
         }
 
         return catalogEntries;
