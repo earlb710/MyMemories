@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     private FileLauncherService? _fileLauncherService;
     private LinkSelectionService? _linkSelectionService;
     private UrlStateCheckerService? _urlStateCheckerService;
+    private TagManagementService? _tagService;
 
     /// <summary>
     /// Gets or sets whether a URL is currently loading.
@@ -143,6 +144,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
             // Initialize CategoryService WITH ConfigurationService
             _categoryService = new CategoryService(_configService.WorkingDirectory, _configService);
+            
+            // Initialize TagManagementService and load tags
+            _tagService = new TagManagementService(_configService.WorkingDirectory);
+            await _tagService.LoadAsync();
             
             // Initialize other services
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);

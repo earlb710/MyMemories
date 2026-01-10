@@ -401,7 +401,8 @@ public class LinkSelectionService
             showLinkBadge,
             fileSize,
             createdDate,
-            modifiedDate);
+            modifiedDate,
+            linkItem);
     }
 
     private async Task ShowLinkDetailsWithCatalogActions(LinkItem linkItem, TreeViewNode? linkNode, Action<string> setStatus)

@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Dialogs;
 using MyMemories.Services;
 using System;
 using System.Diagnostics;
@@ -27,6 +28,24 @@ public sealed partial class MainWindow
     private async void MenuConfig_Options_Click(object sender, RoutedEventArgs e)
     {
         await ShowOptionsDialogAsync();
+    }
+
+    private async void MenuConfig_TagManagement_Click(object sender, RoutedEventArgs e)
+    {
+        await ShowTagManagementDialogAsync();
+    }
+
+    private async Task ShowTagManagementDialogAsync()
+    {
+        // _tagService is initialized during app startup in InitializeAsync
+        if (_tagService == null)
+        {
+            await ShowErrorDialogAsync("Error", "Tag service not initialized.");
+            return;
+        }
+
+        var dialog = new TagManagementDialog(Content.XamlRoot, _tagService);
+        await dialog.RefreshAndShowDialogAsync();
     }
 
     // Helper methods

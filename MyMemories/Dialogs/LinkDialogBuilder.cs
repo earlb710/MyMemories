@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -21,13 +22,16 @@ public class LinkDialogBuilder
     private readonly Window _parentWindow;
     private readonly XamlRoot _xamlRoot;
     private readonly FolderPickerService _folderPickerService;
+    private readonly WebSummaryService _webSummaryService;
     private List<TreeViewNode>? _bookmarkLookupCategories;
+    private CancellationTokenSource? _summarizeCts;
 
     public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
         _folderPickerService = new FolderPickerService(parentWindow);
+        _webSummaryService = new WebSummaryService();
     }
     
     /// <summary>
@@ -182,22 +186,44 @@ public class LinkDialogBuilder
             Visibility = Visibility.Collapsed
         };
 
+        // Summarize button and progress ring
+        var summarizeProgress = new ProgressRing
+        {
+            IsActive = false,
+            Width = 16,
+            Height = 16,
+            Visibility = Visibility.Collapsed
+        };
+
+        var summarizeButton = new Button
+        {
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE8A1", FontSize = 14 }, // Lightbulb icon
+                    new TextBlock { Text = "Summarize URL", VerticalAlignment = VerticalAlignment.Center },
+                    summarizeProgress
+                }
+            }
+        };
+
         var (folderControls, _) = BuildFolderControls();
 
         var stackPanel = new StackPanel();
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category: *", 
-            new Thickness(0, 0, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Category: *", new Thickness(0, 0, 0, 4)));
         stackPanel.Children.Add(categoryComboBox);
         stackPanel.Children.Add(bookmarkInfoText);
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Link Type: *", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Link Type: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(linkTypeComboBox);
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Location: *", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Location: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(urlTextBox);
         stackPanel.Children.Add(browseButton);
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Title: *", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Title: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(titleTextBox);
         
         stackPanel.Children.Add(folderControls.TypeLabel);
@@ -205,12 +231,11 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(folderControls.FiltersLabel);
         stackPanel.Children.Add(folderControls.FiltersTextBox);
         
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(descriptionTextBox);
+        stackPanel.Children.Add(summarizeButton);
         
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(keywordsTextBox);
 
         var controls = new LinkDialogControls
@@ -226,7 +251,9 @@ public class LinkDialogBuilder
             FolderTypeLabel = folderControls.TypeLabel,
             FileFiltersLabel = folderControls.FiltersLabel,
             BrowseButton = browseButton,
-            BookmarkInfoText = bookmarkInfoText
+            BookmarkInfoText = bookmarkInfoText,
+            SummarizeButton = summarizeButton,
+            SummarizeProgress = summarizeProgress
         };
 
         return (stackPanel, controls);
@@ -269,14 +296,38 @@ public class LinkDialogBuilder
             Margin = new Thickness(0, 0, 0, 8)
         };
 
+        // Summarize button and progress ring for edit dialog
+        var summarizeProgress = new ProgressRing
+        {
+            IsActive = false,
+            Width = 16,
+            Height = 16,
+            Visibility = Visibility.Collapsed
+        };
+
+        var summarizeButton = new Button
+        {
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = IsWebUrl(link.Url) ? Visibility.Visible : Visibility.Collapsed,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE8A1", FontSize = 14 },
+                    new TextBlock { Text = "Summarize URL", VerticalAlignment = VerticalAlignment.Center },
+                    summarizeProgress
+                }
+            }
+        };
+
         var (folderControls, _) = BuildFolderControls(link.IsDirectory, link.FolderType, link.FileFilters);
 
         var stackPanel = new StackPanel();
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Title:", 
-            new Thickness(0, 0, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Title:", new Thickness(0, 0, 0, 4)));
         stackPanel.Children.Add(titleTextBox);
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Path/URL:", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Path/URL:", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(urlTextBox);
         
         stackPanel.Children.Add(folderControls.TypeLabel);
@@ -284,12 +335,11 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(folderControls.FiltersLabel);
         stackPanel.Children.Add(folderControls.FiltersTextBox);
         
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Description:", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(descriptionTextBox);
+        stackPanel.Children.Add(summarizeButton);
         
-        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", 
-            new Thickness(0, 8, 0, 4)));
+        stackPanel.Children.Add(DialogHelpers.CreateLabel("Keywords (comma or semicolon separated):", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(keywordsTextBox);
 
         var controls = new LinkDialogControls
@@ -301,7 +351,9 @@ public class LinkDialogBuilder
             FolderTypeComboBox = folderControls.TypeComboBox,
             FileFiltersTextBox = folderControls.FiltersTextBox,
             FolderTypeLabel = folderControls.TypeLabel,
-            FileFiltersLabel = folderControls.FiltersLabel
+            FileFiltersLabel = folderControls.FiltersLabel,
+            SummarizeButton = summarizeButton,
+            SummarizeProgress = summarizeProgress
         };
 
         return (stackPanel, controls);
@@ -401,6 +453,22 @@ public class LinkDialogBuilder
             dialog.IsPrimaryButtonEnabled = hasCategory && hasTitle;
         }
 
+        void UpdateSummarizeButtonVisibility()
+        {
+            // Show summarize button only for URL link type and when URL is a web URL
+            string linkType = "URL";
+            if (controls.LinkTypeComboBox?.SelectedItem is ComboBoxItem linkTypeItem)
+            {
+                linkType = linkTypeItem.Tag?.ToString() ?? "URL";
+            }
+
+            bool showSummarize = linkType == "URL" && IsWebUrl(controls.UrlTextBox.Text);
+            if (controls.SummarizeButton != null)
+            {
+                controls.SummarizeButton.Visibility = showSummarize ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         void UpdateUIForCategoryAndLinkType()
         {
             // Check if selected category is a bookmark category
@@ -445,7 +513,7 @@ public class LinkDialogBuilder
                             Spacing = 6,
                             Children =
                             {
-                                new FontIcon { Glyph = "\uE71B", FontSize = 14 }, // Link icon
+                                new FontIcon { Glyph = "\uE71B", FontSize = 14 },
                                 new TextBlock { Text = "Browse Bookmarks", VerticalAlignment = VerticalAlignment.Center }
                             }
                         };
@@ -462,6 +530,8 @@ public class LinkDialogBuilder
                         break;
                 }
             }
+            
+            UpdateSummarizeButtonVisibility();
         }
 
         void CheckDirectoryAndUpdateUI()
@@ -508,6 +578,8 @@ public class LinkDialogBuilder
                 controls.FileFiltersLabel.Visibility = Visibility.Collapsed;
                 controls.FileFiltersTextBox.Visibility = Visibility.Collapsed;
             }
+            
+            UpdateSummarizeButtonVisibility();
         }
 
         controls.CategoryComboBox!.SelectionChanged += (s, args) =>
@@ -523,7 +595,11 @@ public class LinkDialogBuilder
         };
         
         controls.TitleTextBox.TextChanged += (s, args) => ValidateForm();
-        controls.UrlTextBox.TextChanged += (s, args) => CheckDirectoryAndUpdateUI();
+        controls.UrlTextBox.TextChanged += (s, args) =>
+        {
+            CheckDirectoryAndUpdateUI();
+            UpdateSummarizeButtonVisibility();
+        };
         controls.FolderTypeComboBox.SelectionChanged += (s, args) => CheckDirectoryAndUpdateUI();
 
         controls.BrowseButton!.Click += async (s, args) =>
@@ -544,12 +620,31 @@ public class LinkDialogBuilder
             }
         };
 
+        // Handle summarize button click
+        if (controls.SummarizeButton != null)
+        {
+            controls.SummarizeButton.Click += async (s, args) =>
+            {
+                await SummarizeUrlAsync(controls);
+                ValidateForm(); // Re-validate in case title was populated
+            };
+        }
+
         UpdateUIForCategoryAndLinkType();
         CheckDirectoryAndUpdateUI();
     }
 
     private void SetupEditLinkEventHandlers(LinkDialogControls controls)
     {
+        void UpdateSummarizeButtonVisibility()
+        {
+            bool showSummarize = IsWebUrl(controls.UrlTextBox.Text);
+            if (controls.SummarizeButton != null)
+            {
+                controls.SummarizeButton.Visibility = showSummarize ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         void CheckDirectoryAndUpdateUI()
         {
             bool isDirectory = false;
@@ -575,10 +670,25 @@ public class LinkDialogBuilder
                 controls.FileFiltersLabel.Visibility = Visibility.Collapsed;
                 controls.FileFiltersTextBox.Visibility = Visibility.Collapsed;
             }
+            
+            UpdateSummarizeButtonVisibility();
         }
 
-        controls.UrlTextBox.TextChanged += (s, args) => CheckDirectoryAndUpdateUI();
+        controls.UrlTextBox.TextChanged += (s, args) =>
+        {
+            CheckDirectoryAndUpdateUI();
+            UpdateSummarizeButtonVisibility();
+        };
         controls.FolderTypeComboBox.SelectionChanged += (s, args) => CheckDirectoryAndUpdateUI();
+
+        // Handle summarize button click
+        if (controls.SummarizeButton != null)
+        {
+            controls.SummarizeButton.Click += async (s, args) =>
+            {
+                await SummarizeUrlAsync(controls);
+            };
+        }
     }
 
     private async Task BrowseForFileAsync(TextBox urlTextBox, TextBox titleTextBox)
@@ -1053,6 +1163,8 @@ public class LinkDialogBuilder
         public TextBlock FileFiltersLabel { get; set; } = null!;
         public Button? BrowseButton { get; set; }
         public TextBlock BookmarkInfoText { get; set; } = null!;
+        public Button? SummarizeButton { get; set; }
+        public ProgressRing? SummarizeProgress { get; set; }
     }
 
     private class FolderControlsGroup
@@ -1061,5 +1173,126 @@ public class LinkDialogBuilder
         public TextBox FiltersTextBox { get; set; } = null!;
         public TextBlock TypeLabel { get; set; } = null!;
         public TextBlock FiltersLabel { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// Checks if a URL is a web URL (http:// or https://).
+    /// </summary>
+    private static bool IsWebUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+        
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+               url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Summarizes the URL and populates the title and description fields.
+    /// </summary>
+    private async Task SummarizeUrlAsync(LinkDialogControls controls)
+    {
+        var url = controls.UrlTextBox.Text.Trim();
+        if (!IsWebUrl(url))
+            return;
+
+        // Cancel any existing summarization
+        _summarizeCts?.Cancel();
+        _summarizeCts = new CancellationTokenSource();
+
+        try
+        {
+            // Show progress
+            if (controls.SummarizeProgress != null)
+            {
+                controls.SummarizeProgress.IsActive = true;
+                controls.SummarizeProgress.Visibility = Visibility.Visible;
+            }
+            if (controls.SummarizeButton != null)
+            {
+                controls.SummarizeButton.IsEnabled = false;
+            }
+
+            var summary = await _webSummaryService.SummarizeUrlAsync(url, _summarizeCts.Token);
+
+            if (summary.Success)
+            {
+                // Populate title if empty
+                if (string.IsNullOrWhiteSpace(controls.TitleTextBox.Text) && !string.IsNullOrWhiteSpace(summary.Title))
+                {
+                    controls.TitleTextBox.Text = summary.Title;
+                }
+
+                // Build description from summary
+                var descriptionBuilder = new System.Text.StringBuilder();
+                
+                if (!string.IsNullOrWhiteSpace(summary.Description))
+                {
+                    descriptionBuilder.AppendLine(summary.Description);
+                }
+                
+                if (!string.IsNullOrWhiteSpace(summary.ContentSummary) && summary.ContentSummary != summary.Description)
+                {
+                    if (descriptionBuilder.Length > 0)
+                        descriptionBuilder.AppendLine();
+                    descriptionBuilder.AppendLine(summary.ContentSummary);
+                }
+
+                // Add metadata if available
+                if (!string.IsNullOrWhiteSpace(summary.Author) || !string.IsNullOrWhiteSpace(summary.PublishedDate))
+                {
+                    if (descriptionBuilder.Length > 0)
+                        descriptionBuilder.AppendLine();
+                    
+                    if (!string.IsNullOrWhiteSpace(summary.Author))
+                        descriptionBuilder.AppendLine($"Author: {summary.Author}");
+                    if (!string.IsNullOrWhiteSpace(summary.PublishedDate))
+                        descriptionBuilder.AppendLine($"Published: {summary.PublishedDate}");
+                }
+
+                if (descriptionBuilder.Length > 0)
+                {
+                    controls.DescriptionTextBox.Text = descriptionBuilder.ToString().Trim();
+                }
+
+                // Populate keywords if available and field is empty
+                if (string.IsNullOrWhiteSpace(controls.KeywordsTextBox?.Text) && summary.Keywords.Count > 0)
+                {
+                    controls.KeywordsTextBox!.Text = string.Join(", ", summary.Keywords);
+                }
+            }
+            else if (!summary.WasCancelled)
+            {
+                // Show error in description if it was empty
+                if (string.IsNullOrWhiteSpace(controls.DescriptionTextBox.Text))
+                {
+                    controls.DescriptionTextBox.Text = $"Could not summarize URL: {summary.ErrorMessage}";
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled - do nothing
+        }
+        catch (Exception ex)
+        {
+            if (string.IsNullOrWhiteSpace(controls.DescriptionTextBox.Text))
+            {
+                controls.DescriptionTextBox.Text = $"Error summarizing URL: {ex.Message}";
+            }
+        }
+        finally
+        {
+            // Hide progress
+            if (controls.SummarizeProgress != null)
+            {
+                controls.SummarizeProgress.IsActive = false;
+                controls.SummarizeProgress.Visibility = Visibility.Collapsed;
+            }
+            if (controls.SummarizeButton != null)
+            {
+                controls.SummarizeButton.IsEnabled = true;
+            }
+        }
     }
 }

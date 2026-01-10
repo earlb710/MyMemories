@@ -56,6 +56,8 @@ public sealed partial class MainWindow
         // Get menu items by name
         var changePasswordItem = FindMenuItemByName(menu, "CategoryMenu_ChangePassword");
         var zipCategoryItem = FindMenuItemByName(menu, "CategoryMenu_ZipCategory");
+        var addTagSubItem = FindSubMenuItemByName(menu, "CategoryMenu_AddTag");
+        var removeTagItem = FindMenuItemByName(menu, "CategoryMenu_RemoveTag");
 
         // Change Password: only enabled for root categories
         bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
@@ -72,13 +74,17 @@ public sealed partial class MainWindow
             zipCategoryItem.IsEnabled = folderPaths.Count > 0;
         }
 
-        // All other category menu items are always enabled
-        // - Add Link
-        // - Add Subcategory
-        // - Edit
-        // - Statistics
-        // - Sort By
-        // - Remove
+        // Configure Add Tag submenu
+        if (addTagSubItem != null)
+        {
+            PopulateAddTagSubmenu(addTagSubItem, category.TagIds, isCategory: true);
+        }
+
+        // Remove Tag: only enabled if category has tags
+        if (removeTagItem != null)
+        {
+            removeTagItem.IsEnabled = category.TagIds.Count > 0;
+        }
     }
 
     /// <summary>
@@ -96,6 +102,8 @@ public sealed partial class MainWindow
         var exploreHereItem = FindMenuItemByName(menu, "LinkMenu_ExploreHere");
         var sortCatalogItem = FindMenuItemByName(menu, "LinkMenu_SortCatalog");
         var summarizeItem = FindMenuItemByName(menu, "LinkMenu_Summarize");
+        var addTagSubItem = FindSubMenuItemByName(menu, "LinkMenu_AddTag");
+        var removeTagItem = FindMenuItemByName(menu, "LinkMenu_RemoveTag");
 
         // Check conditions
         bool isCatalogEntry = link.IsCatalogEntry;
@@ -153,6 +161,22 @@ public sealed partial class MainWindow
         {
             sortCatalogItem.IsEnabled = isDirectory && hasCatalog;
         }
+
+        // Configure Add Tag submenu: disabled for catalog entries
+        if (addTagSubItem != null)
+        {
+            addTagSubItem.IsEnabled = !isCatalogEntry;
+            if (!isCatalogEntry)
+            {
+                PopulateAddTagSubmenu(addTagSubItem, link.TagIds, isCategory: false);
+            }
+        }
+
+        // Remove Tag: only enabled if link has tags and is not a catalog entry
+        if (removeTagItem != null)
+        {
+            removeTagItem.IsEnabled = !isCatalogEntry && link.TagIds.Count > 0;
+        }
     }
 
     /// <summary>
@@ -168,6 +192,74 @@ public sealed partial class MainWindow
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Finds a menu flyout sub item by its x:Name property.
+    /// </summary>
+    private MenuFlyoutSubItem? FindSubMenuItemByName(MenuFlyout menu, string name)
+    {
+        foreach (var item in menu.Items)
+        {
+            if (item is MenuFlyoutSubItem subItem && subItem.Name == name)
+            {
+                return subItem;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Populates the Add Tag submenu with available tags.
+    /// </summary>
+    private void PopulateAddTagSubmenu(MenuFlyoutSubItem subMenu, List<string> existingTagIds, bool isCategory)
+    {
+        subMenu.Items.Clear();
+
+        if (_tagService == null || _tagService.TagCount == 0)
+        {
+            var noTagsItem = new MenuFlyoutItem
+            {
+                Text = "No tags available",
+                IsEnabled = false
+            };
+            subMenu.Items.Add(noTagsItem);
+            return;
+        }
+
+        // Add available tags (excluding already assigned ones)
+        var availableTags = _tagService.Tags.Where(t => !existingTagIds.Contains(t.Id)).ToList();
+
+        if (availableTags.Count == 0)
+        {
+            var allAssignedItem = new MenuFlyoutItem
+            {
+                Text = "All tags already assigned",
+                IsEnabled = false
+            };
+            subMenu.Items.Add(allAssignedItem);
+            return;
+        }
+
+        foreach (var tag in availableTags)
+        {
+            var tagItem = new MenuFlyoutItem
+            {
+                Text = $"🏷️ {tag.Name}",
+                Tag = tag.Id
+            };
+
+            if (isCategory)
+            {
+                tagItem.Click += CategoryMenu_AddTagItem_Click;
+            }
+            else
+            {
+                tagItem.Click += LinkMenu_AddTagItem_Click;
+            }
+
+            subMenu.Items.Add(tagItem);
+        }
     }
 
     private async void CategoryMenu_AddLink_Click(object sender, RoutedEventArgs e)
@@ -1992,4 +2084,116 @@ public sealed partial class MainWindow
             StatusText.Text = $"Sorted catalog for '{link.Title}' by {SortingService.GetSortOptionDisplayName(selectedOption)}";
         }
     }
+
+    #region Tag Menu Handlers
+
+    private async void CategoryMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+            return;
+
+        var tag = _tagService?.GetTag(tagId);
+        if (tag == null)
+            return;
+
+        // Add tag to category
+        if (!category.TagIds.Contains(tagId))
+        {
+            category.TagIds.Add(tagId);
+            category.ModifiedDate = DateTime.Now;
+            category.NotifyTagsChanged();
+
+            // Save the category
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            StatusText.Text = $"Added tag '{tag.Name}' to category '{category.Name}'";
+        }
+    }
+
+    private async void CategoryMenu_RemoveTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        if (category.TagIds.Count == 0)
+        {
+            StatusText.Text = "No tags to remove";
+            return;
+        }
+
+        // Remove the last tag added
+        var lastTagId = category.TagIds[^1];
+        var tag = _tagService?.GetTag(lastTagId);
+        
+        category.TagIds.RemoveAt(category.TagIds.Count - 1);
+        category.ModifiedDate = DateTime.Now;
+        category.NotifyTagsChanged();
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(_contextMenuNode);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+
+        var tagName = tag?.Name ?? "Unknown";
+        StatusText.Text = $"Removed tag '{tagName}' from category '{category.Name}'";
+    }
+
+    private async void LinkMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+            return;
+
+        var tag = _tagService?.GetTag(tagId);
+        if (tag == null)
+            return;
+
+        // Add tag to link
+        if (!link.TagIds.Contains(tagId))
+        {
+            link.TagIds.Add(tagId);
+            link.ModifiedDate = DateTime.Now;
+            link.NotifyTagsChanged();
+
+            // Save the category
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            StatusText.Text = $"Added tag '{tag.Name}' to link '{link.Title}'";
+        }
+    }
+
+    private async void LinkMenu_RemoveTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (link.TagIds.Count == 0)
+        {
+            StatusText.Text = "No tags to remove";
+            return;
+        }
+
+        // Remove the last tag added
+        var lastTagId = link.TagIds[^1];
+        var tag = _tagService?.GetTag(lastTagId);
+        
+        link.TagIds.RemoveAt(link.TagIds.Count - 1);
+        link.ModifiedDate = DateTime.Now;
+        link.NotifyTagsChanged();
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(_contextMenuNode);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+
+        var tagName = tag?.Name ?? "Unknown";
+        StatusText.Text = $"Removed tag '{tagName}' from link '{link.Title}'";
+    }
+
+    #endregion
 }

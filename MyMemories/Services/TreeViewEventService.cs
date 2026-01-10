@@ -44,7 +44,7 @@ public class TreeViewEventService
         await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
-        _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon);
+        _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
 
         showDetailsViewers();
         setStatus($"Viewing: {categoryPath} ({node.Children.Count} item(s))");

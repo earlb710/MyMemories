@@ -79,7 +79,7 @@ public class DetailsViewService
     /// <summary>
     /// Shows category header in the header panel with icon on the left.
     /// </summary>
-    public void ShowCategoryHeader(string categoryName, string? description, string icon)
+    public void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null)
     {
         _headerPanel?.Children.Clear();
 
@@ -108,13 +108,38 @@ public class DetailsViewService
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        textPanel.Children.Add(new TextBlock
+        // Title row with optional tag info
+        var titleRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12
+        };
+        
+        titleRow.Children.Add(new TextBlock
         {
             Text = categoryName,
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
+        
+        // Add tag info if category has tags
+        if (category != null && category.TagIds.Count > 0)
+        {
+            var tagText = TagManagementService.Instance?.GetTagDisplayText(category.TagIds);
+            if (!string.IsNullOrEmpty(tagText))
+            {
+                titleRow.Children.Add(new TextBlock
+                {
+                    Text = tagText,
+                    FontSize = 14,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
+                });
+            }
+        }
+        
+        textPanel.Children.Add(titleRow);
 
         if (!string.IsNullOrWhiteSpace(description))
         {
@@ -135,7 +160,7 @@ public class DetailsViewService
     /// Shows link header in the header panel with icon on the left and optional link badge.
     /// Includes file size and timestamps for compact display.
     /// </summary>
-    public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false, ulong? fileSize = null, DateTime? createdDate = null, DateTime? modifiedDate = null)
+    public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false, ulong? fileSize = null, DateTime? createdDate = null, DateTime? modifiedDate = null, LinkItem? linkItem = null)
     {
         _headerPanel?.Children.Clear();
 
@@ -174,13 +199,38 @@ public class DetailsViewService
             titleText += $" ({FileViewerService.FormatFileSize(fileSize.Value)})";
         }
 
-        textPanel.Children.Add(new TextBlock
+        // Title row with optional tag info
+        var titleRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12
+        };
+        
+        titleRow.Children.Add(new TextBlock
         {
             Text = titleText,
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
+        
+        // Add tag info if link has tags
+        if (linkItem != null && linkItem.TagIds.Count > 0)
+        {
+            var tagText = TagManagementService.Instance?.GetTagDisplayText(linkItem.TagIds);
+            if (!string.IsNullOrEmpty(tagText))
+            {
+                titleRow.Children.Add(new TextBlock
+                {
+                    Text = tagText,
+                    FontSize = 11,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
+                });
+            }
+        }
+        
+        textPanel.Children.Add(titleRow);
 
         // Add timestamps line if available
         if (createdDate.HasValue || modifiedDate.HasValue)
@@ -1260,12 +1310,38 @@ public class DetailsViewService
         };
 
         var linkInfo = new StackPanel { Spacing = 4 };
-        linkInfo.Children.Add(new TextBlock
+        
+        // Title row with optional tag info
+        var titleRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+        
+        titleRow.Children.Add(new TextBlock
         {
             Text = link.ToString(),
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
+        
+        // Add tag info if link has tags
+        if (link.TagIds.Count > 0)
+        {
+            var tagText = TagManagementService.Instance?.GetTagDisplayText(link.TagIds);
+            if (!string.IsNullOrEmpty(tagText))
+            {
+                titleRow.Children.Add(new TextBlock
+                {
+                    Text = tagText,
+                    FontSize = 11,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = new SolidColorBrush(Colors.DodgerBlue)
+                });
+            }
+        }
+        
+        linkInfo.Children.Add(titleRow);
 
         if (!string.IsNullOrWhiteSpace(link.Description))
         {

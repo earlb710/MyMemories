@@ -44,6 +44,12 @@
                     </MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Tag Management" Click="MenuConfig_TagManagement_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8EC;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Options" Click="MenuConfig_Options_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE713;"/>
@@ -157,6 +163,36 @@
                             <local:TreeNodeTemplateSelector.CategoryTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <!-- Tooltip for category -->
+                                        <ToolTipService.ToolTip>
+                                            <ToolTip>
+                                                <StackPanel Spacing="4" MaxWidth="400">
+                                                    <TextBlock 
+                                                        Text="{Binding Content.Name, Mode=OneWay}" 
+                                                        FontWeight="SemiBold"
+                                                        TextWrapping="Wrap"/>
+                                                    <TextBlock 
+                                                        Text="{Binding Content.Description, Mode=OneWay}" 
+                                                        TextWrapping="Wrap"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                                        <TextBlock.Visibility>
+                                                            <Binding Path="Content.Description" Mode="OneWay">
+                                                                <Binding.Converter>
+                                                                    <local:StringToVisibilityConverter/>
+                                                                </Binding.Converter>
+                                                            </Binding>
+                                                        </TextBlock.Visibility>
+                                                    </TextBlock>
+                                                    <!-- Tag list with names -->
+                                                    <TextBlock 
+                                                        Text="{Binding Content.TagDisplayText, Mode=OneWay}" 
+                                                        TextWrapping="Wrap"
+                                                        Visibility="{Binding Content.HasTags, Mode=OneWay}"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                </StackPanel>
+                                            </ToolTip>
+                                        </ToolTipService.ToolTip>
+                                        
                                         <!-- Icon Container with Password Badge -->
                                         <Grid Width="20" Height="20">
                                             <!-- Primary Icon -->
@@ -193,6 +229,14 @@
                                         </Grid>
                                         
                                         <TextBlock Text="{Binding Content.Name}" VerticalAlignment="Center"/>
+                                        
+                                        <!-- Tag indicator badge -->
+                                        <TextBlock 
+                                            Text="{Binding Content.TagIndicator, Mode=OneWay}"
+                                            FontSize="11"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Visibility="{Binding Content.HasTags, Mode=OneWay}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.CategoryTemplate>
@@ -201,7 +245,7 @@
                             <local:TreeNodeTemplateSelector.LinkTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <!-- Tooltip for entire link item showing title, description, and URL status -->
+                                        <!-- Tooltip for entire link item showing title, description, tags, and URL status -->
                                         <ToolTipService.ToolTip>
                                             <ToolTip>
                                                 <StackPanel Spacing="4" MaxWidth="400">
@@ -223,6 +267,12 @@
                                                             </Binding>
                                                         </TextBlock.Visibility>
                                                     </TextBlock>
+                                                    <!-- Tag list with names -->
+                                                    <TextBlock 
+                                                        Text="{Binding Content.TagDisplayText, Mode=OneWay}" 
+                                                        TextWrapping="Wrap"
+                                                        Visibility="{Binding Content.HasTags, Mode=OneWay}"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                                     <!-- URL Status (if checked) -->
                                                     <StackPanel Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}" Margin="0,4,0,0">
                                                         <TextBlock 
@@ -353,6 +403,14 @@
                                         <TextBlock 
                                             Text="{Binding Content.DisplayText}" 
                                             VerticalAlignment="Center"/>
+                                        
+                                        <!-- Tag indicator badge -->
+                                        <TextBlock 
+                                            Text="{Binding Content.TagIndicator, Mode=OneWay}"
+                                            FontSize="11"
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Visibility="{Binding Content.HasTags, Mode=OneWay}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.LinkTemplate>
@@ -381,6 +439,17 @@
                             <MenuFlyoutItem x:Name="CategoryMenu_ChangePassword" Text="Change Password" Click="CategoryMenu_ChangePassword_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE72E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutSubItem x:Name="CategoryMenu_AddTag" Text="Add Tag">
+                                <MenuFlyoutSubItem.Icon>
+                                    <FontIcon Glyph="&#xE8EC;"/>
+                                </MenuFlyoutSubItem.Icon>
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutItem x:Name="CategoryMenu_RemoveTag" Text="Remove Tag" Click="CategoryMenu_RemoveTag_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE738;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>
@@ -417,6 +486,17 @@
                             <MenuFlyoutItem x:Name="LinkMenu_ChangePassword" Text="Change Password" Click="LinkMenu_ChangePassword_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE72E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutSubItem x:Name="LinkMenu_AddTag" Text="Add Tag">
+                                <MenuFlyoutSubItem.Icon>
+                                    <FontIcon Glyph="&#xE8EC;"/>
+                                </MenuFlyoutSubItem.Icon>
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutItem x:Name="LinkMenu_RemoveTag" Text="Remove Tag" Click="LinkMenu_RemoveTag_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE738;"/>
                                 </MenuFlyoutItem.Icon>
                             </MenuFlyoutItem>
                             <MenuFlyoutSeparator/>

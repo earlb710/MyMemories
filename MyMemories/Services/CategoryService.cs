@@ -451,6 +451,7 @@ public class CategoryService
             Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
             Icon = category.Icon == "📁" ? null : category.Icon,
             Keywords = string.IsNullOrWhiteSpace(category.Keywords) ? null : category.Keywords,
+            TagIds = category.TagIds.Count > 0 ? category.TagIds : null,
             CreatedDate = category.CreatedDate,
             ModifiedDate = category.ModifiedDate,
             PasswordProtection = category.PasswordProtection,
@@ -489,6 +490,7 @@ public class CategoryService
                     Url = link.Url,
                     Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
                     Keywords = string.IsNullOrWhiteSpace(link.Keywords) ? null : link.Keywords,
+                    TagIds = link.TagIds.Count > 0 ? link.TagIds : null,
                     IsDirectory = link.IsDirectory ? true : null,
                     CategoryPath = link.CategoryPath,
                     CreatedDate = link.CreatedDate,
@@ -616,30 +618,35 @@ public class CategoryService
     /// </summary>
     private TreeViewNode CreateCategoryNode(CategoryData categoryData)
     {
-        var categoryNode = new TreeViewNode
+        var categoryItem = new CategoryItem
         {
-            Content = new CategoryItem
-            {
-                Name = categoryData.Name,
-                Description = categoryData.Description ?? string.Empty,
-                Icon = categoryData.Icon ?? "📁",
-                Keywords = categoryData.Keywords ?? string.Empty,
-                CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
-                ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
-                PasswordProtection = categoryData.PasswordProtection,
-                OwnPasswordHash = categoryData.OwnPasswordHash,
-                SortOrder = categoryData.SortOrder,
-                IsBookmarkImport = categoryData.IsBookmarkImport,
-                SourceBrowserType = categoryData.SourceBrowserType,
-                SourceBrowserName = categoryData.SourceBrowserName,
-                SourceBookmarksPath = categoryData.SourceBookmarksPath,
-                LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
-                ImportedBookmarkCount = categoryData.ImportedBookmarkCount,
-                IsBookmarkCategory = categoryData.IsBookmarkCategory,
-                IsBookmarkLookup = categoryData.IsBookmarkLookup,
-                IsAuditLoggingEnabled = categoryData.IsAuditLoggingEnabled
-            }
+            Name = categoryData.Name,
+            Description = categoryData.Description ?? string.Empty,
+            Icon = categoryData.Icon ?? "📁",
+            Keywords = categoryData.Keywords ?? string.Empty,
+            CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
+            ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
+            PasswordProtection = categoryData.PasswordProtection,
+            OwnPasswordHash = categoryData.OwnPasswordHash,
+            SortOrder = categoryData.SortOrder,
+            IsBookmarkImport = categoryData.IsBookmarkImport,
+            SourceBrowserType = categoryData.SourceBrowserType,
+            SourceBrowserName = categoryData.SourceBrowserName,
+            SourceBookmarksPath = categoryData.SourceBookmarksPath,
+            LastBookmarkImportDate = categoryData.LastBookmarkImportDate,
+            ImportedBookmarkCount = categoryData.ImportedBookmarkCount,
+            IsBookmarkCategory = categoryData.IsBookmarkCategory,
+            IsBookmarkLookup = categoryData.IsBookmarkLookup,
+            IsAuditLoggingEnabled = categoryData.IsAuditLoggingEnabled
         };
+        
+        // Copy TagIds if present
+        if (categoryData.TagIds != null && categoryData.TagIds.Count > 0)
+        {
+            categoryItem.TagIds = new List<string>(categoryData.TagIds);
+        }
+
+        var categoryNode = new TreeViewNode { Content = categoryItem };
 
         // Add subcategories first
         if (categoryData.SubCategories != null)
@@ -678,6 +685,12 @@ public class CategoryService
                     UrlLastChecked = linkData.UrlLastChecked,
                     UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty
                 };
+                
+                // Copy TagIds if present
+                if (linkData.TagIds != null && linkData.TagIds.Count > 0)
+                {
+                    linkItem.TagIds = new List<string>(linkData.TagIds);
+                }
 
                 if (linkData.CatalogEntries != null)
                 {
