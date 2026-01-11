@@ -14,6 +14,15 @@ public class LinkDetailsViewer
 {
     private readonly XamlRoot _xamlRoot;
 
+    // Segoe MDL2 Assets glyphs for icons
+    private const string CalendarGlyph = "\uE787";    // Calendar
+    private const string EditGlyph = "\uE70F";        // Edit/Modified
+    private const string ViewGlyph = "\uE7B3";        // View/Accessed
+    private const string PackageGlyph = "\uE7B8";     // Package/Size
+    private const string LinkGlyph = "\uE71B";        // Link
+    private const string FolderGlyph = "\uE8B7";      // Folder
+    private const string FilterGlyph = "\uE71C";      // Filter
+
     public LinkDetailsViewer(XamlRoot xamlRoot)
     {
         _xamlRoot = xamlRoot;
@@ -117,11 +126,11 @@ public class LinkDetailsViewer
         
         var copyButton = new Button
         {
-            Content = "📋",
-            FontSize = 16,
+            Content = new FontIcon { Glyph = "\uE8C8", FontSize = 14 }, // Copy glyph
             Padding = new Thickness(8, 4, 8, 4),
             VerticalAlignment = VerticalAlignment.Top
         };
+        ToolTipService.SetToolTip(copyButton, "Copy to clipboard");
         
         copyButton.Click += (s, e) => CopyToClipboard(link.Url);
         urlPanel.Children.Add(copyButton);
@@ -153,19 +162,30 @@ public class LinkDetailsViewer
     {
         panel.Children.Add(DialogHelpers.CreateLabel("Folder Type:"));
         
-        string folderTypeText = link.FolderType switch
-        {
-            FolderLinkType.LinkOnly => "🔗 Link Only",
-            FolderLinkType.CatalogueFiles => "📂 Catalogue Files",
-            FolderLinkType.FilteredCatalogue => "🗂️ Filtered Catalogue",
-            _ => "Link Only"
-        };
+        var folderTypePanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         
-        panel.Children.Add(new TextBlock
+        string glyph;
+        string text;
+        switch (link.FolderType)
         {
-            Text = folderTypeText,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+            case FolderLinkType.CatalogueFiles:
+                glyph = FolderGlyph;
+                text = "Catalogue Files";
+                break;
+            case FolderLinkType.FilteredCatalogue:
+                glyph = FilterGlyph;
+                text = "Filtered Catalogue";
+                break;
+            default:
+                glyph = LinkGlyph;
+                text = "Link Only";
+                break;
+        }
+        
+        folderTypePanel.Children.Add(new FontIcon { Glyph = glyph, FontSize = 14 });
+        folderTypePanel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        folderTypePanel.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(folderTypePanel);
 
         if (link.FolderType == FolderLinkType.FilteredCatalogue && 
             !string.IsNullOrWhiteSpace(link.FileFilters))
@@ -184,16 +204,8 @@ public class LinkDetailsViewer
     private void AddLinkTimestampsSection(StackPanel panel, LinkItem link)
     {
         panel.Children.Add(DialogHelpers.CreateLabel("Link Timestamps:"));
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"📅 Created: {link.CreatedDate:yyyy-MM-dd HH:mm:ss}",
-            Margin = new Thickness(0, 0, 0, 4)
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"📝 Modified: {link.ModifiedDate:yyyy-MM-dd HH:mm:ss}",
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+        panel.Children.Add(CreateTimestampRow(CalendarGlyph, "Created:", link.CreatedDate));
+        panel.Children.Add(CreateTimestampRow(EditGlyph, "Modified:", link.ModifiedDate, bottomMargin: 8));
     }
 
     private void AddFileSystemTimestampsSection(StackPanel panel, LinkItem link)
@@ -213,11 +225,7 @@ public class LinkDetailsViewer
             {
                 var fileInfo = new FileInfo(link.Url);
                 panel.Children.Add(DialogHelpers.CreateLabel("File Timestamps:"));
-                panel.Children.Add(new TextBlock
-                {
-                    Text = $"📦 Size: {FileUtilities.FormatFileSize((ulong)fileInfo.Length)}",
-                    Margin = new Thickness(0, 0, 0, 4)
-                });
+                panel.Children.Add(CreateIconTextRow(PackageGlyph, $"Size: {FileUtilities.FormatFileSize((ulong)fileInfo.Length)}"));
                 AddTimestampInfo(panel, fileInfo.CreationTime, fileInfo.LastWriteTime, fileInfo.LastAccessTime);
             }
         }
@@ -229,21 +237,47 @@ public class LinkDetailsViewer
 
     private void AddTimestampInfo(StackPanel panel, DateTime created, DateTime modified, DateTime accessed)
     {
-        panel.Children.Add(new TextBlock
+        panel.Children.Add(CreateTimestampRow(CalendarGlyph, "Created:", created));
+        panel.Children.Add(CreateTimestampRow(EditGlyph, "Modified:", modified));
+        panel.Children.Add(CreateTimestampRow(ViewGlyph, "Accessed:", accessed, bottomMargin: 8));
+    }
+
+    private StackPanel CreateTimestampRow(string glyph, string label, DateTime dateTime, int bottomMargin = 4)
+    {
+        var row = new StackPanel
         {
-            Text = $"📅 Created: {created:yyyy-MM-dd HH:mm:ss}",
-            Margin = new Thickness(0, 0, 0, 4)
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 0, 0, bottomMargin)
+        };
+        
+        row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 12 });
+        row.Children.Add(new TextBlock 
+        { 
+            Text = $"{label} {dateTime:yyyy-MM-dd HH:mm:ss}",
+            VerticalAlignment = VerticalAlignment.Center
         });
-        panel.Children.Add(new TextBlock
+        
+        return row;
+    }
+
+    private StackPanel CreateIconTextRow(string glyph, string text, int bottomMargin = 4)
+    {
+        var row = new StackPanel
         {
-            Text = $"📝 Modified: {modified:yyyy-MM-dd HH:mm:ss}",
-            Margin = new Thickness(0, 0, 0, 4)
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 0, 0, bottomMargin)
+        };
+        
+        row.Children.Add(new FontIcon { Glyph = glyph, FontSize = 12 });
+        row.Children.Add(new TextBlock 
+        { 
+            Text = text,
+            VerticalAlignment = VerticalAlignment.Center
         });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"👁️ Accessed: {accessed:yyyy-MM-dd HH:mm:ss}",
-            Margin = new Thickness(0, 0, 0, 8)
-        });
+        
+        return row;
     }
 
     private void CopyToClipboard(string text)

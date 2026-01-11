@@ -10,6 +10,9 @@ namespace MyMemories.Services.Details;
 /// </summary>
 public static class DetailsUIHelpers
 {
+    // Segoe MDL2 Assets glyphs
+    private const string WarningGlyph = "\uE7BA";
+
     /// <summary>
     /// Creates a stat line text block.
     /// </summary>
@@ -19,6 +22,23 @@ public static class DetailsUIHelpers
         {
             Text = text,
             FontSize = 14
+        };
+    }
+
+    /// <summary>
+    /// Creates a stat line with an icon and text.
+    /// </summary>
+    public static StackPanel CreateIconStatLine(string glyph, string text)
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                new FontIcon { Glyph = glyph, FontSize = 12 },
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+            }
         };
     }
 
@@ -57,14 +77,29 @@ public static class DetailsUIHelpers
     /// </summary>
     public static void AddWarning(StackPanel detailsPanel, string message)
     {
-        detailsPanel.Children.Add(new TextBlock
+        var warningPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
+        warningPanel.Children.Add(new FontIcon
+        {
+            Glyph = WarningGlyph,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Colors.Orange)
+        });
+
+        warningPanel.Children.Add(new TextBlock
         {
             Text = message,
             FontSize = 12,
             Foreground = new SolidColorBrush(Colors.Orange),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
+            TextWrapping = TextWrapping.Wrap
         });
+
+        detailsPanel.Children.Add(warningPanel);
     }
 
     /// <summary>

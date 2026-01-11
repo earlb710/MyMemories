@@ -93,6 +93,7 @@ public sealed partial class MainWindow
     private void ConfigureLinkContextMenu(MenuFlyout menu, LinkItem link, TreeViewNode node)
     {
         // Get menu items by name
+        var addSubLinkItem = FindMenuItemByName(menu, "LinkMenu_AddSubLink");
         var editItem = FindMenuItemByName(menu, "LinkMenu_Edit");
         var copyItem = FindMenuItemByName(menu, "LinkMenu_Copy");
         var moveItem = FindMenuItemByName(menu, "LinkMenu_Move");
@@ -113,6 +114,12 @@ public sealed partial class MainWindow
         bool hasCatalog = isDirectory && node.Children.Count > 0;
         bool isUrl = Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && 
                      (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+        // Add Sub-Link: only enabled for non-catalog, non-directory links (URL links)
+        if (addSubLinkItem != null)
+        {
+            addSubLinkItem.IsEnabled = !isCatalogEntry && !isDirectory;
+        }
 
         // Edit, Copy, Move, Remove: disabled for catalog entries
         if (editItem != null)
@@ -259,6 +266,62 @@ public sealed partial class MainWindow
             }
 
             subMenu.Items.Add(tagItem);
+        }
+    }
+
+    private async void CategoryMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+            return;
+
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        // Add the tag to the category
+        if (!category.TagIds.Contains(tagId))
+        {
+            category.TagIds.Add(tagId);
+            category.ModifiedDate = DateTime.Now;
+            category.NotifyTagsChanged();
+
+            // Refresh the node to update display
+            var updatedNode = _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
+            _contextMenuNode = updatedNode;
+
+            // Save
+            var rootNode = GetRootCategoryNode(updatedNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var tag = TagManagementService.Instance?.GetTag(tagId);
+            StatusText.Text = $"Added tag '{tag?.Name}' to category '{category.Name}'";
+        }
+    }
+
+    private async void LinkMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+            return;
+
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Add the tag to the link
+        if (!link.TagIds.Contains(tagId))
+        {
+            link.TagIds.Add(tagId);
+            link.ModifiedDate = DateTime.Now;
+            link.NotifyTagsChanged();
+
+            // Refresh the node to update display
+            var updatedNode = _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
+            _contextMenuNode = updatedNode;
+
+            // Save
+            var rootNode = GetRootCategoryNode(updatedNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var tag = TagManagementService.Instance?.GetTag(tagId);
+            StatusText.Text = $"Added tag '{tag?.Name}' to link '{link.Title}'";
         }
     }
 
@@ -1149,1046 +1212,109 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void LinkMenu_ExploreHere_Click(object sender, RoutedEventArgs e)
+    private async void LinkMenu_AddSubLink_Click(object sender, RoutedEventArgs e)
     {
-        if (_contextMenuNode?.Content is not LinkItem link)
+        if (_contextMenuNode?.Content is not LinkItem parentLink)
             return;
 
-        // Check if this is a directory or zip file
-        bool isZipFile = link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && File.Exists(link.Url);
-        bool isDirectory = link.IsDirectory && Directory.Exists(link.Url);
-
-        if (isZipFile)
+        // Don't allow sub-links for catalog entries or directories
+        if (parentLink.IsCatalogEntry || parentLink.IsDirectory)
         {
-            // For zip files, open the parent directory and select the zip file
+            var errorDialog = new ContentDialog
+            {
+                Title = "Cannot Add Sub-Link",
+                Content = parentLink.IsCatalogEntry 
+                    ? "Catalog entries cannot have sub-links." 
+                    : "Directory links cannot have sub-links. Use 'Create Catalog' instead.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        // Show add link dialog (without category selection since we're adding to the current link)
+        var result = await _linkDialog!.ShowEditAsync(new LinkItem
+        {
+            Title = string.Empty,
+            Url = string.Empty,
+            Description = string.Empty,
+            Keywords = string.Empty,
+            CategoryPath = parentLink.CategoryPath,
+            CreatedDate = DateTime.Now,
+            ModifiedDate = DateTime.Now
+        });
+
+        if (result != null)
+        {
+            var subLinkItem = new LinkItem
+            {
+                Title = result.Title,
+                Url = result.Url,
+                Description = result.Description,
+                Keywords = result.Keywords,
+                IsDirectory = result.IsDirectory,
+                CategoryPath = parentLink.CategoryPath,
+                CreatedDate = DateTime.Now,
+                ModifiedDate = DateTime.Now,
+                FolderType = result.FolderType,
+                FileFilters = result.FileFilters
+            };
+
+            var subLinkNode = new TreeViewNode { Content = subLinkItem };
+            _contextMenuNode.Children.Add(subLinkNode);
+            _contextMenuNode.IsExpanded = true;
+
+            // Save the category
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            // Audit log the sub-link addition
+            if (rootNode?.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkChangeAsync(
+                    rootCategory.Name,
+                    "added sub-link to",
+                    parentLink.Title,
+                    $"Sub-link: {result.Title}");
+            }
+
+            StatusText.Text = $"Added sub-link '{result.Title}' to '{parentLink.Title}'";
+        }
+    }
+
+    private async void LinkMenu_ExploreHere_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is LinkItem link)
+        {
+            // Extract URL if it's a zip file link
+            string targetPath = link.Url;
+            if (link.IsDirectory && targetPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                // Get the parent directory of the zip file
+                var zipParentDir = Path.GetDirectoryName(targetPath);
+                if (!string.IsNullOrEmpty(zipParentDir) && Directory.Exists(zipParentDir))
+                {
+                    targetPath = zipParentDir;
+                }
+            }
+
             try
             {
-                var zipFileInfo = new FileInfo(link.Url);
-                var parentDirectory = zipFileInfo.DirectoryName;
-
-                if (!string.IsNullOrEmpty(parentDirectory) && Directory.Exists(parentDirectory))
-                {
-                    // Use Windows Explorer to open the folder and select the file
-                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{link.Url}\"");
-                    StatusText.Text = $"Opened location of '{link.Title}'";
-                }
-                else
-                {
-                    var errorDialog = new ContentDialog
-                    {
-                        Title = "Directory Not Found",
-                        Content = "The parent directory of this zip file does not exist.",
-                        CloseButtonText = "OK",
-                        XamlRoot = Content.XamlRoot
-                    };
-                    await errorDialog.ShowAsync();
-                }
+                var uri = new Uri(targetPath);
+                await Windows.System.Launcher.LaunchUriAsync(uri);
             }
             catch (Exception ex)
             {
                 var errorDialog = new ContentDialog
                 {
                     Title = "Error Opening Location",
-                    Content = $"Could not open the file location:\n\n{ex.Message}",
+                    Content = $"Could not open the location:\n\n{ex.Message}",
                     CloseButtonText = "OK",
                     XamlRoot = Content.XamlRoot
                 };
                 await errorDialog.ShowAsync();
             }
-        }
-        else if (isDirectory)
-        {
-            // For directories, open in File Explorer
-            try
-            {
-                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(link.Url);
-                await Windows.System.Launcher.LaunchFolderAsync(folder);
-                StatusText.Text = $"Opened '{link.Title}' in File Explorer";
-            }
-            catch (Exception ex)
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Error Opening Folder",
-                    Content = $"Could not open the folder:\n\n{ex.Message}",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-            }
-        }
-        else
-        {
-            // Not a directory or zip file
-            var errorDialog = new ContentDialog
-            {
-                Title = "Not a Folder or Zip File",
-                Content = "The 'Explore Here' option is only available for folders and zip files.",
-                CloseButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await errorDialog.ShowAsync();
-        }
-    }
-
-    private async void LinkMenu_Summarize_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not LinkItem link)
-            return;
-
-        // Verify this is a URL
-        if (!Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) || 
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            var errorDialog = new ContentDialog
-            {
-                Title = "Not a Web URL",
-                Content = "The summarize feature only works with web URLs (http:// or https://).",
-                CloseButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await errorDialog.ShowAsync();
-            return;
-        }
-
-        // Create cancellation token source
-        using var cts = new System.Threading.CancellationTokenSource();
-
-        // Show loading dialog with cancel button
-        var loadingDialog = new ContentDialog
-        {
-            Title = "Summarizing URL",
-            Content = new StackPanel
-            {
-                Spacing = 16,
-                Children =
-                {
-                    new ProgressRing { IsActive = true, Width = 48, Height = 48 },
-                    new TextBlock
-                    {
-                        Text = $"Fetching and analyzing:\n{link.Url}",
-                        TextWrapping = TextWrapping.Wrap,
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    },
-                    new TextBlock
-                    {
-                        Text = "This may take a few seconds...",
-                        FontSize = 11,
-                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    }
-                }
-            },
-            CloseButtonText = "Cancel",
-            XamlRoot = Content.XamlRoot
-        };
-
-        // Track if cancelled via dialog
-        bool wasCancelledByUser = false;
-
-        // Start the summarization task
-        var summaryService = new WebSummaryService();
-        var summaryTask = summaryService.SummarizeUrlAsync(link.Url, cts.Token);
-
-        // Show dialog and handle cancellation
-        var dialogTask = loadingDialog.ShowAsync();
-
-        // When dialog is closed (Cancel clicked), cancel the operation
-        _ = dialogTask.AsTask().ContinueWith(_ =>
-        {
-            if (!summaryTask.IsCompleted)
-            {
-                wasCancelledByUser = true;
-                cts.Cancel();
-            }
-        });
-
-        try
-        {
-            StatusText.Text = $"Summarizing '{link.Title}'...";
-
-            // Wait for the summary task to complete
-            var summary = await summaryTask;
-
-            // Close loading dialog
-            loadingDialog.Hide();
-
-            // Check if cancelled
-            if (summary.WasCancelled || wasCancelledByUser)
-            {
-                StatusText.Text = "Summarization cancelled";
-                return;
-            }
-
-            if (!summary.Success)
-            {
-                var errorDialog = new ContentDialog
-                {
-                    Title = "Error Fetching URL",
-                    Content = $"Failed to fetch or summarize the URL:\n\n{summary.ErrorMessage}",
-                    CloseButtonText = "OK",
-                    XamlRoot = Content.XamlRoot
-                };
-                await errorDialog.ShowAsync();
-                StatusText.Text = $"Failed to summarize '{link.Title}'";
-                return;
-            }
-
-            // Handle binary content (images, PDFs, etc.)
-            if (summary.IsBinaryContent)
-            {
-                await ShowBinarySummaryDialog(link, summary);
-                return;
-            }
-
-            // Build summary UI with editable fields for HTML content
-            var stackPanel = new StackPanel { Spacing = 12, Width = 650 };
-
-            // Title from website
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = summary.Title,
-                FontSize = 18,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                TextWrapping = TextWrapping.Wrap,
-                IsTextSelectionEnabled = true
-            });
-
-            // URL
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = summary.Url,
-                FontSize = 11,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, -8, 0, 0),
-                IsTextSelectionEnabled = true
-            });
-
-            // Metadata row (status, site name, author, date)
-            var metadataPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 16,
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-
-            if (summary.StatusCode > 0)
-            {
-                metadataPanel.Children.Add(new TextBlock
-                {
-                    Text = $"HTTP {summary.StatusCode}",
-                    FontSize = 11,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen)
-                });
-            }
-
-            if (!string.IsNullOrEmpty(summary.SiteName))
-            {
-                metadataPanel.Children.Add(new TextBlock
-                {
-                    Text = $"📰 {summary.SiteName}",
-                    FontSize = 11,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
-                });
-            }
-
-            if (!string.IsNullOrEmpty(summary.Author))
-            {
-                metadataPanel.Children.Add(new TextBlock
-                {
-                    Text = $"✍️ {summary.Author}",
-                    FontSize = 11,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange)
-                });
-            }
-
-            if (!string.IsNullOrEmpty(summary.PublishedDate))
-            {
-                metadataPanel.Children.Add(new TextBlock
-                {
-                    Text = $"📅 {summary.PublishedDate}",
-                    FontSize = 11,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
-                });
-            }
-
-            if (metadataPanel.Children.Count > 0)
-            {
-                stackPanel.Children.Add(metadataPanel);
-            }
-
-            // Content type and locale
-            if (!string.IsNullOrEmpty(summary.ContentType) || !string.IsNullOrEmpty(summary.Locale))
-            {
-                var typeLocalePanel = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 16
-                };
-
-                if (!string.IsNullOrEmpty(summary.ContentType))
-                {
-                    typeLocalePanel.Children.Add(new TextBlock
-                    {
-                        Text = $"Type: {summary.ContentType}",
-                        FontSize = 10,
-                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
-                    });
-                }
-
-                if (!string.IsNullOrEmpty(summary.Locale))
-                {
-                    typeLocalePanel.Children.Add(new TextBlock
-                    {
-                        Text = $"Language: {summary.Locale}",
-                        FontSize = 10,
-                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
-                    });
-                }
-
-                stackPanel.Children.Add(typeLocalePanel);
-            }
-
-            // Separator
-            stackPanel.Children.Add(new Border
-            {
-                Height = 1,
-                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Opacity = 0.3,
-                Margin = new Thickness(0, 8, 0, 8)
-            });
-
-            // Current Description Section
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = "Current Description:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4)
-            });
-
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = string.IsNullOrWhiteSpace(link.Description) ? "(No description set)" : link.Description,
-                TextWrapping = TextWrapping.Wrap,
-                FontStyle = string.IsNullOrWhiteSpace(link.Description) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                    string.IsNullOrWhiteSpace(link.Description) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
-                Margin = new Thickness(0, 0, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            // Fetched Description from Website
-            if (!string.IsNullOrWhiteSpace(summary.Description))
-            {
-                stackPanel.Children.Add(new TextBlock
-                {
-                    Text = "Description from Website:",
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 4)
-                });
-                
-                stackPanel.Children.Add(new TextBlock
-                {
-                    Text = summary.Description,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
-                    Margin = new Thickness(0, 0, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-            }
-
-            // Editable Description
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = "New Description (editable):",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 4)
-            });
-
-            var descriptionTextBox = new TextBox
-            {
-                Text = !string.IsNullOrWhiteSpace(summary.Description) ? summary.Description : link.Description,
-                PlaceholderText = "Enter description...",
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.Wrap,
-                Height = 80,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            stackPanel.Children.Add(descriptionTextBox);
-
-            // Current Keywords Section
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = "Current Keywords:",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 4)
-            });
-
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = string.IsNullOrWhiteSpace(link.Keywords) ? "(No keywords set)" : link.Keywords,
-                TextWrapping = TextWrapping.Wrap,
-                FontStyle = string.IsNullOrWhiteSpace(link.Keywords) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                    string.IsNullOrWhiteSpace(link.Keywords) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
-                Margin = new Thickness(0, 0, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            // Keywords from Website (displayed as badges - gray for existing, blue for new)
-            if (summary.Keywords.Count > 0)
-            {
-                // Parse existing keywords for comparison
-                var existingKeywordsSet = string.IsNullOrWhiteSpace(link.Keywords) 
-                    ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                    : new HashSet<string>(
-                        link.Keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                            .Select(k => k.Trim()),
-                        StringComparer.OrdinalIgnoreCase);
-
-                stackPanel.Children.Add(new TextBlock
-                {
-                    Text = "Keywords from Website:",
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 4)
-                });
-
-                // Use ItemsRepeater with UniformGridLayout for wrapping, or fall back to a simple wrapping approach
-                // Using a vertical StackPanel with multiple horizontal rows for wrapping
-                var keywordsContainer = new StackPanel
-                {
-                    Orientation = Orientation.Vertical,
-                    Spacing = 6
-                };
-
-                // Create rows of keywords that wrap
-                var currentRow = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 6
-                };
-
-                int keywordsPerRow = 4; // Approximate keywords per row
-                int keywordCount = 0;
-
-                foreach (var keyword in summary.Keywords.Take(15)) // Limit to 15 for display
-                {
-                    // Check if this keyword already exists
-                    bool isExistingKeyword = existingKeywordsSet.Contains(keyword.Trim());
-
-                    var keywordBorder = new Border
-                    {
-                        // Gray background for existing keywords, Blue for new keywords
-                        Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                            isExistingKeyword ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.DodgerBlue),
-                        CornerRadius = new CornerRadius(4),
-                        Padding = new Thickness(8, 4, 8, 4)
-                    };
-
-                    keywordBorder.Child = new TextBlock
-                    {
-                        Text = keyword,
-                        Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-                        FontSize = 11,
-                        MaxWidth = 150,
-                        TextTrimming = TextTrimming.CharacterEllipsis
-                    };
-
-                    // Add tooltip to indicate status and show full text if truncated
-                    ToolTipService.SetToolTip(keywordBorder, 
-                        $"{keyword}\n({(isExistingKeyword ? "Already in your keywords" : "New keyword from website")})");
-
-                    currentRow.Children.Add(keywordBorder);
-                    keywordCount++;
-
-                    // Start a new row after keywordsPerRow items
-                    if (keywordCount % keywordsPerRow == 0)
-                    {
-                        keywordsContainer.Children.Add(currentRow);
-                        currentRow = new StackPanel
-                        {
-                            Orientation = Orientation.Horizontal,
-                            Spacing = 6
-                        };
-                    }
-                }
-
-                // Add the last row if it has items
-                if (currentRow.Children.Count > 0)
-                {
-                    keywordsContainer.Children.Add(currentRow);
-                }
-
-                stackPanel.Children.Add(keywordsContainer);
-            }
-
-            // Merge existing and new keywords (no duplicates)
-            var existingKeywords = string.IsNullOrWhiteSpace(link.Keywords) 
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(
-                    link.Keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Select(k => k.Trim()),
-                    StringComparer.OrdinalIgnoreCase);
-
-            var newKeywords = new HashSet<string>(existingKeywords, StringComparer.OrdinalIgnoreCase);
-            foreach (var keyword in summary.Keywords)
-            {
-                newKeywords.Add(keyword.Trim());
-            }
-
-            var mergedKeywordsText = string.Join(", ", newKeywords.OrderBy(k => k));
-
-            // Editable Keywords
-            stackPanel.Children.Add(new TextBlock
-            {
-                Text = "Merged Keywords (editable, comma or semicolon separated):",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 4)
-            });
-
-            var keywordsTextBox = new TextBox
-            {
-                Text = mergedKeywordsText,
-                PlaceholderText = "Enter keywords separated by comma or semicolon...",
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.Wrap,
-                Height = 60,
-                Margin = new Thickness(0, 0, 0, 8)
-            };
-            stackPanel.Children.Add(keywordsTextBox);
-
-            // Content Summary (read-only but selectable)
-            if (!string.IsNullOrWhiteSpace(summary.ContentSummary))
-            {
-                stackPanel.Children.Add(new TextBlock
-                {
-                    Text = "Content Summary:",
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 4)
-                });
-
-                stackPanel.Children.Add(new TextBlock
-                {
-                    Text = summary.ContentSummary,
-                    TextWrapping = TextWrapping.Wrap,
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-                    FontSize = 12,
-                    IsTextSelectionEnabled = true
-                });
-            }
-
-            // Show summary dialog
-            var summaryDialog = new ContentDialog
-            {
-                Title = "URL Summary - Update Description & Keywords",
-                Content = new ScrollViewer
-                {
-                    Content = stackPanel,
-                    MaxHeight = 550,
-                    Width = 650
-                },
-                CloseButtonText = "Cancel",
-                PrimaryButtonText = "Save Changes",
-                XamlRoot = Content.XamlRoot
-            };
-
-            var result = await summaryDialog.ShowAsync();
-
-            // If user clicked "Save Changes", update the link's description and keywords
-            if (result == ContentDialogResult.Primary)
-            {
-                var newDescription = descriptionTextBox.Text.Trim();
-                var newKeywordsText = keywordsTextBox.Text.Trim();
-
-                bool hasChanges = false;
-
-                if (link.Description != newDescription)
-                {
-                    link.Description = newDescription;
-                    hasChanges = true;
-                }
-
-                if (link.Keywords != newKeywordsText)
-                {
-                    link.Keywords = newKeywordsText;
-                    hasChanges = true;
-                }
-
-                if (hasChanges)
-                {
-                    link.ModifiedDate = DateTime.Now;
-
-                    // Save the category
-                    var rootNode = GetRootCategoryNode(_contextMenuNode);
-                    await _categoryService!.SaveCategoryAsync(rootNode);
-
-                    StatusText.Text = $"Updated description and keywords for '{link.Title}'";
-
-                    // Refresh the details view if this link is currently selected
-                    if (LinksTreeView.SelectedNode == _contextMenuNode)
-                    {
-                        await _detailsViewService!.ShowLinkDetailsAsync(link, _contextMenuNode,
-                            async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode),
-                            async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode),
-                            null);
-                    }
-                }
-                else
-                {
-                    StatusText.Text = "No changes made";
-                }
-            }
-            else
-            {
-                StatusText.Text = "Ready";
-            }
-        }
-        catch (Exception ex)
-        {
-            loadingDialog.Hide();
-            
-            var errorDialog = new ContentDialog
-            {
-                Title = "Error",
-                Content = $"An unexpected error occurred:\n\n{ex.Message}",
-                CloseButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await errorDialog.ShowAsync();
-            
-            StatusText.Text = "Ready";
-        }
-    }
-
-    /// <summary>
-    /// Shows a summary dialog for binary content (images, PDFs, etc.)
-    /// </summary>
-    private async Task ShowBinarySummaryDialog(LinkItem link, WebPageSummary summary)
-    {
-        var stackPanel = new StackPanel { Spacing = 12, Width = 500 };
-
-        // Icon based on content type
-        var icon = summary.MediaType switch
-        {
-            string s when s.StartsWith("image/") => "🖼️",
-            string s when s.StartsWith("audio/") => "🎵",
-            string s when s.StartsWith("video/") => "🎬",
-            "application/pdf" => "📋",
-            string s when s.Contains("zip") || s.Contains("compressed") => "📦",
-            _ => "📄"
-        };
-
-        // Title
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = $"{icon} {summary.Title}",
-            FontSize = 18,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap
-        });
-
-        // URL
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = summary.Url,
-            FontSize = 11,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-            TextWrapping = TextWrapping.Wrap,
-            IsTextSelectionEnabled = true
-        });
-
-        // Content type info
-        var infoPanel = new Border
-        {
-            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                Microsoft.UI.ColorHelper.FromArgb(40, 255, 193, 7)),
-            BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gold),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(12),
-            Margin = new Thickness(0, 8, 0, 8)
-        };
-
-        var infoContent = new StackPanel { Spacing = 4 };
-        infoContent.Children.Add(new TextBlock
-        {
-            Text = "⚠️ Binary Content Detected",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
-        });
-        infoContent.Children.Add(new TextBlock
-        {
-            Text = summary.ContentSummary,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White),
-            FontSize = 12
-        });
-        if (!string.IsNullOrEmpty(summary.MediaType))
-        {
-            infoContent.Children.Add(new TextBlock
-            {
-                Text = $"Content-Type: {summary.MediaType}",
-                FontSize = 11,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LightGray),
-                FontStyle = Windows.UI.Text.FontStyle.Italic
-            });
-        }
-
-        infoPanel.Child = infoContent;
-        stackPanel.Children.Add(infoPanel);
-
-        // Separator
-        stackPanel.Children.Add(new Border
-        {
-            Height = 1,
-            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
-            Opacity = 0.3
-        });
-
-        // Current Description
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = "Current Description:",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 8, 0, 4)
-        });
-
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrWhiteSpace(link.Description) ? "(No description set)" : link.Description,
-            TextWrapping = TextWrapping.Wrap,
-            FontStyle = string.IsNullOrWhiteSpace(link.Description) ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
-            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-                string.IsNullOrWhiteSpace(link.Description) ? Microsoft.UI.Colors.Gray : Microsoft.UI.Colors.LightGray),
-            Margin = new Thickness(0, 0, 0, 8),
-            IsTextSelectionEnabled = true
-        });
-
-        // Editable Description
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = "Description (editable):",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 4)
-        });
-
-        var descriptionTextBox = new TextBox
-        {
-            Text = !string.IsNullOrWhiteSpace(summary.Description) ? summary.Description : link.Description,
-            PlaceholderText = "Enter description...",
-            AcceptsReturn = true,
-            TextWrapping = TextWrapping.Wrap,
-            Height = 80
-        };
-        stackPanel.Children.Add(descriptionTextBox);
-
-        // Show dialog
-        var dialog = new ContentDialog
-        {
-            Title = "Binary Content Summary",
-            Content = new ScrollViewer
-            {
-                Content = stackPanel,
-                MaxHeight = 450
-            },
-            CloseButtonText = "Cancel",
-            PrimaryButtonText = "Save Description",
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            var newDescription = descriptionTextBox.Text.Trim();
-
-            if (link.Description != newDescription)
-            {
-                link.Description = newDescription;
-                link.ModifiedDate = DateTime.Now;
-
-                var rootNode = GetRootCategoryNode(_contextMenuNode!);
-                await _categoryService!.SaveCategoryAsync(rootNode);
-
-                StatusText.Text = $"Updated description for '{link.Title}'";
-
-                if (LinksTreeView.SelectedNode == _contextMenuNode)
-                {
-                    await _detailsViewService!.ShowLinkDetailsAsync(link, _contextMenuNode!,
-                        async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode!),
-                        async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode!),
-                        null);
-                }
-            }
-            else
-            {
-                StatusText.Text = "No changes made";
-            }
-        }
-    }
-
-    private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not CategoryItem category)
-            return;
-
-        // Build sort options UI
-        var stackPanel = new StackPanel { Spacing = 8 };
-
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = "Select sort order for items in this category:",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        var sortComboBox = new ComboBox
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var sortOptions = new[]
-        {
-            SortOption.NameAscending,
-            SortOption.NameDescending,
-            SortOption.DateAscending,
-            SortOption.DateDescending,
-            SortOption.SizeAscending,
-            SortOption.SizeDescending
-        };
-
-        foreach (var option in sortOptions)
-        {
-            sortComboBox.Items.Add(SortingService.GetSortOptionDisplayName(option));
-        }
-
-        // Set current sort option as selected
-        sortComboBox.SelectedIndex = Array.IndexOf(sortOptions, category.SortOrder);
-        if (sortComboBox.SelectedIndex < 0) sortComboBox.SelectedIndex = 0;
-
-        stackPanel.Children.Add(sortComboBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = $"Sort - {category.Name}",
-            Content = stackPanel,
-            PrimaryButtonText = "Apply",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            var selectedOption = sortOptions[sortComboBox.SelectedIndex];
-
-            // Apply sorting
-            SortingService.SortCategoryChildren(_contextMenuNode, selectedOption);
-
-            // Save the category
-            var rootNode = GetRootCategoryNode(_contextMenuNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-
-            StatusText.Text = $"Sorted '{category.Name}' by {SortingService.GetSortOptionDisplayName(selectedOption)}";
-        }
-    }
-
-    private async void LinkMenu_SortCatalog_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not LinkItem link || !link.IsDirectory)
-            return;
-
-        // Build sort options UI
-        var stackPanel = new StackPanel { Spacing = 8 };
-
-        stackPanel.Children.Add(new TextBlock
-        {
-            Text = "Select sort order for catalog entries:",
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        var sortComboBox = new ComboBox
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        var sortOptions = new[]
-        {
-            SortOption.NameAscending,
-            SortOption.NameDescending,
-            SortOption.DateAscending,
-            SortOption.DateDescending,
-            SortOption.SizeAscending,
-            SortOption.SizeDescending
-        };
-
-        foreach (var option in sortOptions)
-        {
-            sortComboBox.Items.Add(SortingService.GetSortOptionDisplayName(option));
-        }
-
-        // Set current sort option as selected
-        sortComboBox.SelectedIndex = Array.IndexOf(sortOptions, link.CatalogSortOrder);
-        if (sortComboBox.SelectedIndex < 0) sortComboBox.SelectedIndex = 0;
-
-        stackPanel.Children.Add(sortComboBox);
-
-        // Option to apply to subdirectories
-        var applyToSubdirsCheckBox = new CheckBox
-        {
-            Content = "Apply to all subdirectories",
-            IsChecked = true,
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-        stackPanel.Children.Add(applyToSubdirsCheckBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = $"Sort Catalog - {link.Title}",
-            Content = stackPanel,
-            PrimaryButtonText = "Apply",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-
-        if (result == ContentDialogResult.Primary)
-        {
-            var selectedOption = sortOptions[sortComboBox.SelectedIndex];
-            var applyToSubdirs = applyToSubdirsCheckBox.IsChecked ?? false;
-
-            // Apply sorting
-            if (applyToSubdirs)
-            {
-                SortingService.SortCatalogEntriesRecursive(_contextMenuNode, selectedOption);
-            }
-            else
-            {
-                SortingService.SortCatalogEntries(_contextMenuNode, selectedOption);
-            }
-
-            // Save the category
-            var rootNode = GetRootCategoryNode(_contextMenuNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-
-            StatusText.Text = $"Sorted catalog for '{link.Title}' by {SortingService.GetSortOptionDisplayName(selectedOption)}";
-        }
-    }
-
-    #region Tag Menu Handlers
-
-    private async void CategoryMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not CategoryItem category)
-            return;
-
-        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
-            return;
-
-        var tag = _tagService?.GetTag(tagId);
-        if (tag == null)
-            return;
-
-        // Add tag to category
-        if (!category.TagIds.Contains(tagId))
-        {
-            category.TagIds.Add(tagId);
-            category.ModifiedDate = DateTime.Now;
-
-            // Save the category
-            var rootNode = GetRootCategoryNode(_contextMenuNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-
-            // Refresh the tree node visual to show updated tag indicator
-            _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
-
-            // Refresh the detail view if this category is currently selected
-            if (LinksTreeView.SelectedNode == _contextMenuNode)
-            {
-                _detailsViewService!.ShowCategoryHeader(category.Name, category.Description, category.Icon, category);
-                await _detailsViewService.ShowCategoryDetailsAsync(category, _contextMenuNode);
-            }
-
-            StatusText.Text = $"Added tag '{tag.Name}' to category '{category.Name}'";
-        }
-    }
-
-    private async void CategoryMenu_RemoveTag_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not CategoryItem category)
-            return;
-
-        if (category.TagIds.Count == 0)
-        {
-            StatusText.Text = "No tags to remove";
-            return;
-        }
-
-        // Remove the last tag added
-        var lastTagId = category.TagIds[^1];
-        var tag = _tagService?.GetTag(lastTagId);
-        
-        category.TagIds.RemoveAt(category.TagIds.Count - 1);
-        category.ModifiedDate = DateTime.Now;
-
-        // Save the category
-        var rootNode = GetRootCategoryNode(_contextMenuNode);
-        await _categoryService!.SaveCategoryAsync(rootNode);
-
-        // Refresh the tree node visual to show updated tag indicator
-        _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
-
-        // Refresh the detail view if this category is currently selected
-        if (LinksTreeView.SelectedNode == _contextMenuNode)
-        {
-            _detailsViewService!.ShowCategoryHeader(category.Name, category.Description, category.Icon, category);
-            await _detailsViewService.ShowCategoryDetailsAsync(category, _contextMenuNode);
-        }
-
-        var tagName = tag?.Name ?? "Unknown";
-        StatusText.Text = $"Removed tag '{tagName}' from category '{category.Name}'";
-    }
-
-    private async void LinkMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (_contextMenuNode?.Content is not LinkItem link)
-            return;
-
-        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
-            return;
-
-        var tag = _tagService?.GetTag(tagId);
-        if (tag == null)
-            return;
-
-        // Add tag to link
-        if (!link.TagIds.Contains(tagId))
-        {
-            link.TagIds.Add(tagId);
-            link.ModifiedDate = DateTime.Now;
-
-            // Save the category
-            var rootNode = GetRootCategoryNode(_contextMenuNode);
-            await _categoryService!.SaveCategoryAsync(rootNode);
-
-            // Refresh the tree node visual to show updated tag indicator
-            _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
-
-            // Refresh the detail view if this link is currently selected
-            if (LinksTreeView.SelectedNode == _contextMenuNode)
-            {
-                bool showLinkBadge = link.IsDirectory && link.FolderType == FolderLinkType.LinkOnly;
-                _detailsViewService!.ShowLinkHeader(link.Title, link.Description, link.GetIcon(), showLinkBadge, 
-                    link.FileSize, link.CreatedDate, link.ModifiedDate, link);
-            }
-
-            StatusText.Text = $"Added tag '{tag.Name}' to link '{link.Title}'";
         }
     }
 
@@ -2199,35 +1325,560 @@ public sealed partial class MainWindow
 
         if (link.TagIds.Count == 0)
         {
-            StatusText.Text = "No tags to remove";
+            StatusText.Text = "This link has no tags to remove";
             return;
         }
 
-        // Remove the last tag added
-        var lastTagId = link.TagIds[^1];
-        var tag = _tagService?.GetTag(lastTagId);
-        
-        link.TagIds.RemoveAt(link.TagIds.Count - 1);
-        link.ModifiedDate = DateTime.Now;
+        // Show dialog to select which tag to remove
+        var tagService = TagManagementService.Instance;
+        if (tagService == null)
+            return;
 
-        // Save the category
-        var rootNode = GetRootCategoryNode(_contextMenuNode);
-        await _categoryService!.SaveCategoryAsync(rootNode);
-
-        // Refresh the tree node visual to show updated tag indicator
-        _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
-
-        // Refresh the detail view if this link is currently selected
-        if (LinksTreeView.SelectedNode == _contextMenuNode)
+        var tagsInfo = tagService.GetTagsInfo(link.TagIds);
+        if (tagsInfo.Count == 0)
         {
-            bool showLinkBadge = link.IsDirectory && link.FolderType == FolderLinkType.LinkOnly;
-            _detailsViewService!.ShowLinkHeader(link.Title, link.Description, link.GetIcon(), showLinkBadge, 
-                link.FileSize, link.CreatedDate, link.ModifiedDate, link);
+            StatusText.Text = "No valid tags found";
+            return;
         }
 
-        var tagName = tag?.Name ?? "Unknown";
-        StatusText.Text = $"Removed tag '{tagName}' from link '{link.Title}'";
+        var tagComboBox = new ComboBox
+        {
+            PlaceholderText = "Select tag to remove",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        foreach (var (name, _) in tagsInfo)
+        {
+            tagComboBox.Items.Add(name);
+        }
+        tagComboBox.SelectedIndex = 0;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Remove Tag",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = $"Select tag to remove from '{link.Title}':" },
+                    tagComboBox
+                }
+            },
+            PrimaryButtonText = "Remove",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary && tagComboBox.SelectedItem is string selectedTagName)
+        {
+            var tagToRemove = tagService.GetTagByName(selectedTagName);
+            if (tagToRemove != null && link.TagIds.Contains(tagToRemove.Id))
+            {
+                link.TagIds.Remove(tagToRemove.Id);
+                link.ModifiedDate = DateTime.Now;
+                link.NotifyTagsChanged();
+
+                var updatedNode = _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
+                _contextMenuNode = updatedNode;
+
+                var rootNode = GetRootCategoryNode(updatedNode);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                StatusText.Text = $"Removed tag '{selectedTagName}' from link '{link.Title}'";
+            }
+        }
     }
 
-    #endregion
+    private async void CategoryMenu_RemoveTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        if (category.TagIds.Count == 0)
+        {
+            StatusText.Text = "This category has no tags to remove";
+            return;
+        }
+
+        var tagService = TagManagementService.Instance;
+        if (tagService == null)
+            return;
+
+        var tagsInfo = tagService.GetTagsInfo(category.TagIds);
+        if (tagsInfo.Count == 0)
+        {
+            StatusText.Text = "No valid tags found";
+            return;
+        }
+
+        var tagComboBox = new ComboBox
+        {
+            PlaceholderText = "Select tag to remove",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        foreach (var (name, _) in tagsInfo)
+        {
+            tagComboBox.Items.Add(name);
+        }
+        tagComboBox.SelectedIndex = 0;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Remove Tag",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = $"Select tag to remove from '{category.Name}':" },
+                    tagComboBox
+                }
+            },
+            PrimaryButtonText = "Remove",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary && tagComboBox.SelectedItem is string selectedTagName)
+        {
+            var tagToRemove = tagService.GetTagByName(selectedTagName);
+            if (tagToRemove != null && category.TagIds.Contains(tagToRemove.Id))
+            {
+                category.TagIds.Remove(tagToRemove.Id);
+                category.ModifiedDate = DateTime.Now;
+                category.NotifyTagsChanged();
+
+                var updatedNode = _treeViewService!.RefreshCategoryNode(_contextMenuNode, category);
+                _contextMenuNode = updatedNode;
+
+                var rootNode = GetRootCategoryNode(updatedNode);
+                await _categoryService!.SaveCategoryAsync(rootNode);
+
+                StatusText.Text = $"Removed tag '{selectedTagName}' from category '{category.Name}'";
+            }
+        }
+    }
+
+    private async void LinkMenu_Summarize_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Only works for URL links
+        if (!Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            StatusText.Text = "Summarize is only available for HTTP/HTTPS URLs";
+            return;
+        }
+
+        // Create cancellation token source
+        var cts = new System.Threading.CancellationTokenSource();
+
+        // Show busy dialog with cancel button
+        var busyContent = new StackPanel
+        {
+            Spacing = 16,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        
+        busyContent.Children.Add(new ProgressRing
+        {
+            IsActive = true,
+            Width = 50,
+            Height = 50
+        });
+        
+        busyContent.Children.Add(new TextBlock
+        {
+            Text = $"Summarizing URL...\n{link.Url}",
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = Microsoft.UI.Xaml.TextAlignment.Center,
+            MaxWidth = 400
+        });
+
+        var busyDialog = new ContentDialog
+        {
+            Title = "Fetching Summary",
+            Content = busyContent,
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        // Handle cancel
+        busyDialog.CloseButtonClick += (s, args) =>
+        {
+            cts.Cancel();
+        };
+
+        StatusText.Text = $"Summarizing URL: {link.Url}...";
+
+        // Start the summarize task
+        var summaryTask = Task.Run(async () =>
+        {
+            var webSummaryService = new WebSummaryService();
+            return await webSummaryService.SummarizeUrlAsync(link.Url, cts.Token);
+        });
+
+        // Show the busy dialog (it will be dismissed when we hide it)
+        var dialogTask = busyDialog.ShowAsync();
+
+        // Wait for the summary to complete
+        WebPageSummary? summary = null;
+        try
+        {
+            summary = await summaryTask;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText.Text = "Summarize cancelled";
+            busyDialog.Hide();
+            return;
+        }
+        catch (Exception ex)
+        {
+            busyDialog.Hide();
+            var errorDialog = new ContentDialog
+            {
+                Title = "Error",
+                Content = $"An error occurred while summarizing the URL:\n\n{ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            StatusText.Text = $"Error summarizing URL: {ex.Message}";
+            return;
+        }
+
+        // Hide the busy dialog
+        busyDialog.Hide();
+
+        if (summary == null || summary.WasCancelled)
+        {
+            StatusText.Text = "Summarize cancelled";
+            return;
+        }
+
+        if (!summary.Success)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Summarize Failed",
+                Content = $"Could not summarize the URL:\n\n{summary.ErrorMessage}",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            StatusText.Text = $"Failed to summarize: {summary.ErrorMessage}";
+            return;
+        }
+
+        // Build the new description text
+        var descriptionBuilder = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrWhiteSpace(summary.Description))
+        {
+            descriptionBuilder.AppendLine(summary.Description);
+        }
+
+        if (!string.IsNullOrWhiteSpace(summary.ContentSummary) && summary.ContentSummary != summary.Description)
+        {
+            if (descriptionBuilder.Length > 0)
+                descriptionBuilder.AppendLine();
+            descriptionBuilder.AppendLine(summary.ContentSummary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(summary.Author) || !string.IsNullOrWhiteSpace(summary.PublishedDate))
+        {
+            if (descriptionBuilder.Length > 0)
+                descriptionBuilder.AppendLine();
+            if (!string.IsNullOrWhiteSpace(summary.Author))
+                descriptionBuilder.AppendLine($"Author: {summary.Author}");
+            if (!string.IsNullOrWhiteSpace(summary.PublishedDate))
+                descriptionBuilder.AppendLine($"Published: {summary.PublishedDate}");
+        }
+
+        var newDescription = descriptionBuilder.ToString().Trim();
+        var newKeywords = summary.Keywords.Count > 0 ? string.Join(", ", summary.Keywords) : string.Empty;
+
+        // Build the comparison dialog with Edit Current vs Summary columns
+        var mainGrid = new Grid
+        {
+            ColumnSpacing = 20,
+            RowSpacing = 12,
+            Width = 900
+        };
+        
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        int row = 0;
+
+        // Store editable text boxes for saving
+        TextBox? currentTitleBox = null;
+        TextBox? currentDescriptionBox = null;
+        TextBox? currentKeywordsBox = null;
+        
+        // Store summary text boxes for deferred text setting
+        TextBox? summaryTitleBox = null;
+        TextBox? summaryDescriptionBox = null;
+        TextBox? summaryKeywordsBox = null;
+
+        // Helper to add a comparison row
+        void AddComparisonRow(string label, string currentValue, string newValue, ref TextBox? currentTextBoxRef, ref TextBox? summaryTextBoxRef, bool isDescription = false)
+        {
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Label spanning both columns
+            var labelBlock = new TextBlock
+            {
+                Text = label,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, row > 0 ? 8 : 0, 0, 4)
+            };
+            Grid.SetRow(labelBlock, row);
+            Grid.SetColumnSpan(labelBlock, 2);
+            mainGrid.Children.Add(labelBlock);
+            row++;
+
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // Set height based on whether this is a description field
+            int fieldHeight = isDescription ? 250 : 80;
+
+            // Edit Current value column
+            var currentPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+            currentPanel.Children.Add(new TextBlock
+            {
+                Text = "Edit Current:",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            });
+            var currentTextBox = new TextBox
+            {
+                PlaceholderText = "(empty)",
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                Height = fieldHeight,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            ScrollViewer.SetVerticalScrollBarVisibility(currentTextBox, ScrollBarVisibility.Auto);
+            currentPanel.Children.Add(currentTextBox);
+            Grid.SetRow(currentPanel, row);
+            Grid.SetColumn(currentPanel, 0);
+            mainGrid.Children.Add(currentPanel);
+
+            // Store reference to editable text box
+            currentTextBoxRef = currentTextBox;
+
+            // New/Summary value column (read-only for copying)
+            var newPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+            newPanel.Children.Add(new TextBlock
+            {
+                Text = "Summary:",
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+            });
+            var newTextBox = new TextBox
+            {
+                PlaceholderText = "(empty)",
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                AcceptsReturn = true,
+                Height = fieldHeight,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Foreground = string.IsNullOrWhiteSpace(newValue) 
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray) 
+                    : null
+            };
+            ScrollViewer.SetVerticalScrollBarVisibility(newTextBox, ScrollBarVisibility.Auto);
+            newPanel.Children.Add(newTextBox);
+            Grid.SetRow(newPanel, row);
+            Grid.SetColumn(newPanel, 1);
+            mainGrid.Children.Add(newPanel);
+            
+            // Store reference to summary text box
+            summaryTextBoxRef = newTextBox;
+            
+            row++;
+        }
+
+        // Add comparison rows (text will be set after controls are added to visual tree)
+        AddComparisonRow("Title", link.Title, summary.Title, ref currentTitleBox, ref summaryTitleBox);
+        AddComparisonRow("Description", link.Description, newDescription, ref currentDescriptionBox, ref summaryDescriptionBox, isDescription: true);
+        AddComparisonRow("Keywords", link.Keywords, newKeywords, ref currentKeywordsBox, ref summaryKeywordsBox);
+
+        // Set text AFTER controls are created to avoid WinUI TextBox truncation issue
+        if (currentTitleBox != null) currentTitleBox.Text = link.Title ?? string.Empty;
+        if (currentDescriptionBox != null) currentDescriptionBox.Text = link.Description ?? string.Empty;
+        if (currentKeywordsBox != null) currentKeywordsBox.Text = link.Keywords ?? string.Empty;
+        if (summaryTitleBox != null) summaryTitleBox.Text = summary.Title ?? string.Empty;
+        if (summaryDescriptionBox != null) summaryDescriptionBox.Text = newDescription ?? string.Empty;
+        if (summaryKeywordsBox != null) summaryKeywordsBox.Text = newKeywords ?? string.Empty;
+
+        // Add metadata info if available
+        if (!string.IsNullOrWhiteSpace(summary.SiteName) || !string.IsNullOrWhiteSpace(summary.ContentType))
+        {
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            
+            var metadataText = new System.Text.StringBuilder();
+            if (!string.IsNullOrWhiteSpace(summary.SiteName))
+                metadataText.AppendLine($"📍 Site: {summary.SiteName}");
+            if (!string.IsNullOrWhiteSpace(summary.ContentType))
+                metadataText.AppendLine($"📄 Type: {summary.ContentType}");
+
+            var metadataBlock = new TextBlock
+            {
+                Text = metadataText.ToString().Trim(),
+                FontSize = 12,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            Grid.SetRow(metadataBlock, row);
+            Grid.SetColumnSpan(metadataBlock, 2);
+            mainGrid.Children.Add(metadataBlock);
+        }
+
+        // Show the comparison dialog with wider content
+        var compareDialog = new ContentDialog
+        {
+            Title = "URL Summary - Compare & Edit",
+            Content = new ScrollViewer
+            {
+                Content = mainGrid,
+                MaxHeight = 700,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            },
+            PrimaryButtonText = "Save Changes",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+
+        // Override the default ContentDialog width constraint
+        compareDialog.Resources["ContentDialogMaxWidth"] = 1000.0;
+
+        var result = await compareDialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary)
+        {
+            // Save the edited current values
+            if (currentTitleBox != null)
+            {
+                link.Title = currentTitleBox.Text.Trim();
+            }
+
+            if (currentDescriptionBox != null)
+            {
+                link.Description = currentDescriptionBox.Text.Trim();
+            }
+
+            if (currentKeywordsBox != null)
+            {
+                link.Keywords = currentKeywordsBox.Text.Trim();
+            }
+
+            link.ModifiedDate = DateTime.Now;
+
+            var updatedNode = _treeViewService!.RefreshLinkNode(_contextMenuNode, link);
+            _contextMenuNode = updatedNode;
+
+            var rootNode = GetRootCategoryNode(updatedNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            StatusText.Text = $"Saved changes to: {link.Title}";
+        }
+        else
+        {
+            StatusText.Text = "Summary cancelled";
+        }
+    }
+
+    private async void CategoryMenu_SortBy_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        await ShowSortDialogAsync(_contextMenuNode, category.SortOrder, isCategory: true);
+    }
+
+    private async void LinkMenu_SortCatalog_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (!link.IsDirectory)
+        {
+            StatusText.Text = "Sort is only available for directories";
+            return;
+        }
+
+        await ShowSortDialogAsync(_contextMenuNode, link.CatalogSortOrder, isCategory: false);
+    }
+
+    private async Task ShowSortDialogAsync(TreeViewNode node, SortOption currentSort, bool isCategory)
+    {
+        var sortComboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Name (A-Z)", Tag = SortOption.NameAscending });
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Name (Z-A)", Tag = SortOption.NameDescending });
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Date (Newest First)", Tag = SortOption.DateDescending });
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Date (Oldest First)", Tag = SortOption.DateAscending });
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Size (Largest First)", Tag = SortOption.SizeDescending });
+        sortComboBox.Items.Add(new ComboBoxItem { Content = "Size (Smallest First)", Tag = SortOption.SizeAscending });
+
+        sortComboBox.SelectedIndex = (int)currentSort;
+
+        var dialog = new ContentDialog
+        {
+            Title = isCategory ? "Sort Category" : "Sort Catalog",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = "Select sort order:" },
+                    sortComboBox
+                }
+            },
+            PrimaryButtonText = "Sort",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary && sortComboBox.SelectedItem is ComboBoxItem selectedItem &&
+            selectedItem.Tag is SortOption newSort)
+        {
+            if (isCategory && node.Content is CategoryItem category)
+            {
+                category.SortOrder = newSort;
+                category.ModifiedDate = DateTime.Now;
+                SortingService.SortCategoryChildren(node, newSort);
+            }
+            else if (!isCategory && node.Content is LinkItem link)
+            {
+                link.CatalogSortOrder = newSort;
+                link.ModifiedDate = DateTime.Now;
+                SortingService.SortCatalogEntries(node, newSort);
+            }
+
+            var rootNode = GetRootCategoryNode(node);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            StatusText.Text = $"Sorted by {selectedItem.Content}";
+        }
+    }
 }

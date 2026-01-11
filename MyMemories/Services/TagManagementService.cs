@@ -20,7 +20,8 @@ public class TagManagementService
 {
     private const string TagsFileName = "tags.json";
     private const int MaxTags = 20;
-    private const string TagIconGlyph = "\U0001F3F7"; // ??? Label/Tag emoji
+    private const string TagIconGlyph = "\uE8EC"; // Tag icon from Segoe MDL2 Assets
+    private const string TagEmojiGlyph = "\U0001F3F7"; // ??? Label/Tag emoji - used for text display
     
     private readonly string _tagsFilePath;
     private TagCollection _tagCollection;
@@ -305,12 +306,11 @@ public class TagManagementService
             Spacing = 4
         };
 
-        contentPanel.Children.Add(new TextBlock
+        contentPanel.Children.Add(new FontIcon
         {
-            Text = TagIconGlyph,
+            Glyph = TagIconGlyph,
             FontSize = fontSize,
-            Foreground = new SolidColorBrush(Colors.White),
-            VerticalAlignment = VerticalAlignment.Center
+            Foreground = new SolidColorBrush(Colors.White)
         });
 
         contentPanel.Children.Add(new TextBlock
@@ -337,6 +337,91 @@ public class TagManagementService
     {
         var tag = GetTag(tagId);
         return tag != null ? CreateTagBadge(tag, fontSize) : null;
+    }
+
+    /// <summary>
+    /// Creates a styled StackPanel with small colored tag icon badges for tree node display.
+    /// Each tag shows only the icon with the tag's background color.
+    /// Limited to 3 visible tags, with a "+N" indicator for additional tags.
+    /// </summary>
+    public StackPanel CreateTagIconsPanel(IEnumerable<string> tagIds, double iconSize = 10, double spacing = 2)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = spacing,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        if (tagIds == null)
+            return panel;
+
+        var validTags = new List<TagItem>();
+        foreach (var tagId in tagIds)
+        {
+            var tag = GetTag(tagId);
+            if (tag != null)
+            {
+                validTags.Add(tag);
+            }
+        }
+
+        if (validTags.Count == 0)
+            return panel;
+
+        // Show up to 3 tag icons
+        int displayCount = Math.Min(validTags.Count, 3);
+        for (int i = 0; i < displayCount; i++)
+        {
+            var tag = validTags[i];
+            var badge = CreateTagIconBadge(tag, iconSize);
+            panel.Children.Add(badge);
+        }
+
+        // Show "+N" for additional tags
+        if (validTags.Count > 3)
+        {
+            var moreText = new TextBlock
+            {
+                Text = $"+{validTags.Count - 3}",
+                FontSize = iconSize,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                Margin = new Thickness(2, 0, 0, 0)
+            };
+            panel.Children.Add(moreText);
+        }
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Creates a single small tag icon badge with colored background for tree node display.
+    /// </summary>
+    public Border CreateTagIconBadge(TagItem tag, double iconSize = 10)
+    {
+        var backgroundColor = ParseColor(tag.Color);
+
+        var icon = new FontIcon
+        {
+            Glyph = TagIconGlyph,
+            FontSize = iconSize,
+            Foreground = new SolidColorBrush(Colors.White)
+        };
+
+        var badge = new Border
+        {
+            Background = new SolidColorBrush(backgroundColor),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(3, 1, 3, 1),
+            Child = icon,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        // Add tooltip with tag name
+        ToolTipService.SetToolTip(badge, tag.Name);
+
+        return badge;
     }
 
     private static Color ParseColor(string hex)

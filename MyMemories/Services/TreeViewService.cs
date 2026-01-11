@@ -24,17 +24,27 @@ public class TreeViewService
     /// </summary>
     public void InsertCategoryNode(TreeViewNode categoryNode)
     {
+        // Validate the node has valid content
+        if (categoryNode.Content is not CategoryItem)
+        {
+            Debug.WriteLine($"[InsertCategoryNode] Skipping node with invalid content: {categoryNode.Content?.GetType().Name ?? "null"}");
+            return;
+        }
+        
         int insertIndex = 0;
         foreach (var node in _treeView.RootNodes)
         {
+            // Only count valid CategoryItem nodes
             if (node.Content is CategoryItem)
             {
                 insertIndex++;
             }
-            else
+            // Skip nodes with null or invalid content entirely (don't break)
+            else if (node.Content is LinkItem)
             {
-                break;
+                break; // Links should come after categories
             }
+            // Nodes with null/invalid content are ignored
         }
         _treeView.RootNodes.Insert(insertIndex, categoryNode);
     }

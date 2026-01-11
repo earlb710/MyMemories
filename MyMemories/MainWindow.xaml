@@ -79,6 +79,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
                     <ComboBox 
@@ -102,6 +103,36 @@
                             <ToolTip Content="Search"/>
                         </ToolTipService.ToolTip>
                         <FontIcon Glyph="&#xE721;" FontSize="16"/>
+                    </Button>
+                    
+                    <Button 
+                        Grid.Column="2"
+                        x:Name="TagFilterButton"
+                        Width="32"
+                        Height="32"
+                        Padding="0"
+                        Margin="4,0,0,0">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Filter by Tag"/>
+                        </ToolTipService.ToolTip>
+                        <Grid>
+                            <FontIcon x:Name="TagFilterIcon" Glyph="&#xE8EC;" FontSize="16"/>
+                            <!-- Active filter indicator dot -->
+                            <Ellipse 
+                                x:Name="TagFilterActiveIndicator"
+                                Width="8" 
+                                Height="8"
+                                Fill="#FF0078D4"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Margin="0,-2,-2,0"
+                                Visibility="Collapsed"/>
+                        </Grid>
+                        <Button.Flyout>
+                            <MenuFlyout x:Name="TagFilterFlyout" Placement="BottomEdgeAlignedRight" Opening="TagFilterFlyout_Opening">
+                                <!-- Items will be populated dynamically -->
+                            </MenuFlyout>
+                        </Button.Flyout>
                     </Button>
                 </Grid>
 
@@ -230,13 +261,18 @@
                                         
                                         <TextBlock Text="{Binding Content.Name}" VerticalAlignment="Center"/>
                                         
-                                        <!-- Tag indicator badge -->
-                                        <TextBlock 
-                                            Text="{Binding Content.TagIndicator, Mode=OneWay}"
-                                            FontSize="11"
+                                        <!-- Tag indicator badges with colored backgrounds -->
+                                        <ContentPresenter
                                             VerticalAlignment="Center"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Visibility="{Binding Content.HasTags, Mode=OneWay}"/>
+                                            Visibility="{Binding Content.HasTags, Mode=OneWay}">
+                                            <ContentPresenter.Content>
+                                                <Binding Path="Content.TagIds" Mode="OneWay">
+                                                    <Binding.Converter>
+                                                        <local:TagIdsToIconsPanelConverter/>
+                                                    </Binding.Converter>
+                                                </Binding>
+                                            </ContentPresenter.Content>
+                                        </ContentPresenter>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.CategoryTemplate>
@@ -362,18 +398,22 @@
                                             </Border>
 
                                             <!-- Warning Badge Icon for Changed Folders (top-right corner) -->
-                                            <FontIcon 
-                                                Glyph="&#xE7BA;"
-                                                FontSize="10"
+                                            <Border
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Top"
-                                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                                Background="White"
+                                                CornerRadius="2"
+                                                Padding="1"
                                                 Margin="0,-1,-1,0"
                                                 Visibility="{Binding Content.HasChanged, Mode=OneWay}">
+                                                <FontIcon 
+                                                    Glyph="&#xE7BA;"
+                                                    FontSize="8"
+                                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
                                                 <ToolTipService.ToolTip>
                                                     <ToolTip Content="Folder has changed since last catalog"/>
                                                 </ToolTipService.ToolTip>
-                                            </FontIcon>
+                                            </Border>
 
                                             <!-- URL Status Badge (right side, vertically centered) -->
                                             <Ellipse 
@@ -404,13 +444,18 @@
                                             Text="{Binding Content.DisplayText}" 
                                             VerticalAlignment="Center"/>
                                         
-                                        <!-- Tag indicator badge -->
-                                        <TextBlock 
-                                            Text="{Binding Content.TagIndicator, Mode=OneWay}"
-                                            FontSize="11"
+                                        <!-- Tag indicator badges with colored backgrounds -->
+                                        <ContentPresenter
                                             VerticalAlignment="Center"
-                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                            Visibility="{Binding Content.HasTags, Mode=OneWay}"/>
+                                            Visibility="{Binding Content.HasTags, Mode=OneWay}">
+                                            <ContentPresenter.Content>
+                                                <Binding Path="Content.TagIds" Mode="OneWay">
+                                                    <Binding.Converter>
+                                                        <local:TagIdsToIconsPanelConverter/>
+                                                    </Binding.Converter>
+                                                </Binding>
+                                            </ContentPresenter.Content>
+                                        </ContentPresenter>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.LinkTemplate>
@@ -476,6 +521,12 @@
                         
                         <!-- Context Menu for Link Nodes -->
                         <MenuFlyout x:Key="LinkContextMenu">
+                            <MenuFlyoutItem x:Name="LinkMenu_AddSubLink" Text="Add Sub-Link" Click="LinkMenu_AddSubLink_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE710;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
                             <MenuFlyoutItem x:Name="LinkMenu_Move" Text="Move Link" Click="LinkMenu_Move_Click">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8DE;"/>

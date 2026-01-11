@@ -339,7 +339,16 @@ public class LinkItem : INotifyPropertyChanged
     {
         get
         {
+            // Only check for directories with catalog (CatalogueFiles or FilteredCatalogue)
             if (!IsDirectory || !LastCatalogUpdate.HasValue)
+                return Visibility.Collapsed;
+
+            // Skip catalog entries themselves - they don't need change detection
+            if (IsCatalogEntry)
+                return Visibility.Collapsed;
+
+            // Only check folders that are cataloged
+            if (FolderType == FolderLinkType.LinkOnly)
                 return Visibility.Collapsed;
 
             if (!Directory.Exists(Url))
@@ -364,33 +373,61 @@ public class LinkItem : INotifyPropertyChanged
         {
             var dirInfo = new DirectoryInfo(directoryPath);
 
-            if (dirInfo.LastWriteTime > lastUpdate)
+            // Check if the directory's LastWriteTime is newer than our catalog
+            // Add a small tolerance (1 second) to avoid false positives from timestamp precision
+            if (dirInfo.LastWriteTime > lastUpdate.AddSeconds(1))
                 return true;
 
-            if (IsCatalogEntry)
+            // Check the current file count against our stored count
+            try
             {
                 var currentFileCount = Directory.GetFiles(directoryPath).Length;
-                if (currentFileCount != CatalogFileCount)
+                var currentDirCount = Directory.GetDirectories(directoryPath).Length;
+                
+                // For catalog entries, compare file count
+                if (IsCatalogEntry && currentFileCount != CatalogFileCount)
                     return true;
             }
+            catch (UnauthorizedAccessException)
+            {
+                // Can't access - assume no change
+            }
 
+            // Check subdirectories
             var subdirectories = Directory.GetDirectories(directoryPath);
             foreach (var subdir in subdirectories)
             {
-                var subdirInfo = new DirectoryInfo(subdir);
-                if (subdirInfo.LastWriteTime > lastUpdate)
-                    return true;
+                try
+                {
+                    var subdirInfo = new DirectoryInfo(subdir);
+                    // Add tolerance for subdirectory check too
+                    if (subdirInfo.LastWriteTime > lastUpdate.AddSeconds(1))
+                        return true;
 
-                if (HasDirectoryChangedRecursive(subdir, lastUpdate))
-                    return true;
+                    if (HasDirectoryChangedRecursive(subdir, lastUpdate))
+                        return true;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Skip inaccessible subdirectories
+                }
             }
 
+            // Check files - only compare LastWriteTime, not LastAccessTime
             var files = Directory.GetFiles(directoryPath);
             foreach (var file in files)
             {
-                var fileInfo = new FileInfo(file);
-                if (fileInfo.LastWriteTime > lastUpdate)
-                    return true;
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    // Add tolerance for file check
+                    if (fileInfo.LastWriteTime > lastUpdate.AddSeconds(1))
+                        return true;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Skip inaccessible files
+                }
             }
 
             return false;

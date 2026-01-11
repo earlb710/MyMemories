@@ -16,6 +16,16 @@ public class CategoryDetailsBuilder
 {
     private readonly StackPanel _detailsPanel;
 
+    // Segoe MDL2 Assets glyphs
+    private const string CalendarGlyph = "\uE787";    // Calendar
+    private const string EditGlyph = "\uE70F";        // Edit/Modified
+    private const string LinkGlyph = "\uE71B";        // Link
+    private const string FileGlyph = "\uE8A5";        // Document
+    private const string FolderGlyph = "\uE8B7";      // Folder
+    private const string GlobeGlyph = "\uE774";       // Globe/URL
+    private const string BookmarkGlyph = "\uE8A4";    // Bookmark
+    private const string PathGlyph = "\uE8DA";        // Path
+
     public CategoryDetailsBuilder(StackPanel detailsPanel)
     {
         _detailsPanel = detailsPanel;
@@ -160,34 +170,17 @@ public class CategoryDetailsBuilder
 
         if (category.LastBookmarkImportDate.HasValue)
         {
-            infoStack.Children.Add(new TextBlock
-            {
-                Text = $"?? Last Import: {category.LastBookmarkImportDate.Value:yyyy-MM-dd HH:mm:ss}",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Colors.LightGray)
-            });
+            infoStack.Children.Add(CreateIconTextRow(CalendarGlyph, $"Last Import: {category.LastBookmarkImportDate.Value:yyyy-MM-dd HH:mm:ss}", Colors.LightGray));
         }
 
         if (category.ImportedBookmarkCount.HasValue)
         {
-            infoStack.Children.Add(new TextBlock
-            {
-                Text = $"?? Imported Bookmarks: {category.ImportedBookmarkCount.Value}",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Colors.LightGray)
-            });
+            infoStack.Children.Add(CreateIconTextRow(BookmarkGlyph, $"Imported Bookmarks: {category.ImportedBookmarkCount.Value}", Colors.LightGray));
         }
 
         if (!string.IsNullOrEmpty(category.SourceBookmarksPath))
         {
-            infoStack.Children.Add(new TextBlock
-            {
-                Text = $"?? Source Path:",
-                FontSize = 13,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Colors.White),
-                Margin = new Thickness(0, 4, 0, 0)
-            });
+            infoStack.Children.Add(CreateIconTextRow(PathGlyph, "Source Path:", Colors.White, isBold: true));
 
             infoStack.Children.Add(new TextBlock
             {
@@ -201,6 +194,33 @@ public class CategoryDetailsBuilder
 
         importPanel.Child = infoStack;
         _detailsPanel.Children.Add(importPanel);
+    }
+
+    private StackPanel CreateIconTextRow(string glyph, string text, Windows.UI.Color foregroundColor, bool isBold = false)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6
+        };
+
+        row.Children.Add(new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 12,
+            Foreground = new SolidColorBrush(foregroundColor)
+        });
+
+        row.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontSize = 13,
+            FontWeight = isBold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+            Foreground = new SolidColorBrush(foregroundColor),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        return row;
     }
 
     private string GetBrowserGlyph(BrowserType browserType)
@@ -228,8 +248,8 @@ public class CategoryDetailsBuilder
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        timestampsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Created: {category.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
-        timestampsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Modified: {category.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {category.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {category.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
 
         _detailsPanel.Children.Add(timestampsPanel);
     }
@@ -247,18 +267,18 @@ public class CategoryDetailsBuilder
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
         var stats = CalculateDetailedStatistics(node);
 
-        statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Total Links: {stats.TotalLinks}"));
+        statsPanel.Children.Add(CreateIconStatLine(LinkGlyph, $"Total Links: {stats.TotalLinks}"));
 
         if (stats.FileCount > 0)
         {
             var fileSizeText = stats.FileTotalSize > 0
                 ? $" ({FileViewerService.FormatFileSize(stats.FileTotalSize)})"
                 : "";
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Files: {stats.FileCount}{fileSizeText}"));
+            statsPanel.Children.Add(CreateIconStatLine(FileGlyph, $"Files: {stats.FileCount}{fileSizeText}"));
         }
         else
         {
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Files: 0"));
+            statsPanel.Children.Add(CreateIconStatLine(FileGlyph, "Files: 0"));
         }
 
         if (stats.DirectoryCount > 0)
@@ -276,16 +296,33 @@ public class CategoryDetailsBuilder
             var dirDetailText = dirDetails.Count > 0
                 ? $" ({string.Join(", ", dirDetails)})"
                 : "";
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Directories: {stats.DirectoryCount}{dirDetailText}"));
+            statsPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Directories: {stats.DirectoryCount}{dirDetailText}"));
         }
         else
         {
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Directories: 0"));
+            statsPanel.Children.Add(CreateIconStatLine(FolderGlyph, "Directories: 0"));
         }
 
-        statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? URLs: {stats.UrlCount}"));
+        statsPanel.Children.Add(CreateIconStatLine(GlobeGlyph, $"URLs: {stats.UrlCount}"));
 
         _detailsPanel.Children.Add(statsPanel);
+    }
+
+    /// <summary>
+    /// Creates a stat line with an icon and text.
+    /// </summary>
+    private StackPanel CreateIconStatLine(string glyph, string text)
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                new FontIcon { Glyph = glyph, FontSize = 12 },
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+            }
+        };
     }
 
     private (int TotalLinks, int FileCount, ulong FileTotalSize, int DirectoryCount, int DirectoryNestedFileCount, ulong DirectoryTotalSize, int UrlCount) CalculateDetailedStatistics(TreeViewNode node)

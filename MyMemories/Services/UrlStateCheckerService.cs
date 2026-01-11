@@ -262,6 +262,7 @@ public class UrlStateCheckerService
             {
                 // Only include web URLs (not directories or files)
                 if (!link.IsDirectory && 
+                    !string.IsNullOrEmpty(link.Url) &&
                     (link.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                      link.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -287,6 +288,7 @@ public class UrlStateCheckerService
             {
                 // Only include web URLs (not directories or files)
                 if (!link.IsDirectory && 
+                    !string.IsNullOrEmpty(link.Url) &&
                     (link.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                      link.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
                 {

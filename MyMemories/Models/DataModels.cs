@@ -140,4 +140,10 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }
+    
+    /// <summary>
+    /// Child links for URL links (non-directory links that can have sub-links).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<LinkData>? SubLinks { get; set; }
 }

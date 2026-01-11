@@ -19,6 +19,18 @@ public class LinkDetailsBuilder
 {
     private readonly StackPanel _detailsPanel;
 
+    // Segoe MDL2 Assets glyphs
+    private const string FileGlyph = "\uE8A5";        // Document
+    private const string FolderGlyph = "\uE8B7";      // Folder
+    private const string SizeGlyph = "\uE7B8";        // Package/Size
+    private const string CalendarGlyph = "\uE787";    // Calendar
+    private const string EditGlyph = "\uE70F";        // Edit/Modified
+    private const string ViewGlyph = "\uE7B3";        // View/Accessed
+    private const string WarningGlyph = "\uE7BA";     // Warning
+    private const string LockGlyph = "\uE72E";        // Lock
+    private const string ExtensionGlyph = "\uE8F9";   // Extension
+    private const string ContainsGlyph = "\uE8B7";    // Contains
+
     public LinkDetailsBuilder(StackPanel detailsPanel)
     {
         _detailsPanel = detailsPanel;
@@ -122,7 +134,7 @@ public class LinkDetailsBuilder
         }
         else
         {
-            DetailsUIHelpers.AddWarning(_detailsPanel, "?? No path or URL specified for this link");
+            DetailsUIHelpers.AddWarning(_detailsPanel, "No path or URL specified for this link");
         }
 
         AddTimestamps(linkItem);
@@ -344,11 +356,11 @@ public class LinkDetailsBuilder
         });
 
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Total Files: {fileEntries.Count}"));
+        statsPanel.Children.Add(CreateIconStatLine(FileGlyph, $"Total Files: {fileEntries.Count}"));
 
         if (directoryEntries.Count > 0)
         {
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Subdirectories: {directoryEntries.Count}"));
+            statsPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Subdirectories: {directoryEntries.Count}"));
         }
 
         ulong totalSize = 0;
@@ -375,16 +387,11 @@ public class LinkDetailsBuilder
 
         if (accessibleFiles > 0)
         {
-            statsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Total Size: {FileViewerService.FormatFileSize(totalSize)}"));
+            statsPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Total Size: {FileViewerService.FormatFileSize(totalSize)}"));
 
             if (accessibleFiles < fileEntries.Count)
             {
-                statsPanel.Children.Add(new TextBlock
-                {
-                    Text = $"?? {fileEntries.Count - accessibleFiles} file(s) could not be accessed",
-                    FontSize = 12,
-                    Foreground = new SolidColorBrush(Colors.Orange)
-                });
+                statsPanel.Children.Add(CreateWarningLine($"{fileEntries.Count - accessibleFiles} file(s) could not be accessed"));
             }
         }
 
@@ -402,8 +409,8 @@ public class LinkDetailsBuilder
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        timestampsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Created: {linkItem.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
-        timestampsPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Modified: {linkItem.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {linkItem.CreatedDate:yyyy-MM-dd HH:mm:ss}"));
+        timestampsPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {linkItem.ModifiedDate:yyyy-MM-dd HH:mm:ss}"));
 
         _detailsPanel.Children.Add(timestampsPanel);
     }
@@ -415,7 +422,7 @@ public class LinkDetailsBuilder
             var parts = linkItem.Url.Split(new[] { "::" }, 2, StringSplitOptions.None);
             if (parts.Length != 2)
             {
-                DetailsUIHelpers.AddWarning(_detailsPanel, "?? Invalid zip entry URL format");
+                DetailsUIHelpers.AddWarning(_detailsPanel, "Invalid zip entry URL format");
                 return;
             }
 
@@ -444,18 +451,18 @@ public class LinkDetailsBuilder
             });
 
             var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? File Name: {fileName}"));
+            infoPanel.Children.Add(CreateIconStatLine(FileGlyph, $"File Name: {fileName}"));
 
             if (!string.IsNullOrEmpty(extension))
             {
-                infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Extension: {extension}"));
+                infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {extension}"));
             }
 
-            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Path in Archive: {entryPath}"));
+            infoPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Path in Archive: {entryPath}"));
 
             if (linkItem.FileSize.HasValue)
             {
-                infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Size: {FileViewerService.FormatFileSize(linkItem.FileSize.Value)}"));
+                infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize(linkItem.FileSize.Value)}"));
             }
             else
             {
@@ -481,8 +488,8 @@ public class LinkDetailsBuilder
 
                         if (entryInfo.found)
                         {
-                            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Size: {FileViewerService.FormatFileSize(entryInfo.size)}"));
-                            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Last Modified: {entryInfo.modified:yyyy-MM-dd HH:mm:ss}"));
+                            infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize(entryInfo.size)}"));
+                            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {entryInfo.modified:yyyy-MM-dd HH:mm:ss}"));
                         }
                     }
                 }
@@ -496,7 +503,7 @@ public class LinkDetailsBuilder
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[AddZipEntryInfoAsync] Error: {ex.Message}");
-            DetailsUIHelpers.AddWarning(_detailsPanel, $"?? Error displaying zip entry information: {ex.Message}");
+            DetailsUIHelpers.AddWarning(_detailsPanel, $"Error displaying zip entry information: {ex.Message}");
         }
     }
 
@@ -519,7 +526,7 @@ public class LinkDetailsBuilder
         }
         catch (Exception ex)
         {
-            DetailsUIHelpers.AddWarning(_detailsPanel, $"?? Unable to access file/directory information: {ex.Message}");
+            DetailsUIHelpers.AddWarning(_detailsPanel, $"Unable to access file/directory information: {ex.Message}");
         }
     }
 
@@ -578,38 +585,25 @@ public class LinkDetailsBuilder
 
             if (isPasswordProtected)
             {
-                infoPanel.Children.Add(new TextBlock
-                {
-                    Text = "?? This archive is password-protected",
-                    FontSize = 14,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Colors.Orange),
-                    Margin = new Thickness(0, 0, 0, 8)
-                });
+                infoPanel.Children.Add(CreateIconWarningLine(LockGlyph, "This archive is password-protected"));
             }
 
-            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Files in Archive: {fileCount}"));
+            infoPanel.Children.Add(CreateIconStatLine(FileGlyph, $"Files in Archive: {fileCount}"));
             if (dirCount > 0)
             {
-                infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Folders in Archive: {dirCount}"));
+                infoPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Folders in Archive: {dirCount}"));
             }
         }
         catch (Exception ex)
         {
-            infoPanel.Children.Add(new TextBlock
-            {
-                Text = $"?? Could not read archive contents: {ex.Message}",
-                FontSize = 12,
-                Foreground = new SolidColorBrush(Colors.Orange),
-                TextWrapping = TextWrapping.Wrap
-            });
+            infoPanel.Children.Add(CreateWarningLine($"Could not read archive contents: {ex.Message}"));
         }
 
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Archive Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Extension: {fileInfo.Extension}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"??? Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Archive Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
+        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
 
         _detailsPanel.Children.Add(infoPanel);
     }
@@ -627,15 +621,15 @@ public class LinkDetailsBuilder
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Created: {dirInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Last Modified: {dirInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"??? Last Accessed: {dirInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {dirInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {dirInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {dirInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
 
         try
         {
             var files = dirInfo.GetFiles();
             var dirs = dirInfo.GetDirectories();
-            infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Contains: {files.Length} file(s), {dirs.Length} folder(s)"));
+            infoPanel.Children.Add(CreateIconStatLine(ContainsGlyph, $"Contains: {files.Length} file(s), {dirs.Length} folder(s)"));
         }
         catch { }
 
@@ -655,13 +649,71 @@ public class LinkDetailsBuilder
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Extension: {fileInfo.Extension}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"?? Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(DetailsUIHelpers.CreateStatLine($"??? Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
+        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
 
         _detailsPanel.Children.Add(infoPanel);
+    }
+
+    /// <summary>
+    /// Creates a stat line with an icon and text.
+    /// </summary>
+    private StackPanel CreateIconStatLine(string glyph, string text)
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                new FontIcon { Glyph = glyph, FontSize = 12 },
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Creates a warning line with an icon and text.
+    /// </summary>
+    private StackPanel CreateWarningLine(string text)
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                new FontIcon { Glyph = WarningGlyph, FontSize = 12, Foreground = new SolidColorBrush(Colors.Orange) },
+                new TextBlock { Text = text, FontSize = 12, Foreground = new SolidColorBrush(Colors.Orange), TextWrapping = TextWrapping.Wrap }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Creates a warning line with a specific icon and text.
+    /// </summary>
+    private StackPanel CreateIconWarningLine(string glyph, string text)
+    {
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Margin = new Thickness(0, 0, 0, 8),
+            Children =
+            {
+                new FontIcon { Glyph = glyph, FontSize = 14, Foreground = new SolidColorBrush(Colors.Orange) },
+                new TextBlock 
+                { 
+                    Text = text, 
+                    FontSize = 14, 
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Colors.Orange) 
+                }
+            }
+        };
     }
 
     private bool HasCatalogEntries(TreeViewNode node)

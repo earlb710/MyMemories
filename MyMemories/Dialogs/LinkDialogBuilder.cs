@@ -153,10 +153,14 @@ public class LinkDialogBuilder
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
+            IsSpellCheckEnabled = false,
             MinWidth = 500,
-            Height = 150,
+            MinHeight = 150,
+            MaxHeight = 300,
             Margin = new Thickness(0, 0, 0, 8)
         };
+        // Enable vertical scrolling for long descriptions
+        ScrollViewer.SetVerticalScrollBarVisibility(descriptionTextBox, ScrollBarVisibility.Auto);
 
         var keywordsTextBox = new TextBox
         {
@@ -261,6 +265,13 @@ public class LinkDialogBuilder
 
     private (StackPanel, LinkDialogControls) BuildEditLinkUI(LinkItem link)
     {
+        // Log the description being loaded for debugging
+        System.Diagnostics.Debug.WriteLine($"[BuildEditLinkUI] Loading description for '{link.Title}': Length={link.Description?.Length ?? 0}");
+        if (!string.IsNullOrEmpty(link.Description))
+        {
+            System.Diagnostics.Debug.WriteLine($"[BuildEditLinkUI] Description preview: {link.Description.Substring(0, Math.Min(100, link.Description.Length))}...");
+        }
+
         var titleTextBox = new TextBox
         {
             Text = link.Title,
@@ -277,14 +288,20 @@ public class LinkDialogBuilder
 
         var descriptionTextBox = new TextBox
         {
-            Text = link.Description,
             PlaceholderText = "Enter description (optional)",
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
+            IsSpellCheckEnabled = false,
             MinWidth = 500,
-            Height = 150,
+            MinHeight = 150,
+            MaxHeight = 300,
             Margin = new Thickness(0, 0, 0, 8)
         };
+        // Enable vertical scrolling for long descriptions
+        ScrollViewer.SetVerticalScrollBarVisibility(descriptionTextBox, ScrollBarVisibility.Auto);
+        
+        // Set text after control creation to ensure proper initialization
+        descriptionTextBox.Text = link.Description ?? string.Empty;
 
         var keywordsTextBox = new TextBox
         {
@@ -976,7 +993,7 @@ public class LinkDialogBuilder
         if (source.Content is LinkItem link)
         {
             currentNodeMatches = link.Title.ToLowerInvariant().Contains(searchText) ||
-                                link.Url.ToLowerInvariant().Contains(searchText) ||
+                                (!string.IsNullOrWhiteSpace(link.Url) && link.Url.ToLowerInvariant().Contains(searchText)) ||
                                 (!string.IsNullOrWhiteSpace(link.Description) && link.Description.ToLowerInvariant().Contains(searchText)) ||
                                 (!string.IsNullOrWhiteSpace(link.Keywords) && MatchesKeywordsSearch(link.Keywords, searchText));
         }
@@ -1196,8 +1213,9 @@ public class LinkDialogBuilder
         if (!IsWebUrl(url))
             return;
 
-        // Cancel any existing summarization
+        // Cancel and dispose any existing summarization
         _summarizeCts?.Cancel();
+        _summarizeCts?.Dispose();
         _summarizeCts = new CancellationTokenSource();
 
         try

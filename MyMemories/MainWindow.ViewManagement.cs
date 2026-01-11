@@ -20,6 +20,10 @@ public sealed partial class MainWindow
         public string NodeType { get; set; } = string.Empty;
     }
 
+    // Tag filter state
+    private string? _activeTagFilterId = null;
+    private string? _activeTagFilterName = null;
+
     private void HideAllViewers()
     {
         ImageViewer.Visibility = Visibility.Collapsed;
@@ -44,25 +48,25 @@ public sealed partial class MainWindow
             case FileViewerType.Image:
                 ImageViewer.Visibility = Visibility.Visible;
                 HeaderViewerScroll.Visibility = Visibility.Visible;
-                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for images - they overlap
+                DetailsViewerScroll.Visibility = Visibility.Collapsed;
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Web:
                 WebViewer.Visibility = Visibility.Visible;
-                HeaderViewerScroll.Visibility = Visibility.Visible; // Show header for web (title, description, tags)
-                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for web
-                UrlBarPanel.Visibility = Visibility.Visible; // Also show URL bar
+                HeaderViewerScroll.Visibility = Visibility.Visible;
+                DetailsViewerScroll.Visibility = Visibility.Collapsed;
+                UrlBarPanel.Visibility = Visibility.Visible;
                 break;
             case FileViewerType.Document:
                 WebViewer.Visibility = Visibility.Visible;
-                HeaderViewerScroll.Visibility = Visibility.Visible; // Show header for documents (PDFs, etc.)
-                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details - they overlap
-                UrlBarPanel.Visibility = Visibility.Collapsed; // No URL bar for documents
+                HeaderViewerScroll.Visibility = Visibility.Visible;
+                DetailsViewerScroll.Visibility = Visibility.Collapsed;
+                UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Text:
                 TextViewerScroll.Visibility = Visibility.Visible;
                 HeaderViewerScroll.Visibility = Visibility.Visible;
-                DetailsViewerScroll.Visibility = Visibility.Collapsed; // Don't show details for text - they overlap
+                DetailsViewerScroll.Visibility = Visibility.Collapsed;
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
         }
@@ -97,7 +101,8 @@ public sealed partial class MainWindow
     {
         var searchText = SearchComboBox.Text?.Trim();
         
-        if (string.IsNullOrWhiteSpace(searchText))
+        // If no search text and no tag filter, clear results
+        if (string.IsNullOrWhiteSpace(searchText) && string.IsNullOrEmpty(_activeTagFilterId))
         {
             SearchComboBox.ItemsSource = null;
             _searchResults.Clear();
@@ -107,18 +112,26 @@ public sealed partial class MainWindow
             return;
         }
 
-        bool isNewSearch = searchText != _lastSearchText;
+        // Build a search key that includes the tag filter
+        var effectiveSearchKey = $"{searchText ?? ""}|{_activeTagFilterId ?? ""}";
+        bool isNewSearch = effectiveSearchKey != _lastSearchText;
 
         if (isNewSearch)
         {
-            _searchResults = SearchNodes(searchText);
+            _searchResults = SearchNodes(searchText ?? string.Empty);
             _currentSearchIndex = -1;
-            _lastSearchText = searchText;
+            _lastSearchText = effectiveSearchKey;
 
             if (_searchResults.Count == 0)
             {
                 SearchComboBox.ItemsSource = null;
-                StatusText.Text = $"No results found for '{searchText}'";
+                var filterInfo = !string.IsNullOrEmpty(_activeTagFilterName) 
+                    ? $" with tag '{_activeTagFilterName}'" 
+                    : "";
+                var searchInfo = !string.IsNullOrWhiteSpace(searchText) 
+                    ? $"'{searchText}'" 
+                    : "items";
+                StatusText.Text = $"No results found for {searchInfo}{filterInfo}";
                 return;
             }
 
@@ -130,7 +143,13 @@ public sealed partial class MainWindow
             _currentSearchIndex = (_currentSearchIndex + 1) % _searchResults.Count;
             NavigateToSearchResult(_searchResults[_currentSearchIndex], false);
             
-            StatusText.Text = $"Result {_currentSearchIndex + 1} of {_searchResults.Count} for '{searchText}'";
+            var filterInfo = !string.IsNullOrEmpty(_activeTagFilterName) 
+                ? $" (Tag: {_activeTagFilterName})" 
+                : "";
+            var searchInfo = !string.IsNullOrWhiteSpace(searchText) 
+                ? $"for '{searchText}'" 
+                : "";
+            StatusText.Text = $"Result {_currentSearchIndex + 1} of {_searchResults.Count} {searchInfo}{filterInfo}";
         }
     }
 
@@ -153,19 +172,30 @@ public sealed partial class MainWindow
         {
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             
-            // Search in name, description, and keywords
-            if (category.Name.ToLowerInvariant().Contains(searchLower) ||
-                (!string.IsNullOrEmpty(category.Description) && category.Description.ToLowerInvariant().Contains(searchLower)) ||
-                (!string.IsNullOrEmpty(category.Keywords) && MatchesKeywords(category.Keywords, searchLower)))
+            // Check tag filter first
+            bool passesTagFilter = string.IsNullOrEmpty(_activeTagFilterId) || 
+                                   category.TagIds.Contains(_activeTagFilterId);
+            
+            if (passesTagFilter)
             {
-                results.Add(new SearchResult
+                // If no search text, include all items that pass the tag filter
+                bool matchesSearch = string.IsNullOrWhiteSpace(searchLower) ||
+                    category.Name.ToLowerInvariant().Contains(searchLower) ||
+                    (!string.IsNullOrEmpty(category.Description) && category.Description.ToLowerInvariant().Contains(searchLower)) ||
+                    (!string.IsNullOrEmpty(category.Keywords) && MatchesKeywords(category.Keywords, searchLower));
+
+                if (matchesSearch)
                 {
-                    DisplayText = $"📁 {categoryPath}",
-                    Node = node,
-                    NodeType = "Category"
-                });
+                    results.Add(new SearchResult
+                    {
+                        DisplayText = $"📁 {categoryPath}",
+                        Node = node,
+                        NodeType = "Category"
+                    });
+                }
             }
 
+            // Always recurse into children (they might have the tag even if parent doesn't)
             foreach (var child in node.Children)
             {
                 SearchNodeRecursive(child, searchLower, results);
@@ -175,23 +205,33 @@ public sealed partial class MainWindow
         {
             var categoryPath = link.CategoryPath;
             
-            // Search in title, URL, description, and keywords
-            if (link.Title.ToLowerInvariant().Contains(searchLower) ||
-                (!string.IsNullOrEmpty(link.Url) && link.Url.ToLowerInvariant().Contains(searchLower)) ||
-                (!string.IsNullOrEmpty(link.Description) && link.Description.ToLowerInvariant().Contains(searchLower)) ||
-                (!string.IsNullOrEmpty(link.Keywords) && MatchesKeywords(link.Keywords, searchLower)))
+            // Check tag filter first
+            bool passesTagFilter = string.IsNullOrEmpty(_activeTagFilterId) || 
+                                   link.TagIds.Contains(_activeTagFilterId);
+            
+            if (passesTagFilter)
             {
-                var icon = link.GetIcon();
-                var displayText = string.IsNullOrEmpty(categoryPath) 
-                    ? $"{icon} {link.Title}" 
-                    : $"{icon} {link.Title} [{categoryPath}]";
+                // If no search text, include all items that pass the tag filter
+                bool matchesSearch = string.IsNullOrWhiteSpace(searchLower) ||
+                    link.Title.ToLowerInvariant().Contains(searchLower) ||
+                    (!string.IsNullOrEmpty(link.Url) && link.Url.ToLowerInvariant().Contains(searchLower)) ||
+                    (!string.IsNullOrEmpty(link.Description) && link.Description.ToLowerInvariant().Contains(searchLower)) ||
+                    (!string.IsNullOrEmpty(link.Keywords) && MatchesKeywords(link.Keywords, searchLower));
 
-                results.Add(new SearchResult
+                if (matchesSearch)
                 {
-                    DisplayText = displayText,
-                    Node = node,
-                    NodeType = "Link"
-                });
+                    var icon = link.GetIcon();
+                    var displayText = string.IsNullOrEmpty(categoryPath) 
+                        ? $"{icon} {link.Title}" 
+                        : $"{icon} {link.Title} [{categoryPath}]";
+
+                    results.Add(new SearchResult
+                    {
+                        DisplayText = displayText,
+                        Node = node,
+                        NodeType = "Link"
+                    });
+                }
             }
         }
     }
@@ -204,7 +244,6 @@ public sealed partial class MainWindow
         if (string.IsNullOrWhiteSpace(keywords))
             return false;
 
-        // Split keywords by comma or semicolon, trim each, and check if any contains the search term
         var keywordList = keywords.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
         foreach (var keyword in keywordList)
         {
@@ -223,7 +262,6 @@ public sealed partial class MainWindow
         ExpandParentNodes(result.Node);
         LinksTreeView.SelectedNode = result.Node;
 
-        // Scroll the TreeView to bring the selected node into view
         ScrollToSelectedNode(result.Node);
 
         if (clearSearch)
@@ -245,17 +283,12 @@ public sealed partial class MainWindow
     {
         System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] Called for node");
         
-        // Give the TreeView time to create containers after expanding parent nodes
-        // Then scroll on the UI thread
         DispatcherQueue.TryEnqueue(async () =>
         {
-            // Wait for layout to settle after expansion
             await Task.Delay(200);
             
-            // Force layout update to ensure visual tree is ready
             LinksTreeView.UpdateLayout();
             
-            // Find the ListControl inside the TreeView by name
             var listControl = FindChildByName(LinksTreeView, "ListControl") as ListViewBase;
             
             if (listControl != null)
@@ -275,7 +308,6 @@ public sealed partial class MainWindow
             {
                 System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] ListControl not found, trying container approach");
                 
-                // Fallback: try using StartBringIntoView on the container
                 var container = LinksTreeView.ContainerFromNode(node);
                 System.Diagnostics.Debug.WriteLine($"[ScrollToSelectedNode] Container: {container?.GetType().Name ?? "null"}");
                 
@@ -321,4 +353,122 @@ public sealed partial class MainWindow
             parent = parent.Parent;
         }
     }
+
+    #region Tag Filter
+
+    /// <summary>
+    /// Handles the flyout opening event to populate tags.
+    /// </summary>
+    private void TagFilterFlyout_Opening(object? sender, object e)
+    {
+        PopulateTagFilterFlyout();
+    }
+
+    /// <summary>
+    /// Populates the tag filter flyout with available tags.
+    /// Called when the flyout is about to open.
+    /// </summary>
+    private void PopulateTagFilterFlyout()
+    {
+        TagFilterFlyout.Items.Clear();
+
+        // Add "Clear Filter" option if a filter is active
+        if (!string.IsNullOrEmpty(_activeTagFilterId))
+        {
+            var clearItem = new MenuFlyoutItem
+            {
+                Text = "✕ Clear Filter",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            clearItem.Click += TagFilterClear_Click;
+            TagFilterFlyout.Items.Add(clearItem);
+            TagFilterFlyout.Items.Add(new MenuFlyoutSeparator());
+        }
+
+        // Add all available tags
+        if (_tagService == null || _tagService.TagCount == 0)
+        {
+            var noTagsItem = new MenuFlyoutItem
+            {
+                Text = "No tags available",
+                IsEnabled = false
+            };
+            TagFilterFlyout.Items.Add(noTagsItem);
+            return;
+        }
+
+        foreach (var tag in _tagService.Tags)
+        {
+            var tagItem = new MenuFlyoutItem
+            {
+                Text = $"🏷️ {tag.Name}",
+                Tag = tag.Id
+            };
+
+            // Mark the active tag with a checkmark
+            if (tag.Id == _activeTagFilterId)
+            {
+                tagItem.Text = $"✓ 🏷️ {tag.Name}";
+                tagItem.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            }
+
+            tagItem.Click += TagFilterItem_Click;
+            TagFilterFlyout.Items.Add(tagItem);
+        }
+    }
+
+    /// <summary>
+    /// Handles clicking on a tag filter item.
+    /// </summary>
+    private void TagFilterItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.Tag is string tagId)
+        {
+            var tag = _tagService?.GetTag(tagId);
+            if (tag != null)
+            {
+                _activeTagFilterId = tagId;
+                _activeTagFilterName = tag.Name;
+                
+                // Show the active filter indicator
+                TagFilterActiveIndicator.Visibility = Visibility.Visible;
+                
+                // Reset search to apply the new filter
+                _lastSearchText = string.Empty;
+                PerformSearch();
+                
+                StatusText.Text = $"Filtering by tag: {tag.Name}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clears the active tag filter.
+    /// </summary>
+    private void TagFilterClear_Click(object sender, RoutedEventArgs e)
+    {
+        ClearTagFilter();
+    }
+
+    /// <summary>
+    /// Clears the active tag filter and updates the UI.
+    /// </summary>
+    private void ClearTagFilter()
+    {
+        _activeTagFilterId = null;
+        _activeTagFilterName = null;
+        
+        // Hide the active filter indicator
+        TagFilterActiveIndicator.Visibility = Visibility.Collapsed;
+        
+        // Clear search results
+        SearchComboBox.ItemsSource = null;
+        _searchResults.Clear();
+        _currentSearchIndex = -1;
+        _lastSearchText = string.Empty;
+        
+        StatusText.Text = "Tag filter cleared";
+    }
+
+    #endregion
 }

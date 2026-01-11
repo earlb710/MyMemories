@@ -509,8 +509,8 @@ public class CategoryService
                     CatalogEntries = null
                 };
 
-                // Process catalog entries (only for non-catalog-entry links)
-                if (child.Children.Count > 0 && !link.IsCatalogEntry)
+                // Process catalog entries (only for directory links)
+                if (child.Children.Count > 0 && !link.IsCatalogEntry && link.IsDirectory)
                 {
                     var catalogEntries = new List<LinkData>();
 
@@ -594,6 +594,42 @@ public class CategoryService
                     if (catalogEntries.Count > 0)
                     {
                         linkData.CatalogEntries = catalogEntries;
+                    }
+                }
+                // Process sub-links for non-directory links (URL links with children)
+                else if (child.Children.Count > 0 && !link.IsCatalogEntry && !link.IsDirectory)
+                {
+                    var subLinks = new List<LinkData>();
+
+                    foreach (var subLinkChild in child.Children)
+                    {
+                        if (subLinkChild.Content is LinkItem subLink && !subLink.IsCatalogEntry)
+                        {
+                            var subLinkData = new LinkData
+                            {
+                                Title = subLink.Title,
+                                Url = subLink.Url,
+                                Description = string.IsNullOrWhiteSpace(subLink.Description) ? null : subLink.Description,
+                                Keywords = string.IsNullOrWhiteSpace(subLink.Keywords) ? null : subLink.Keywords,
+                                TagIds = subLink.TagIds.Count > 0 ? subLink.TagIds : null,
+                                IsDirectory = subLink.IsDirectory ? true : null,
+                                CategoryPath = subLink.CategoryPath,
+                                CreatedDate = subLink.CreatedDate,
+                                ModifiedDate = subLink.ModifiedDate,
+                                FolderType = subLink.IsDirectory && subLink.FolderType != FolderLinkType.LinkOnly ? subLink.FolderType : null,
+                                FileFilters = !string.IsNullOrWhiteSpace(subLink.FileFilters) ? subLink.FileFilters : null,
+                                UrlStatus = subLink.UrlStatus,
+                                UrlLastChecked = subLink.UrlLastChecked,
+                                UrlStatusMessage = string.IsNullOrWhiteSpace(subLink.UrlStatusMessage) ? null : subLink.UrlStatusMessage
+                            };
+
+                            subLinks.Add(subLinkData);
+                        }
+                    }
+
+                    if (subLinks.Count > 0)
+                    {
+                        linkData.SubLinks = subLinks;
                     }
                 }
 
@@ -784,6 +820,40 @@ public class CategoryService
                         }
 
                         linkNode.Children.Add(catalogEntryNode);
+                    }
+                }
+
+                // Add sub-links as children (for URL links with child links)
+                if (linkData.SubLinks != null && linkData.SubLinks.Count > 0)
+                {
+                    foreach (var subLinkData in linkData.SubLinks)
+                    {
+                        var subLinkItem = new LinkItem
+                        {
+                            Title = subLinkData.Title ?? string.Empty,
+                            Url = subLinkData.Url ?? string.Empty,
+                            Description = subLinkData.Description ?? string.Empty,
+                            Keywords = subLinkData.Keywords ?? string.Empty,
+                            IsDirectory = subLinkData.IsDirectory ?? false,
+                            CategoryPath = subLinkData.CategoryPath ?? string.Empty,
+                            CreatedDate = subLinkData.CreatedDate ?? DateTime.Now,
+                            ModifiedDate = subLinkData.ModifiedDate ?? DateTime.Now,
+                            FolderType = subLinkData.FolderType ?? FolderLinkType.LinkOnly,
+                            FileFilters = subLinkData.FileFilters ?? string.Empty,
+                            IsCatalogEntry = false,
+                            UrlStatus = subLinkData.UrlStatus,
+                            UrlLastChecked = subLinkData.UrlLastChecked,
+                            UrlStatusMessage = subLinkData.UrlStatusMessage ?? string.Empty
+                        };
+
+                        // Copy TagIds if present
+                        if (subLinkData.TagIds != null && subLinkData.TagIds.Count > 0)
+                        {
+                            subLinkItem.TagIds = new List<string>(subLinkData.TagIds);
+                        }
+
+                        var subLinkNode = new TreeViewNode { Content = subLinkItem };
+                        linkNode.Children.Add(subLinkNode);
                     }
                 }
 

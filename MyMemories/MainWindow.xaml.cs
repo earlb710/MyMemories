@@ -200,6 +200,18 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
             // NOW load categories (password is cached if needed)
             await LoadAllCategoriesAsync();
+            
+            // Final cleanup: ensure no blank/invalid nodes exist
+            // This catches any nodes that might have been added by the framework
+            RemoveInvalidNodes();
+            
+            // Schedule a delayed cleanup to catch any nodes added after initial load
+            // This is a workaround for potential WinUI TreeView quirks
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                await Task.Delay(100); // Small delay to let any deferred operations complete
+                RemoveInvalidNodes();
+            });
 
             StatusText.Text = "Ready";
         }
@@ -333,12 +345,43 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
+            // Log initial state
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] START - RootNodes.Count: {LinksTreeView.RootNodes.Count}");
+            
+            // Clear any existing nodes (including any blank placeholder nodes)
+            LinksTreeView.RootNodes.Clear();
+            
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] After Clear - RootNodes.Count: {LinksTreeView.RootNodes.Count}");
+            
             var categories = await _categoryService!.LoadAllCategoriesAsync();
+
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] Loaded {categories.Count} categories from service");
 
             foreach (var category in categories)
             {
-                _treeViewService!.InsertCategoryNode(category);
+                // Only add valid category nodes
+                if (category.Content is CategoryItem cat)
+                {
+                    if (!string.IsNullOrEmpty(cat.Name))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] Adding category: {cat.Name}");
+                        _treeViewService!.InsertCategoryNode(category);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] Skipping category with empty name");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] Skipping node with content type: {category.Content?.GetType().Name ?? "null"}");
+                }
             }
+            
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] After adding categories - RootNodes.Count: {LinksTreeView.RootNodes.Count}");
+            
+            // Safety check: Remove any nodes with null or invalid content that may have been added
+            RemoveInvalidNodes();
             
             // Update bookmark lookup categories
             UpdateBookmarkLookupCategories();
@@ -349,14 +392,83 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 CheckFolderChangesRecursively(category);
             }
 
-            StatusText.Text = categories.Count > 0
-                ? $"Loaded {categories.Count} categor{(categories.Count == 1 ? "y" : "ies")}"
+            StatusText.Text = LinksTreeView.RootNodes.Count > 0
+                ? $"Loaded {LinksTreeView.RootNodes.Count} categor{(LinksTreeView.RootNodes.Count == 1 ? "y" : "ies")}"
                 : "Ready";
+                
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] END - RootNodes.Count: {LinksTreeView.RootNodes.Count}");
         }
         catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] ERROR: {ex.Message}");
             StatusText.Text = $"Error loading categories: {ex.Message}";
         }
+    }
+    
+    /// <summary>
+    /// Removes any nodes with null or invalid content from the TreeView.
+    /// </summary>
+    private void RemoveInvalidNodes()
+    {
+        // Log all nodes for debugging
+        System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] RootNodes.Count before cleanup: {LinksTreeView.RootNodes.Count}");
+        
+        for (int i = 0; i < LinksTreeView.RootNodes.Count; i++)
+        {
+            var node = LinksTreeView.RootNodes[i];
+            var contentType = node.Content?.GetType().Name ?? "null";
+            var contentName = node.Content switch
+            {
+                CategoryItem cat => cat.Name ?? "(null name)",
+                LinkItem link => link.Title ?? "(null title)",
+                _ => "(unknown)"
+            };
+            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Node[{i}]: Content type={contentType}, Name/Title={contentName}");
+        }
+        
+        // Collect nodes to remove (can't modify collection while iterating)
+        var nodesToRemove = new List<TreeViewNode>();
+        
+        foreach (var node in LinksTreeView.RootNodes)
+        {
+            bool shouldRemove = false;
+            string reason = "";
+            
+            if (node.Content == null)
+            {
+                shouldRemove = true;
+                reason = "Content is null";
+            }
+            else if (node.Content is CategoryItem cat && string.IsNullOrEmpty(cat.Name))
+            {
+                shouldRemove = true;
+                reason = "CategoryItem with empty name";
+            }
+            else if (node.Content is LinkItem link && string.IsNullOrEmpty(link.Title))
+            {
+                shouldRemove = true;
+                reason = "LinkItem with empty title";
+            }
+            else if (node.Content is not CategoryItem && node.Content is not LinkItem)
+            {
+                shouldRemove = true;
+                reason = $"Unknown content type: {node.Content.GetType().Name}";
+            }
+            
+            if (shouldRemove)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Marking node for removal: {reason}");
+                nodesToRemove.Add(node);
+            }
+        }
+        
+        foreach (var node in nodesToRemove)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removing node");
+            LinksTreeView.RootNodes.Remove(node);
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] RootNodes.Count after cleanup: {LinksTreeView.RootNodes.Count}");
     }
     
     /// <summary>
