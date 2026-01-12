@@ -1,0 +1,404 @@
+{
+  "Name": "Development Resources",
+  "Description": "A comprehensive collection of development tools, documentation, and code references",
+  "Icon": "??",
+  "Keywords": "programming coding development software engineering",
+  "TagIds": [
+    "tag-work",
+    "tag-important"
+  ],
+  "CreatedDate": "2024-01-15T09:00:00",
+  "ModifiedDate": "2024-12-20T14:35:22",
+  "PasswordProtection": "None",
+  "SortOrder": "NameAscending",
+  "IsBookmarkCategory": true,
+  "IsBookmarkLookup": true,
+  "IsAuditLoggingEnabled": true,
+  "SubCategories": [
+    {
+      "Name": "Documentation",
+      "Description": "Official documentation and API references",
+      "Icon": "??",
+      "Keywords": "docs api reference manual",
+      "CreatedDate": "2024-01-15T09:05:00",
+      "ModifiedDate": "2024-12-15T10:20:00",
+      "SortOrder": "NameAscending",
+      "Links": [
+        {
+          "Title": "Microsoft .NET Documentation",
+          "Url": "https://learn.microsoft.com/en-us/dotnet/",
+          "Description": "Official .NET documentation including C#, F#, and VB.NET",
+          "Keywords": "dotnet csharp microsoft",
+          "TagIds": ["tag-microsoft"],
+          "CategoryPath": "Development Resources/Documentation",
+          "CreatedDate": "2024-01-16T08:00:00",
+          "ModifiedDate": "2024-12-10T09:15:00",
+          "UrlStatus": "Accessible",
+          "UrlLastChecked": "2024-12-20T14:00:00",
+          "UrlStatusMessage": "200 OK",
+          "SubLinks": [
+            {
+              "Title": "C# Programming Guide",
+              "Url": "https://learn.microsoft.com/en-us/dotnet/csharp/",
+              "Description": "C# language reference and tutorials",
+              "CategoryPath": "Development Resources/Documentation",
+              "CreatedDate": "2024-02-01T10:00:00",
+              "ModifiedDate": "2024-02-01T10:00:00",
+              "UrlStatus": "Accessible",
+              "UrlLastChecked": "2024-12-20T14:00:00"
+            },
+            {
+              "Title": "ASP.NET Core Documentation",
+              "Url": "https://learn.microsoft.com/en-us/aspnet/core/",
+              "Description": "Web framework documentation",
+              "CategoryPath": "Development Resources/Documentation",
+              "CreatedDate": "2024-02-01T10:05:00",
+              "ModifiedDate": "2024-02-01T10:05:00",
+              "UrlStatus": "Accessible",
+              "UrlLastChecked": "2024-12-20T14:00:00"
+            }
+          ]
+        },
+        {
+          "Title": "MDN Web Docs",
+          "Url": "https://developer.mozilla.org/",
+          "Description": "Comprehensive web development documentation for HTML, CSS, and JavaScript",
+          "Keywords": "html css javascript web",
+          "TagIds": ["tag-web"],
+          "CategoryPath": "Development Resources/Documentation",
+          "CreatedDate": "2024-01-16T08:30:00",
+          "ModifiedDate": "2024-11-20T11:00:00",
+          "UrlStatus": "Accessible",
+          "UrlLastChecked": "2024-12-20T14:00:00",
+          "UrlStatusMessage": "200 OK"
+        },
+        {
+          "Title": "React Documentation",
+          "Url": "https://react.dev/",
+          "Description": "Official React framework documentation",
+          "Keywords": "react javascript frontend ui",
+          "CategoryPath": "Development Resources/Documentation",
+          "CreatedDate": "2024-03-10T14:00:00",
+          "ModifiedDate": "2024-10-05T16:30:00",
+          "UrlStatus": "Accessible",
+          "UrlLastChecked": "2024-12-20T14:00:00"
+        }
+      ],
+      "SubCategories": [
+        {
+          "Name": "API References",
+          "Description": "Third-party API documentation",
+          "Icon": "??",
+          "CreatedDate": "2024-02-20T13:00:00",
+          "ModifiedDate": "2024-12-01T09:00:00",
+          "Links": [
+            {
+              "Title": "GitHub REST API",
+              "Url": "https://docs.github.com/en/rest",
+              "Description": "GitHub's REST API documentation",
+              "CategoryPath": "Development Resources/Documentation/API References",
+              "CreatedDate": "2024-02-20T13:05:00",
+              "ModifiedDate": "2024-02-20T13:05:00",
+              "UrlStatus": "Accessible"
+            },
+            {
+              "Title": "OpenAI API Reference",
+              "Url": "https://platform.openai.com/docs/api-reference",
+              "Description": "OpenAI GPT and DALL-E API documentation",
+              "Keywords": "ai gpt openai",
+              "CategoryPath": "Development Resources/Documentation/API References",
+              "CreatedDate": "2024-04-15T11:00:00",
+              "ModifiedDate": "2024-11-28T15:45:00",
+              "UrlStatus": "Accessible"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Code Samples",
+      "Description": "Local code samples and project templates",
+      "Icon": "??",
+      "CreatedDate": "2024-01-15T09:10:00",
+      "ModifiedDate": "2024-12-18T16:00:00",
+      "Links": [
+        {
+          "Title": "C# Projects",
+          "Url": "D:\\Development\\CSharp\\Projects",
+          "Description": "Collection of C# sample projects and experiments",
+          "IsDirectory": true,
+          "CategoryPath": "Development Resources/Code Samples",
+          "CreatedDate": "2024-01-20T10:00:00",
+          "ModifiedDate": "2024-12-18T16:00:00",
+          "FolderType": "CatalogueFiles",
+          "LastCatalogUpdate": "2024-12-18T16:00:00",
+          "CatalogSortOrder": "NameAscending",
+          "CatalogEntries": [
+            {
+              "Title": "ConsoleApp",
+              "Url": "ConsoleApp",
+              "Description": "Subfolder",
+              "IsDirectory": true,
+              "CategoryPath": "Development Resources/Code Samples",
+              "CreatedDate": "2024-02-10T09:00:00",
+              "ModifiedDate": "2024-11-15T14:30:00",
+              "CatalogFileCount": 5,
+              "CatalogTotalSize": 45678,
+              "CatalogEntries": [
+                {
+                  "Title": "Program.cs",
+                  "Url": "Program.cs",
+                  "Description": "C# source file | 2.5 KB",
+                  "CategoryPath": "Development Resources/Code Samples",
+                  "CreatedDate": "2024-02-10T09:05:00",
+                  "ModifiedDate": "2024-11-15T14:30:00",
+                  "FileSize": 2560
+                },
+                {
+                  "Title": "ConsoleApp.csproj",
+                  "Url": "ConsoleApp.csproj",
+                  "Description": "MSBuild project file | 856 bytes",
+                  "CategoryPath": "Development Resources/Code Samples",
+                  "CreatedDate": "2024-02-10T09:05:00",
+                  "ModifiedDate": "2024-02-10T09:05:00",
+                  "FileSize": 856
+                },
+                {
+                  "Title": "appsettings.json",
+                  "Url": "appsettings.json",
+                  "Description": "JSON configuration file | 1.2 KB",
+                  "CategoryPath": "Development Resources/Code Samples",
+                  "CreatedDate": "2024-02-10T09:05:00",
+                  "ModifiedDate": "2024-08-20T11:00:00",
+                  "FileSize": 1230
+                }
+              ]
+            },
+            {
+              "Title": "WebAPI",
+              "Url": "WebAPI",
+              "Description": "Subfolder",
+              "IsDirectory": true,
+              "CategoryPath": "Development Resources/Code Samples",
+              "CreatedDate": "2024-03-05T11:00:00",
+              "ModifiedDate": "2024-12-10T09:45:00",
+              "CatalogFileCount": 12,
+              "CatalogTotalSize": 98765,
+              "CatalogEntries": [
+                {
+                  "Title": "Controllers",
+                  "Url": "Controllers",
+                  "Description": "Subfolder",
+                  "IsDirectory": true,
+                  "CategoryPath": "Development Resources/Code Samples",
+                  "CreatedDate": "2024-03-05T11:00:00",
+                  "ModifiedDate": "2024-12-10T09:45:00",
+                  "CatalogFileCount": 3,
+                  "CatalogTotalSize": 15000
+                },
+                {
+                  "Title": "Program.cs",
+                  "Url": "Program.cs",
+                  "Description": "C# source file | 3.8 KB",
+                  "CategoryPath": "Development Resources/Code Samples",
+                  "CreatedDate": "2024-03-05T11:05:00",
+                  "ModifiedDate": "2024-12-10T09:45:00",
+                  "FileSize": 3892
+                }
+              ]
+            },
+            {
+              "Title": "README.md",
+              "Url": "README.md",
+              "Description": "Markdown document | 4.2 KB",
+              "CategoryPath": "Development Resources/Code Samples",
+              "CreatedDate": "2024-01-20T10:00:00",
+              "ModifiedDate": "2024-12-01T08:30:00",
+              "FileSize": 4300
+            },
+            {
+              "Title": "Directory.Build.props",
+              "Url": "Directory.Build.props",
+              "Description": "MSBuild props file | 512 bytes",
+              "CategoryPath": "Development Resources/Code Samples",
+              "CreatedDate": "2024-01-20T10:00:00",
+              "ModifiedDate": "2024-06-15T14:00:00",
+              "FileSize": 512
+            }
+          ]
+        },
+        {
+          "Title": "Project Templates Archive",
+          "Url": "D:\\Development\\Templates\\project-templates.zip",
+          "Description": "Archived project templates (password protected)",
+          "IsDirectory": true,
+          "CategoryPath": "Development Resources/Code Samples",
+          "CreatedDate": "2024-05-10T09:00:00",
+          "ModifiedDate": "2024-12-01T10:00:00",
+          "FolderType": "CatalogueFiles",
+          "IsZipPasswordProtected": true,
+          "LastCatalogUpdate": "2024-12-01T10:00:00",
+          "FileSize": 15728640,
+          "CatalogEntries": [
+            {
+              "Title": "blazor-template",
+              "Url": "blazor-template",
+              "Description": "Subfolder",
+              "IsDirectory": true,
+              "CategoryPath": "Development Resources/Code Samples",
+              "CatalogFileCount": 8,
+              "CatalogTotalSize": 125000
+            },
+            {
+              "Title": "minimal-api-template",
+              "Url": "minimal-api-template",
+              "Description": "Subfolder",
+              "IsDirectory": true,
+              "CategoryPath": "Development Resources/Code Samples",
+              "CatalogFileCount": 5,
+              "CatalogTotalSize": 45000
+            },
+            {
+              "Title": "_MANIFEST.txt",
+              "Url": "_MANIFEST.txt",
+              "Description": "Text file | 1.5 KB",
+              "CategoryPath": "Development Resources/Code Samples",
+              "FileSize": 1536
+            }
+          ]
+        },
+        {
+          "Title": "Python Scripts",
+          "Url": "D:\\Development\\Python\\Scripts",
+          "Description": "Utility scripts filtered to .py files only",
+          "IsDirectory": true,
+          "CategoryPath": "Development Resources/Code Samples",
+          "CreatedDate": "2024-04-01T14:00:00",
+          "ModifiedDate": "2024-11-30T17:00:00",
+          "FolderType": "FilteredCatalogue",
+          "FileFilters": "*.py",
+          "LastCatalogUpdate": "2024-11-30T17:00:00",
+          "CatalogEntries": [
+            {
+              "Title": "data_processor.py",
+              "Url": "data_processor.py",
+              "Description": "Python script | 8.5 KB",
+              "CategoryPath": "Development Resources/Code Samples",
+              "FileSize": 8704
+            },
+            {
+              "Title": "api_client.py",
+              "Url": "api_client.py",
+              "Description": "Python script | 5.2 KB",
+              "CategoryPath": "Development Resources/Code Samples",
+              "FileSize": 5325
+            },
+            {
+              "Title": "utils.py",
+              "Url": "utils.py",
+              "Description": "Python script | 3.1 KB",
+              "CategoryPath": "Development Resources/Code Samples",
+              "FileSize": 3174
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Imported Bookmarks",
+      "Description": "Imported from Microsoft Edge on 2024-06-15 10:30",
+      "Icon": "??",
+      "CreatedDate": "2024-06-15T10:30:00",
+      "ModifiedDate": "2024-12-20T14:35:22",
+      "IsBookmarkImport": true,
+      "SourceBrowserType": "Edge",
+      "SourceBrowserName": "Microsoft Edge",
+      "SourceBookmarksPath": "C:\\Users\\User\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\Bookmarks",
+      "LastBookmarkImportDate": "2024-12-20T14:35:22",
+      "ImportedBookmarkCount": 156,
+      "IsBookmarkCategory": true,
+      "Links": [
+        {
+          "Title": "Stack Overflow",
+          "Url": "https://stackoverflow.com/",
+          "Description": "Q&A for programmers",
+          "Keywords": "programming qa help",
+          "CategoryPath": "Development Resources/Imported Bookmarks",
+          "CreatedDate": "2024-06-15T10:30:00",
+          "ModifiedDate": "2024-06-15T10:30:00",
+          "UrlStatus": "Accessible",
+          "UrlLastChecked": "2024-12-20T14:30:00",
+          "UrlStatusMessage": "200 OK"
+        },
+        {
+          "Title": "GitHub - Old Repository",
+          "Url": "https://github.com/olduser/deleted-repo",
+          "Description": "Repository that no longer exists",
+          "CategoryPath": "Development Resources/Imported Bookmarks",
+          "CreatedDate": "2024-06-15T10:30:00",
+          "ModifiedDate": "2024-06-15T10:30:00",
+          "UrlStatus": "NotFound",
+          "UrlLastChecked": "2024-12-20T14:30:00",
+          "UrlStatusMessage": "404 Not Found"
+        },
+        {
+          "Title": "Internal Wiki (VPN Required)",
+          "Url": "https://internal.company.local/wiki",
+          "Description": "Company internal documentation - requires VPN",
+          "CategoryPath": "Development Resources/Imported Bookmarks",
+          "CreatedDate": "2024-06-15T10:30:00",
+          "ModifiedDate": "2024-06-15T10:30:00",
+          "UrlStatus": "Error",
+          "UrlLastChecked": "2024-12-20T14:30:00",
+          "UrlStatusMessage": "Connection timed out"
+        }
+      ]
+    }
+  ],
+  "Links": [
+    {
+      "Title": "Visual Studio 2022",
+      "Url": "https://visualstudio.microsoft.com/vs/",
+      "Description": "Download page for Visual Studio IDE",
+      "Keywords": "ide microsoft visual studio",
+      "TagIds": ["tag-microsoft", "tag-tools"],
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-01-15T09:30:00",
+      "ModifiedDate": "2024-10-01T11:00:00",
+      "UrlStatus": "Accessible",
+      "UrlLastChecked": "2024-12-20T14:00:00",
+      "UrlStatusMessage": "200 OK"
+    },
+    {
+      "Title": "VS Code",
+      "Url": "https://code.visualstudio.com/",
+      "Description": "Lightweight code editor from Microsoft",
+      "Keywords": "editor vscode microsoft",
+      "TagIds": ["tag-microsoft", "tag-tools"],
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-01-15T09:35:00",
+      "ModifiedDate": "2024-09-15T08:00:00",
+      "UrlStatus": "Accessible",
+      "UrlLastChecked": "2024-12-20T14:00:00"
+    },
+    {
+      "Title": "Development Notes",
+      "Url": "D:\\Development\\notes.txt",
+      "Description": "Personal development notes and reminders",
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-02-01T08:00:00",
+      "ModifiedDate": "2024-12-19T17:30:00",
+      "FileSize": 15360
+    },
+    {
+      "Title": "Architecture Diagram",
+      "Url": "D:\\Development\\Diagrams\\system-architecture.png",
+      "Description": "System architecture overview diagram",
+      "Keywords": "diagram architecture design",
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-03-20T14:00:00",
+      "ModifiedDate": "2024-11-10T09:00:00",
+      "FileSize": 2457600
+    }
+  ]
+}

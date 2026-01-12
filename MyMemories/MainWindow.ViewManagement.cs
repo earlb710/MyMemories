@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using MyMemories.Services;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -188,7 +188,7 @@ public sealed partial class MainWindow
                 {
                     results.Add(new SearchResult
                     {
-                        DisplayText = $"📁 {categoryPath}",
+                        DisplayText = $"?? {categoryPath}",
                         Node = node,
                         NodeType = "Category"
                     });
@@ -377,7 +377,7 @@ public sealed partial class MainWindow
         {
             var clearItem = new MenuFlyoutItem
             {
-                Text = "✕ Clear Filter",
+                Text = "? Clear Filter",
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             clearItem.Click += TagFilterClear_Click;
@@ -401,14 +401,14 @@ public sealed partial class MainWindow
         {
             var tagItem = new MenuFlyoutItem
             {
-                Text = $"🏷️ {tag.Name}",
+                Text = $"??? {tag.Name}",
                 Tag = tag.Id
             };
 
             // Mark the active tag with a checkmark
             if (tag.Id == _activeTagFilterId)
             {
-                tagItem.Text = $"✓ 🏷️ {tag.Name}";
+                tagItem.Text = $"? ??? {tag.Name}";
                 tagItem.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
             }
 

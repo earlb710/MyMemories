@@ -65,7 +65,8 @@ public class LinkDetailsBuilder
                          File.Exists(linkItem.Url);
 
         bool isLinkOnlyFolder = linkItem.IsDirectory &&
-                               linkItem.FolderType == FolderLinkType.LinkOnly;
+                               linkItem.FolderType == FolderLinkType.LinkOnly &&
+                               !linkItem.IsCatalogEntry; // Catalog entries are not "Link Only" folders
 
         bool directoryExists = linkItem.IsDirectory &&
                                !string.IsNullOrEmpty(linkItem.Url) &&

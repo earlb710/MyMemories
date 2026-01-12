@@ -1,0 +1,21 @@
+{
+  "Name": "Quick Links",
+  "CreatedDate": "2024-12-01T10:00:00",
+  "ModifiedDate": "2024-12-01T10:00:00",
+  "Links": [
+    {
+      "Title": "Google",
+      "Url": "https://www.google.com",
+      "CategoryPath": "Quick Links",
+      "CreatedDate": "2024-12-01T10:00:00",
+      "ModifiedDate": "2024-12-01T10:00:00"
+    },
+    {
+      "Title": "GitHub",
+      "Url": "https://github.com",
+      "CategoryPath": "Quick Links",
+      "CreatedDate": "2024-12-01T10:05:00",
+      "ModifiedDate": "2024-12-01T10:05:00"
+    }
+  ]
+}

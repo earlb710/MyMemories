@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,7 @@ namespace MyMemories.Services;
 public class UrlStateCheckerService
 {
     private readonly HttpClient _httpClient;
+    private readonly HttpClient _noRedirectHttpClient;
     private CancellationTokenSource? _cancellationTokenSource;
     private bool _isChecking;
 
@@ -25,6 +27,17 @@ public class UrlStateCheckerService
             Timeout = TimeSpan.FromSeconds(10) // 10 second timeout per URL
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+
+        // Create a separate HttpClient that doesn't follow redirects
+        var noRedirectHandler = new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        };
+        _noRedirectHttpClient = new HttpClient(noRedirectHandler)
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+        _noRedirectHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
     }
 
     /// <summary>
@@ -83,22 +96,26 @@ public class UrlStateCheckerService
 
                 try
                 {
-                    var status = await CheckUrlAsync(link.Url, _cancellationTokenSource.Token);
-                    link.UrlStatus = status;
+                    // Use the new redirect-aware check
+                    var result = await CheckUrlWithRedirectAsync(link.Url, _cancellationTokenSource.Token);
+                    
+                    link.UrlStatus = result.Status;
+                    link.UrlStatusMessage = result.Message;
                     link.UrlLastChecked = DateTime.Now;
                     
-                    // Get detailed message for non-accessible URLs
-                    if (status != UrlStatus.Accessible)
+                    // Update redirect information
+                    if (result.RedirectDetected && !string.IsNullOrEmpty(result.RedirectUrl))
                     {
-                        var (_, message) = await CheckSingleUrlAsync(link.Url);
-                        link.UrlStatusMessage = message;
+                        link.RedirectUrl = result.RedirectUrl;
+                        stats.RedirectCount++;
+                        Debug.WriteLine($"[UrlStateChecker] Redirect detected: {link.Url} -> {result.RedirectUrl}");
                     }
                     else
                     {
-                        link.UrlStatusMessage = "URL is accessible";
+                        link.RedirectUrl = null;
                     }
 
-                    switch (status)
+                    switch (result.Status)
                     {
                         case UrlStatus.Accessible:
                             stats.AccessibleCount++;
@@ -111,7 +128,7 @@ public class UrlStateCheckerService
                             break;
                     }
 
-                    Debug.WriteLine($"[UrlStateChecker] {i + 1}/{stats.TotalUrls}: {link.Title} = {status}");
+                    Debug.WriteLine($"[UrlStateChecker] {i + 1}/{stats.TotalUrls}: {link.Title} = {result.Status}");
                 }
                 catch (Exception ex)
                 {
@@ -119,6 +136,7 @@ public class UrlStateCheckerService
                     link.UrlStatus = UrlStatus.Error;
                     link.UrlLastChecked = DateTime.Now;
                     link.UrlStatusMessage = $"Exception: {ex.Message}";
+                    link.RedirectUrl = null;
                     stats.ErrorCount++;
                 }
             }
@@ -316,6 +334,208 @@ public class UrlStateCheckerService
             link.UrlStatus = UrlStatus.Unknown;
             link.UrlLastChecked = null;
             link.UrlStatusMessage = string.Empty;
+            link.RedirectUrl = null;
+        }
+    }
+
+    /// <summary>
+    /// Checks a URL for redirects and returns detailed information including the final URL.
+    /// </summary>
+    /// <param name="url">The URL to check</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>A UrlCheckResult with status, message, and redirect information</returns>
+    public async Task<UrlCheckResult> CheckUrlWithRedirectAsync(string url, CancellationToken cancellationToken = default)
+    {
+        var result = new UrlCheckResult();
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            result.Status = UrlStatus.NotFound;
+            result.Message = "URL is empty";
+            return result;
+        }
+
+        // Only check HTTP/HTTPS URLs
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            result.Status = UrlStatus.Unknown;
+            result.Message = "Not an HTTP/HTTPS URL";
+            return result;
+        }
+
+        try
+        {
+            var currentUrl = url;
+            var maxRedirects = 10;
+            var redirectCount = 0;
+            string? finalRedirectUrl = null;
+
+            Debug.WriteLine($"[UrlStateChecker] Starting redirect check for: {url}");
+
+            // Follow redirects manually to track the redirect chain
+            while (redirectCount < maxRedirects)
+            {
+                // Try HEAD first, but some servers don't support it for redirects
+                HttpResponseMessage? response = null;
+                
+                try
+                {
+                    using var headRequest = new HttpRequestMessage(HttpMethod.Head, currentUrl);
+                    response = await _noRedirectHttpClient.SendAsync(headRequest, cancellationToken);
+                    
+                    // Some servers return 405 Method Not Allowed for HEAD requests
+                    if ((int)response.StatusCode == 405)
+                    {
+                        response.Dispose();
+                        Debug.WriteLine($"[UrlStateChecker] HEAD not allowed, trying GET for: {currentUrl}");
+                        using var getRequest = new HttpRequestMessage(HttpMethod.Get, currentUrl);
+                        response = await _noRedirectHttpClient.SendAsync(getRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[UrlStateChecker] HEAD failed with exception, trying GET: {ex.Message}");
+                    // If HEAD fails completely, try GET
+                    using var getRequest = new HttpRequestMessage(HttpMethod.Get, currentUrl);
+                    response = await _noRedirectHttpClient.SendAsync(getRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+                }
+
+                var statusCode = (int)response.StatusCode;
+                Debug.WriteLine($"[UrlStateChecker] Response: {statusCode} {response.ReasonPhrase} for {currentUrl}");
+
+                // Check for redirect status codes (301, 302, 303, 307, 308)
+                if (statusCode == 301 || statusCode == 302 || statusCode == 303 || 
+                    statusCode == 307 || statusCode == 308)
+                {
+                    redirectCount++;
+                    var location = response.Headers.Location;
+
+                    Debug.WriteLine($"[UrlStateChecker] Redirect {redirectCount}: Status={statusCode}, Location={location?.ToString() ?? "(null)"}");
+
+                    if (location == null)
+                    {
+                        result.Status = UrlStatus.Error;
+                        result.Message = $"HTTP {statusCode} redirect without Location header";
+                        response.Dispose();
+                        return result;
+                    }
+
+                    // Handle relative URLs
+                    if (!location.IsAbsoluteUri)
+                    {
+                        var baseUri = new Uri(currentUrl);
+                        location = new Uri(baseUri, location);
+                    }
+
+                    currentUrl = location.ToString();
+                    finalRedirectUrl = currentUrl;
+
+                    Debug.WriteLine($"[UrlStateChecker] Following redirect {redirectCount}: {url} -> {currentUrl}");
+                    response.Dispose();
+                    continue;
+                }
+
+                // We've reached the final destination
+                if (response.IsSuccessStatusCode)
+                {
+                    result.Status = UrlStatus.Accessible;
+                    result.Message = $"HTTP {statusCode} {response.ReasonPhrase}";
+                }
+                else if (statusCode == 404 || statusCode == 410)
+                {
+                    result.Status = UrlStatus.NotFound;
+                    result.Message = $"HTTP {statusCode} {response.ReasonPhrase}";
+                }
+                else
+                {
+                    result.Status = UrlStatus.Error;
+                    result.Message = $"HTTP {statusCode} {response.ReasonPhrase}";
+                }
+
+                response.Dispose();
+                break;
+            }
+
+            if (redirectCount >= maxRedirects)
+            {
+                result.Status = UrlStatus.Error;
+                result.Message = "Too many redirects (max 10)";
+            }
+
+            // Set redirect information if we followed any redirects
+            if (redirectCount > 0 && finalRedirectUrl != null)
+            {
+                // Only mark as redirect if the final URL is different from the original
+                // Normalize URLs for comparison (remove trailing slash, lowercase)
+                var normalizedOriginal = NormalizeUrlForComparison(url);
+                var normalizedFinal = NormalizeUrlForComparison(finalRedirectUrl);
+                
+                if (!string.Equals(normalizedOriginal, normalizedFinal, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.RedirectDetected = true;
+                    result.RedirectUrl = finalRedirectUrl;
+                    result.RedirectCount = redirectCount;
+                    
+                    // Append redirect info to message
+                    result.Message += $" (redirected {redirectCount}x)";
+                    Debug.WriteLine($"[UrlStateChecker] Redirect detected: {url} -> {finalRedirectUrl}");
+                }
+                else
+                {
+                    Debug.WriteLine($"[UrlStateChecker] Redirect resolved to same URL (normalized): {url}");
+                }
+            }
+
+            return result;
+        }
+        catch (HttpRequestException ex)
+        {
+            Debug.WriteLine($"[UrlStateChecker] HttpRequestException: {ex.Message}");
+            result.Status = UrlStatus.NotFound;
+            result.Message = $"Connection failed: {ex.Message}";
+            return result;
+        }
+        catch (TaskCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            Debug.WriteLine($"[UrlStateChecker] Request timed out for: {url}");
+            result.Status = UrlStatus.Error;
+            result.Message = "Request timed out";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[UrlStateChecker] Exception: {ex.GetType().Name}: {ex.Message}");
+            result.Status = UrlStatus.Error;
+            result.Message = $"Error: {ex.Message}";
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Normalizes a URL for comparison purposes.
+    /// </summary>
+    private static string NormalizeUrlForComparison(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return string.Empty;
+
+        try
+        {
+            var uri = new Uri(url);
+            // Normalize: scheme + host + path (without trailing slash) + query
+            var normalized = $"{uri.Scheme}://{uri.Host}{uri.AbsolutePath.TrimEnd('/')}";
+            if (!string.IsNullOrEmpty(uri.Query))
+                normalized += uri.Query;
+            return normalized.ToLowerInvariant();
+        }
+        catch
+        {
+            return url.TrimEnd('/').ToLowerInvariant();
         }
     }
 }
@@ -329,5 +549,18 @@ public class UrlCheckStatistics
     public int AccessibleCount { get; set; }
     public int ErrorCount { get; set; }
     public int NotFoundCount { get; set; }
+    public int RedirectCount { get; set; }
     public int CheckedCount => AccessibleCount + ErrorCount + NotFoundCount;
+}
+
+/// <summary>
+/// Result from checking a URL with redirect detection.
+/// </summary>
+public class UrlCheckResult
+{
+    public UrlStatus Status { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public bool RedirectDetected { get; set; }
+    public string? RedirectUrl { get; set; }
+    public int RedirectCount { get; set; }
 }

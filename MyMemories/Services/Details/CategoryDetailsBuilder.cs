@@ -35,7 +35,7 @@ public class CategoryDetailsBuilder
     /// Shows category details.
     /// </summary>
     public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, 
-        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null)
+        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null)
     {
         _detailsPanel.Children.Clear();
 
@@ -45,32 +45,74 @@ public class CategoryDetailsBuilder
         {
             await AddBookmarkImportInfoAsync(category);
 
-            if (!string.IsNullOrEmpty(category.SourceBookmarksPath) && onRefreshBookmarks != null)
+            if (!string.IsNullOrEmpty(category.SourceBookmarksPath))
             {
-                refreshButton = new Button
-                {
-                    Content = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 8,
-                        Children =
-                        {
-                            new FontIcon { Glyph = "\uE72C" },
-                            new TextBlock { Text = "Refresh Bookmarks", VerticalAlignment = VerticalAlignment.Center }
-                        }
-                    },
+                var buttonPanel = new StackPanel 
+                { 
+                    Orientation = Orientation.Horizontal, 
+                    Spacing = 8,
                     Margin = new Thickness(0, 0, 0, 16)
                 };
 
-                ToolTipService.SetToolTip(refreshButton, $"Re-imports bookmarks from {category.SourceBrowserName ?? "browser"} to update this category with the latest bookmarks");
-
-                refreshButton.Click += async (s, e) =>
+                // Sync button (detect changes)
+                if (onSyncBookmarks != null)
                 {
-                    try { await onRefreshBookmarks(); }
-                    catch { }
-                };
+                    var syncButton = new Button
+                    {
+                        Content = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new FontIcon { Glyph = "\uE895" }, // Sync icon
+                                new TextBlock { Text = "Sync", VerticalAlignment = VerticalAlignment.Center }
+                            }
+                        }
+                    };
 
-                _detailsPanel.Children.Add(refreshButton);
+                    ToolTipService.SetToolTip(syncButton, 
+                        $"Detect changes between {category.SourceBrowserName ?? "browser"} and MyMemories.\nShows new, modified, and deleted bookmarks.");
+
+                    syncButton.Click += async (s, e) =>
+                    {
+                        try { await onSyncBookmarks(); }
+                        catch { }
+                    };
+
+                    buttonPanel.Children.Add(syncButton);
+                }
+
+                // Refresh button (full re-import)
+                if (onRefreshBookmarks != null)
+                {
+                    refreshButton = new Button
+                    {
+                        Content = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            Children =
+                            {
+                                new FontIcon { Glyph = "\uE72C" }, // Refresh icon
+                                new TextBlock { Text = "Refresh All", VerticalAlignment = VerticalAlignment.Center }
+                            }
+                        }
+                    };
+
+                    ToolTipService.SetToolTip(refreshButton, 
+                        $"Re-imports all bookmarks from {category.SourceBrowserName ?? "browser"}.\nReplaces or adds to existing bookmarks.");
+
+                    refreshButton.Click += async (s, e) =>
+                    {
+                        try { await onRefreshBookmarks(); }
+                        catch { }
+                    };
+
+                    buttonPanel.Children.Add(refreshButton);
+                }
+
+                _detailsPanel.Children.Add(buttonPanel);
             }
         }
 

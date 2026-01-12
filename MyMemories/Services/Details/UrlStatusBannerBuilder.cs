@@ -2,15 +2,22 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using System;
 
 namespace MyMemories.Services.Details;
 
 /// <summary>
 /// Builds URL status banners for display in the details panel.
+/// Note: Redirect handling is now done via the header panel button.
 /// </summary>
 public class UrlStatusBannerBuilder
 {
     private readonly StackPanel _detailsPanel;
+
+    /// <summary>
+    /// Event raised when the user requests to update a URL to its redirect target.
+    /// </summary>
+    public event Action<LinkItem>? UpdateUrlRequested;
 
     public UrlStatusBannerBuilder(StackPanel detailsPanel)
     {
@@ -19,14 +26,23 @@ public class UrlStatusBannerBuilder
 
     /// <summary>
     /// Shows URL status banner at the top of the details panel for non-accessible URLs.
+    /// Note: Redirect banners are no longer shown here - they are handled via the header button.
     /// </summary>
     public void ShowUrlStatusBanner(LinkItem linkItem)
     {
-        if (linkItem.UrlStatus == UrlStatus.Unknown || linkItem.UrlStatus == UrlStatus.Accessible)
+        // Only show error/not found banner if URL is not accessible
+        // Redirect handling is now done via the header panel button
+        if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
         {
-            return;
+            ShowErrorBanner(linkItem);
         }
+    }
 
+    /// <summary>
+    /// Shows an error banner for non-accessible URLs.
+    /// </summary>
+    private void ShowErrorBanner(LinkItem linkItem)
+    {
         var (backgroundColor, borderColor, icon, statusText) = linkItem.UrlStatus switch
         {
             UrlStatus.Error => (

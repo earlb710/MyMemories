@@ -246,4 +246,12 @@ public class TreeViewService
 
         return newNode;
     }
+
+    /// <summary>
+    /// Selects a node in the TreeView.
+    /// </summary>
+    public void SelectNode(TreeViewNode node)
+    {
+        _treeView.SelectedNode = node;
+    }
 }

@@ -33,7 +33,12 @@ public sealed partial class MainWindow
                 ? async () => await RefreshUrlStateAsync(category, node)
                 : null;
 
-            await _detailsViewService!.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState);
+            // Create sync callback for bookmark import categories
+            Func<Task>? syncBookmarks = category.IsBookmarkImport
+                ? async () => await SyncBookmarksAsync(category, node)
+                : null;
+
+            await _detailsViewService!.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks);
 
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
@@ -50,7 +55,9 @@ public sealed partial class MainWindow
                 ShowDetailsViewers,
                 ShowViewer,
                 status => StatusText.Text = status,
-                RefreshBookmarksAsync);
+                RefreshBookmarksAsync,
+                RefreshUrlStateAsync,
+                SyncBookmarksAsync);
         }
         
         // Attach pointer events to show URL status in status bar
@@ -84,12 +91,9 @@ public sealed partial class MainWindow
     {
         if (sender is TreeViewItem item && item.Content is TreeViewNode node && node.Content is LinkItem link)
         {
-            System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Link: {link.Title}, URL: {link.Url ?? "(null)"}");
-            
             // Skip zip entry URLs - they contain :: which is invalid for Uri parsing
             if (ZipUtilities.IsZipEntryUrl(link.Url))
             {
-                System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Skipping zip entry URL");
                 StatusText.Text = $"Zip entry: {link.Title}";
                 return;
             }
@@ -99,7 +103,6 @@ public sealed partial class MainWindow
                 Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) && 
                 !uri.IsFile)
             {
-                System.Diagnostics.Debug.WriteLine($"[TreeViewItem_PointerEntered] Web URL detected, checking status");
                 if (link.UrlStatus != UrlStatus.Unknown)
                 {
                     // Build status message
@@ -425,121 +428,475 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Handles keyboard input on the TreeView. Delete key removes the selected item, Insert key adds a link.
+    /// Handles keyboard input on the TreeView.
+    /// Shortcuts:
+    /// - Delete: Remove selected item
+    /// - Insert: Add new link
+    /// - F2: Edit selected item
+    /// - Ctrl+C: Copy link
+    /// - Ctrl+E: Edit selected item
+    /// - Ctrl+M: Move link
+    /// - Ctrl+N: Add new link (same as Insert)
+    /// - Ctrl+Shift+N: Add new subcategory
+    /// - Enter: Open/launch selected item
+    /// - Space: Expand/collapse category
+    /// - Ctrl+D: Show details
+    /// - Ctrl+O: Open in Explorer (for folders/files)
     /// </summary>
     private async void LinksTreeView_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == Windows.System.VirtualKey.Delete)
+        var selectedNode = LinksTreeView.SelectedNode;
+        if (selectedNode == null && e.Key != Windows.System.VirtualKey.Insert && e.Key != Windows.System.VirtualKey.N)
+            return;
+
+        // Check for modifier keys
+        var ctrlPressed = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+        var shiftPressed = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        switch (e.Key)
         {
-            var selectedNode = LinksTreeView.SelectedNode;
-            if (selectedNode == null)
-                return;
+            case Windows.System.VirtualKey.Delete:
+                await HandleDeleteKeyAsync(selectedNode);
+                e.Handled = true;
+                break;
 
-            if (selectedNode.Content is LinkItem link)
-            {
-                // Don't allow deleting catalog entries
-                if (link.IsCatalogEntry)
+            case Windows.System.VirtualKey.Insert:
+                await HandleInsertKeyAsync(selectedNode);
+                e.Handled = true;
+                break;
+
+            case Windows.System.VirtualKey.F2:
+                // F2: Edit selected item
+                await HandleEditKeyAsync(selectedNode);
+                e.Handled = true;
+                break;
+
+            case Windows.System.VirtualKey.C:
+                if (ctrlPressed)
                 {
-                    StatusText.Text = "Cannot remove catalog entries. Use 'Refresh Catalog' to update them.";
+                    // Ctrl+C: Copy link
+                    await HandleCopyKeyAsync(selectedNode);
                     e.Handled = true;
-                    return;
                 }
+                break;
 
-                await DeleteLinkAsync(link, selectedNode);
+            case Windows.System.VirtualKey.E:
+                if (ctrlPressed)
+                {
+                    // Ctrl+E: Edit selected item
+                    await HandleEditKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.M:
+                if (ctrlPressed)
+                {
+                    // Ctrl+M: Move link
+                    await HandleMoveKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.N:
+                if (ctrlPressed && shiftPressed)
+                {
+                    // Ctrl+Shift+N: Add new subcategory
+                    await HandleAddSubcategoryKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                else if (ctrlPressed)
+                {
+                    // Ctrl+N: Add new link
+                    await HandleInsertKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.Enter:
+                // Enter: Open/launch selected item
+                await HandleEnterKeyAsync(selectedNode);
                 e.Handled = true;
-            }
-            else if (selectedNode.Content is CategoryItem category)
+                break;
+
+            case Windows.System.VirtualKey.Space:
+                // Space: Expand/collapse category
+                if (selectedNode?.Content is CategoryItem)
+                {
+                    selectedNode.IsExpanded = !selectedNode.IsExpanded;
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.D:
+                if (ctrlPressed)
+                {
+                    // Ctrl+D: Show details dialog
+                    await HandleDetailsKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                break;
+
+            case Windows.System.VirtualKey.O:
+                if (ctrlPressed)
+                {
+                    // Ctrl+O: Open in Explorer
+                    await HandleOpenInExplorerKeyAsync(selectedNode);
+                    e.Handled = true;
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Handles Delete key - removes selected item.
+    /// </summary>
+    private async Task HandleDeleteKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode == null) return;
+
+        if (selectedNode.Content is LinkItem link)
+        {
+            if (link.IsCatalogEntry)
             {
-                await DeleteCategoryAsync(category, selectedNode);
-                e.Handled = true;
+                StatusText.Text = "Cannot remove catalog entries. Use 'Refresh Catalog' to update them.";
+                return;
+            }
+            await DeleteLinkAsync(link, selectedNode);
+        }
+        else if (selectedNode.Content is CategoryItem category)
+        {
+            await DeleteCategoryAsync(category, selectedNode);
+        }
+    }
+
+    /// <summary>
+    /// Handles Insert key - adds new link.
+    /// </summary>
+    private async Task HandleInsertKeyAsync(TreeViewNode? selectedNode)
+    {
+        // Get the parent category node for the new link
+        TreeViewNode? targetCategoryNode = null;
+
+        if (selectedNode != null)
+        {
+            if (selectedNode.Content is CategoryItem)
+            {
+                targetCategoryNode = selectedNode;
+            }
+            else if (selectedNode.Content is LinkItem)
+            {
+                targetCategoryNode = _treeViewService!.GetParentCategoryNode(selectedNode);
             }
         }
-        else if (e.Key == Windows.System.VirtualKey.Insert)
-        {
-            // Add link - same as clicking the Add Link button or context menu
-            var selectedNode = LinksTreeView.SelectedNode;
-            
-            // Get the parent category node for the new link
-            TreeViewNode? targetCategoryNode = null;
-            
-            if (selectedNode != null)
-            {
-                if (selectedNode.Content is CategoryItem)
-                {
-                    // If a category is selected, add link to that category
-                    targetCategoryNode = selectedNode;
-                }
-                else if (selectedNode.Content is LinkItem)
-                {
-                    // If a link is selected, add to its parent category
-                    targetCategoryNode = _treeViewService!.GetParentCategoryNode(selectedNode);
-                }
-            }
-            
-            // Fall back to last used category if nothing is selected
-            targetCategoryNode ??= _lastUsedCategory;
-            
-            // Get all root categories for the dialog
-            var categories = LinksTreeView.RootNodes
-                .Where(n => n.Content is CategoryItem)
-                .Select(n => new CategoryNode
-                {
-                    Name = ((CategoryItem)n.Content).Name,
-                    Node = n
-                })
-                .ToList();
 
-            if (categories.Count == 0)
+        targetCategoryNode ??= _lastUsedCategory;
+
+        var categories = LinksTreeView.RootNodes
+            .Where(n => n.Content is CategoryItem)
+            .Select(n => new CategoryNode
             {
-                StatusText.Text = "Please create a category first";
-                e.Handled = true;
+                Name = ((CategoryItem)n.Content).Name,
+                Node = n
+            })
+            .ToList();
+
+        if (categories.Count == 0)
+        {
+            StatusText.Text = "Please create a category first";
+            return;
+        }
+
+        CategoryNode? selectedCategoryNode = null;
+        if (targetCategoryNode != null && targetCategoryNode.Content is CategoryItem)
+        {
+            selectedCategoryNode = new CategoryNode
+            {
+                Name = _treeViewService!.GetCategoryPath(targetCategoryNode),
+                Node = targetCategoryNode
+            };
+        }
+
+        var result = await _linkDialog!.ShowAddAsync(categories, selectedCategoryNode);
+
+        if (result?.CategoryNode != null)
+        {
+            var categoryPath = _treeViewService!.GetCategoryPath(result.CategoryNode);
+
+            var linkNode = new TreeViewNode
+            {
+                Content = new LinkItem
+                {
+                    Title = result.Title,
+                    Url = result.Url,
+                    Description = result.Description,
+                    IsDirectory = result.IsDirectory,
+                    CategoryPath = categoryPath,
+                    CreatedDate = DateTime.Now,
+                    ModifiedDate = DateTime.Now,
+                    FolderType = result.FolderType,
+                    FileFilters = result.FileFilters
+                }
+            };
+
+            result.CategoryNode.Children.Add(linkNode);
+            result.CategoryNode.IsExpanded = true;
+            _lastUsedCategory = result.CategoryNode;
+
+            await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
+
+            StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
+        }
+    }
+
+    /// <summary>
+    /// Handles F2/Ctrl+E key - edits selected item.
+    /// </summary>
+    private async Task HandleEditKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode == null) return;
+
+        if (selectedNode.Content is CategoryItem category)
+        {
+            await EditCategoryAsync(category, selectedNode);
+        }
+        else if (selectedNode.Content is LinkItem link)
+        {
+            if (link.IsCatalogEntry)
+            {
+                StatusText.Text = "Catalog entries cannot be edited.";
                 return;
             }
+            await EditLinkAsync(link, selectedNode);
+        }
+    }
 
-            // Prepare selected category for the dialog
-            CategoryNode? selectedCategoryNode = null;
-            if (targetCategoryNode != null && targetCategoryNode.Content is CategoryItem targetCategory)
+    /// <summary>
+    /// Handles Ctrl+C key - copies link (duplicates the link in the same category).
+    /// </summary>
+    private async Task HandleCopyKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode?.Content is not LinkItem link) return;
+
+        if (link.IsCatalogEntry)
+        {
+            StatusText.Text = "Catalog entries cannot be copied.";
+            return;
+        }
+
+        // Find the parent category node
+        var parentNode = FindParentNode(selectedNode);
+        if (parentNode == null)
+        {
+            StatusText.Text = "Could not find parent category";
+            return;
+        }
+
+        // Generate a unique title with sequence number
+        var baseTitle = link.Title;
+        var newTitle = GenerateUniqueTitle(baseTitle, parentNode);
+
+        // Create a copy of the link
+        var copiedLink = new LinkItem
+        {
+            Title = newTitle,
+            Url = link.Url,
+            Description = link.Description,
+            Keywords = link.Keywords,
+            IsDirectory = link.IsDirectory,
+            CategoryPath = link.CategoryPath,
+            CreatedDate = DateTime.Now,
+            ModifiedDate = DateTime.Now,
+            FolderType = link.FolderType,
+            FileFilters = link.FileFilters,
+            UrlStatus = link.UrlStatus,
+            UrlLastChecked = link.UrlLastChecked,
+            UrlStatusMessage = link.UrlStatusMessage
+        };
+
+        // Create the new node
+        var copiedNode = new TreeViewNode { Content = copiedLink };
+
+        // Add the copied link to the parent category (after the original)
+        var insertIndex = parentNode.Children.IndexOf(selectedNode) + 1;
+        if (insertIndex > 0 && insertIndex <= parentNode.Children.Count)
+        {
+            parentNode.Children.Insert(insertIndex, copiedNode);
+        }
+        else
+        {
+            parentNode.Children.Add(copiedNode);
+        }
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(parentNode);
+        await _categoryService!.SaveCategoryAsync(rootNode);
+
+        StatusText.Text = $"Copied link as '{newTitle}'";
+
+        // Select the new node and open the edit dialog
+        LinksTreeView.SelectedNode = copiedNode;
+        _contextMenuNode = copiedNode;
+
+        // Open the edit dialog for the copied link
+        await EditLinkAsync(copiedLink, copiedNode);
+    }
+
+    /// <summary>
+    /// Handles Ctrl+M key - moves link.
+    /// </summary>
+    private async Task HandleMoveKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode?.Content is not LinkItem link) return;
+
+        if (link.IsCatalogEntry)
+        {
+            StatusText.Text = "Catalog entries cannot be moved.";
+            return;
+        }
+
+        await MoveLinkAsync(link, selectedNode);
+    }
+
+    /// <summary>
+    /// Handles Ctrl+Shift+N key - adds subcategory.
+    /// </summary>
+    private async Task HandleAddSubcategoryKeyAsync(TreeViewNode? selectedNode)
+    {
+        TreeViewNode? targetCategoryNode = null;
+
+        if (selectedNode != null)
+        {
+            if (selectedNode.Content is CategoryItem)
             {
-                selectedCategoryNode = new CategoryNode 
-                { 
-                    Name = _treeViewService!.GetCategoryPath(targetCategoryNode), 
-                    Node = targetCategoryNode 
-                };
+                targetCategoryNode = selectedNode;
             }
-
-            var result = await _linkDialog!.ShowAddAsync(categories, selectedCategoryNode);
-
-            if (result?.CategoryNode != null)
+            else if (selectedNode.Content is LinkItem)
             {
-                var categoryPath = _treeViewService!.GetCategoryPath(result.CategoryNode);
-                
-                var linkNode = new TreeViewNode
+                targetCategoryNode = _treeViewService!.GetParentCategoryNode(selectedNode);
+            }
+        }
+
+        if (targetCategoryNode == null)
+        {
+            StatusText.Text = "Please select a category first";
+            return;
+        }
+
+        await CreateSubCategoryAsync(targetCategoryNode);
+    }
+
+    /// <summary>
+    /// Handles Enter key - opens/launches selected item.
+    /// </summary>
+    private async Task HandleEnterKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode == null) return;
+
+        if (selectedNode.Content is CategoryItem)
+        {
+            // Toggle expand for categories
+            selectedNode.IsExpanded = !selectedNode.IsExpanded;
+        }
+        else if (selectedNode.Content is LinkItem link)
+        {
+            // Open/launch the link
+            await _doubleTapHandlerService!.HandleDoubleTapAsync(
+                link,
+                selectedNode,
+                status => StatusText.Text = status);
+        }
+    }
+
+    /// <summary>
+    /// Handles Ctrl+D key - shows details dialog.
+    /// </summary>
+    private async Task HandleDetailsKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode?.Content is LinkItem link)
+        {
+            var detailsViewer = new Dialogs.LinkDetailsViewer(Content.XamlRoot);
+            var wantsEdit = await detailsViewer.ShowAsync(link);
+
+            if (wantsEdit && !link.IsCatalogEntry)
+            {
+                await EditLinkAsync(link, selectedNode);
+            }
+        }
+        else if (selectedNode?.Content is CategoryItem category)
+        {
+            // Show category stats
+            var statisticsService = new CategoryStatisticsService();
+            var folderPaths = statisticsService.CollectFolderPathsFromCategory(selectedNode);
+            var stats = await Task.Run(() => statisticsService.CalculateMultipleFoldersStatistics(folderPaths.ToArray()));
+
+            var statsMessage = $"?? {category.Name} Statistics:\n\n" +
+                              $"• Items: {selectedNode.Children.Count}\n" +
+                              $"• Folders: {stats.FolderCount:N0}\n" +
+                              $"• Files: {stats.FileCount:N0}\n" +
+                              $"• Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
+
+            var dialog = new ContentDialog
+            {
+                Title = "Category Details",
+                Content = statsMessage,
+                CloseButtonText = "Close",
+                XamlRoot = Content.XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+    }
+
+    /// <summary>
+    /// Handles Ctrl+O key - opens in Explorer.
+    /// </summary>
+    private async Task HandleOpenInExplorerKeyAsync(TreeViewNode? selectedNode)
+    {
+        if (selectedNode?.Content is not LinkItem link) return;
+
+        string targetPath = link.Url;
+
+        // For zip files, open the parent directory
+        if (link.IsDirectory && targetPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            var zipParentDir = System.IO.Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(zipParentDir) && System.IO.Directory.Exists(zipParentDir))
+            {
+                targetPath = zipParentDir;
+            }
+        }
+
+        try
+        {
+            // For files, open the containing folder
+            if (System.IO.File.Exists(targetPath))
+            {
+                var folder = System.IO.Path.GetDirectoryName(targetPath);
+                if (!string.IsNullOrEmpty(folder))
                 {
-                    Content = new LinkItem
-                    {
-                        Title = result.Title,
-                        Url = result.Url,
-                        Description = result.Description,
-                        IsDirectory = result.IsDirectory,
-                        CategoryPath = categoryPath,
-                        CreatedDate = DateTime.Now,
-                        ModifiedDate = DateTime.Now,
-                        FolderType = result.FolderType,
-                        FileFilters = result.FileFilters
-                    }
-                };
-
-                result.CategoryNode.Children.Add(linkNode);
-                result.CategoryNode.IsExpanded = true;
-                _lastUsedCategory = result.CategoryNode;
-
-                // Update parent categories' ModifiedDate and save
-                await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
-
-                StatusText.Text = $"Added link '{result.Title}' to '{categoryPath}'";
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri(folder));
+                    StatusText.Text = $"Opened folder: {folder}";
+                }
             }
-
-            e.Handled = true;
+            else if (System.IO.Directory.Exists(targetPath))
+            {
+                await Windows.System.Launcher.LaunchUriAsync(new Uri(targetPath));
+                StatusText.Text = $"Opened folder: {targetPath}";
+            }
+            else if (Uri.TryCreate(targetPath, UriKind.Absolute, out _))
+            {
+                StatusText.Text = "Cannot open Explorer for URLs";
+            }
+            else
+            {
+                StatusText.Text = "Path does not exist";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error opening location: {ex.Message}";
         }
     }
 }

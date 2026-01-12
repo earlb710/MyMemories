@@ -1,11 +1,21 @@
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace MyMemories.Services;
+
+/// <summary>
+/// Represents preserved metadata for a catalog entry that should survive refresh.
+/// </summary>
+public class CatalogEntryMetadata
+{
+    public List<string> TagIds { get; set; } = new();
+    public List<RatingValue> Ratings { get; set; } = new();
+}
 
 public class CatalogService
 {
@@ -78,6 +88,10 @@ public class CatalogService
         {
             Debug.WriteLine($"[RefreshCatalogAsync] Refreshing catalog for '{linkItem.Title}', IsZip: {isZipFile}");
             
+            // Extract existing tags and ratings before removing catalog entries
+            var preservedMetadata = ExtractCatalogMetadata(linkNode);
+            Debug.WriteLine($"[RefreshCatalogAsync] Preserved metadata for {preservedMetadata.Count} entries");
+            
             _categoryService.RemoveCatalogEntries(linkNode);
             var tempNode = ShowCatalogingProgress(linkNode, isZipFile, isRefresh: true);
 
@@ -89,6 +103,10 @@ public class CatalogService
             {
                 await CatalogDirectoryAsync(linkItem, linkNode);
             }
+
+            // Restore preserved tags and ratings to matching entries
+            RestoreCatalogMetadata(linkNode, preservedMetadata);
+            Debug.WriteLine($"[RefreshCatalogAsync] Restored metadata to catalog entries");
 
             linkNode.Children.Remove(tempNode);
             await FinalizeCatalogCreationAsync(linkItem, linkNode);
@@ -114,9 +132,117 @@ public class CatalogService
         }
     }
 
+    /// <summary>
+    /// Extracts tags and ratings from existing catalog entries before refresh.
+    /// Key is the relative path (filename or folder name) to match after refresh.
+    /// </summary>
+    private Dictionary<string, CatalogEntryMetadata> ExtractCatalogMetadata(TreeViewNode linkNode)
+    {
+        var metadata = new Dictionary<string, CatalogEntryMetadata>(StringComparer.OrdinalIgnoreCase);
+        
+        ExtractMetadataRecursive(linkNode, metadata, string.Empty);
+        
+        return metadata;
+    }
+
+    /// <summary>
+    /// Recursively extracts metadata from catalog entries.
+    /// </summary>
+    private void ExtractMetadataRecursive(TreeViewNode node, Dictionary<string, CatalogEntryMetadata> metadata, string parentPath)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link && link.IsCatalogEntry)
+            {
+                // Only extract if there are tags or ratings to preserve
+                if (link.TagIds.Count > 0 || link.Ratings.Count > 0)
+                {
+                    // Use filename/folder name as key for matching after refresh
+                    var key = string.IsNullOrEmpty(parentPath) 
+                        ? link.Title 
+                        : $"{parentPath}/{link.Title}";
+                    
+                    metadata[key] = new CatalogEntryMetadata
+                    {
+                        TagIds = new List<string>(link.TagIds),
+                        Ratings = new List<RatingValue>(link.Ratings)
+                    };
+                    
+                    Debug.WriteLine($"[ExtractMetadataRecursive] Preserved metadata for '{key}': {link.TagIds.Count} tags, {link.Ratings.Count} ratings");
+                }
+                
+                // Recursively process subdirectories
+                if (link.IsDirectory && child.Children.Count > 0)
+                {
+                    var childPath = string.IsNullOrEmpty(parentPath) 
+                        ? link.Title 
+                        : $"{parentPath}/{link.Title}";
+                    ExtractMetadataRecursive(child, metadata, childPath);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Restores tags and ratings to catalog entries after refresh.
+    /// </summary>
+    private void RestoreCatalogMetadata(TreeViewNode linkNode, Dictionary<string, CatalogEntryMetadata> metadata)
+    {
+        if (metadata.Count == 0)
+            return;
+            
+        RestoreMetadataRecursive(linkNode, metadata, string.Empty);
+    }
+
+    /// <summary>
+    /// Recursively restores metadata to catalog entries.
+    /// </summary>
+    private void RestoreMetadataRecursive(TreeViewNode node, Dictionary<string, CatalogEntryMetadata> metadata, string parentPath)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem link && link.IsCatalogEntry)
+            {
+                var key = string.IsNullOrEmpty(parentPath) 
+                    ? link.Title 
+                    : $"{parentPath}/{link.Title}";
+                
+                if (metadata.TryGetValue(key, out var savedMetadata))
+                {
+                    // Restore tags
+                    if (savedMetadata.TagIds.Count > 0)
+                    {
+                        link.TagIds = new List<string>(savedMetadata.TagIds);
+                    }
+                    
+                    // Restore ratings
+                    if (savedMetadata.Ratings.Count > 0)
+                    {
+                        link.Ratings = new List<RatingValue>(savedMetadata.Ratings);
+                    }
+                    
+                    Debug.WriteLine($"[RestoreMetadataRecursive] Restored metadata to '{key}': {link.TagIds.Count} tags, {link.Ratings.Count} ratings");
+                }
+                
+                // Recursively process subdirectories
+                if (link.IsDirectory && child.Children.Count > 0)
+                {
+                    var childPath = string.IsNullOrEmpty(parentPath) 
+                        ? link.Title 
+                        : $"{parentPath}/{link.Title}";
+                    RestoreMetadataRecursive(child, metadata, childPath);
+                }
+            }
+        }
+    }
+
     private async Task CatalogDirectoryAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
         var catalogEntries = await _categoryService.CreateCatalogEntriesAsync(linkItem.Url, linkItem.CategoryPath);
+
+        // Note: We don't mark directories as changed during catalog creation/refresh
+        // because we're capturing the current state. Change detection only happens
+        // when loading from saved JSON (in CategoryService.CheckAndMarkCatalogEntryAsChanged)
 
         foreach (var entry in catalogEntries)
         {
@@ -200,7 +326,16 @@ public class CatalogService
         _categoryService.UpdateCatalogFileCount(linkNode);
         var refreshedNode = _treeViewService.RefreshLinkNode(linkNode, linkItem);
 
+        // Expand the node and select it so user can see the refreshed content
         refreshedNode.IsExpanded = true;
+        
+        // Also expand the parent node if it exists (in case it collapsed)
+        if (refreshedNode.Parent != null)
+        {
+            refreshedNode.Parent.IsExpanded = true;
+        }
+        
+        _treeViewService.SelectNode(refreshedNode);
         
         // Only pass RefreshArchiveFromManifestAsync for zip files
         bool isZipFile = IsZipFile(linkItem.Url);

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml;
 
@@ -25,28 +26,61 @@ public class CategoryItem
     public string Keywords { get; set; } = string.Empty;
     
     /// <summary>
-    /// List of tag IDs assigned to this category.
+    /// List of tag names assigned to this category.
     /// </summary>
-    public List<string> TagIds { get; set; } = new();
+    public List<string> Tags { get; set; } = new();
+    
+    /// <summary>
+    /// Legacy property for backwards compatibility. Maps to Tags property.
+    /// </summary>
+    [JsonIgnore]
+    public List<string> TagIds
+    {
+        get => Tags;
+        set => Tags = value;
+    }
+    
+    /// <summary>
+    /// List of ratings assigned to this category.
+    /// </summary>
+    public List<RatingValue> Ratings { get; set; } = new();
     
     /// <summary>
     /// Gets formatted display text showing all tags with their names.
     /// Format: [tag icon] TagName  [tag icon] TagName2
     /// </summary>
     [JsonIgnore]
-    public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(TagIds) ?? string.Empty;
+    public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(Tags) ?? string.Empty;
     
     /// <summary>
     /// Gets whether this category has any tags assigned.
     /// </summary>
     [JsonIgnore]
-    public Visibility HasTags => TagIds.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility HasTags => Tags.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     
     /// <summary>
     /// Gets tag icons only for tree node display (no names).
     /// </summary>
     [JsonIgnore]
-    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(TagIds) ?? string.Empty;
+    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(Tags) ?? string.Empty;
+    
+    /// <summary>
+    /// Gets whether this category has any ratings assigned.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasRatings => Ratings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    
+    /// <summary>
+    /// Gets the average rating score for this category.
+    /// </summary>
+    [JsonIgnore]
+    public double AverageRating => Ratings.Count > 0 ? Ratings.Average(r => r.Score) : 0;
+    
+    /// <summary>
+    /// Gets formatted display text showing all ratings.
+    /// </summary>
+    [JsonIgnore]
+    public string RatingDisplayText => Services.RatingManagementService.Instance?.GetRatingsDisplayText(Ratings) ?? string.Empty;
     
     // Bookmark import metadata
     public bool IsBookmarkImport { get; set; } = false;
@@ -64,6 +98,40 @@ public class CategoryItem
     
     // Audit logging - enables per-category audit logging
     public bool IsAuditLoggingEnabled { get; set; } = false;
+    
+    // Export/Sync metadata
+    /// <summary>
+    /// Last date this category was exported to a browser.
+    /// </summary>
+    public DateTime? LastExportDate { get; set; }
+    
+    /// <summary>
+    /// The folder name used when exporting to browser (e.g., "MyMemories").
+    /// </summary>
+    public string? ExportFolderName { get; set; }
+    
+    /// <summary>
+    /// The browser type this category was last exported to.
+    /// </summary>
+    public BrowserType? ExportedToBrowserType { get; set; }
+    
+    /// <summary>
+    /// The path to the browser's bookmarks file for sync.
+    /// </summary>
+    public string? ExportedToBookmarksPath { get; set; }
+    
+    // Backup configuration
+    /// <summary>
+    /// List of directories to automatically copy the category file to on save.
+    /// Only applies to root categories.
+    /// </summary>
+    public List<string> BackupDirectories { get; set; } = new();
+    
+    /// <summary>
+    /// Gets whether this category has backup directories configured.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasBackupDirectories => BackupDirectories.Count > 0;
 
     public override string ToString() => $"{Icon} {Name}";
     

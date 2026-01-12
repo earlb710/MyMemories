@@ -8,6 +8,116 @@ namespace MyMemories;
 
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// Handles the request to update a URL to its redirect target.
+    /// The URL has already been updated in the LinkItem by the caller.
+    /// This handler saves the changes and refreshes the UI.
+    /// </summary>
+    private async void OnUpdateUrlFromRedirect(LinkItem linkItem)
+    {
+        if (linkItem == null)
+        {
+            return;
+        }
+
+        // Find the node for this link
+        TreeViewNode? linkNode = FindNodeForLinkItem(linkItem);
+        if (linkNode == null)
+        {
+            StatusText.Text = "Error: Could not find link in tree";
+            return;
+        }
+
+        // The URL was already updated by the dialog - just refresh and save
+        
+        // Re-check the new URL to get fresh status
+        if (_urlStateCheckerService != null)
+        {
+            var checkResult = await _urlStateCheckerService.CheckUrlWithRedirectAsync(linkItem.Url);
+            linkItem.UrlStatus = checkResult.Status;
+            linkItem.UrlStatusMessage = checkResult.Message;
+            linkItem.UrlLastChecked = DateTime.Now;
+            
+            // If the new URL also redirects, store that
+            if (checkResult.RedirectDetected && !string.IsNullOrEmpty(checkResult.RedirectUrl))
+            {
+                linkItem.RedirectUrl = checkResult.RedirectUrl;
+            }
+        }
+
+        // Refresh the tree node
+        var newNode = _treeViewService!.RefreshLinkNode(linkNode, linkItem);
+        if (_contextMenuNode == linkNode)
+        {
+            _contextMenuNode = newNode;
+        }
+
+        // Save the category
+        var rootNode = GetRootCategoryNode(newNode);
+        if (rootNode != null)
+        {
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            // Audit log the URL update
+            if (rootNode.Content is CategoryItem rootCategory && rootCategory.IsAuditLoggingEnabled)
+            {
+                await _configService!.AuditLogService!.LogLinkChangeAsync(
+                    rootCategory.Name,
+                    "URL updated from redirect",
+                    linkItem.Title,
+                    $"New URL: {linkItem.Url}");
+            }
+        }
+
+        StatusText.Text = $"Updated URL for '{linkItem.Title}' to redirect target";
+
+        // Refresh the header to remove the redirect button (since we just updated)
+        _detailsViewService!.ShowLinkHeader(
+            linkItem.Title,
+            linkItem.Description,
+            linkItem.GetIcon(),
+            linkItem.IsDirectory && linkItem.FolderType == FolderLinkType.LinkOnly,
+            linkItem.FileSize,
+            linkItem.CreatedDate,
+            linkItem.ModifiedDate,
+            linkItem);
+    }
+
+    /// <summary>
+    /// Finds the TreeViewNode for a given LinkItem by searching the tree.
+    /// </summary>
+    private TreeViewNode? FindNodeForLinkItem(LinkItem linkItem)
+    {
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            var found = FindNodeForLinkItemRecursive(rootNode, linkItem);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private TreeViewNode? FindNodeForLinkItemRecursive(TreeViewNode node, LinkItem linkItem)
+    {
+        if (node.Content == linkItem)
+        {
+            return node;
+        }
+
+        foreach (var child in node.Children)
+        {
+            var found = FindNodeForLinkItemRecursive(child, linkItem);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     private async void AddBookmarkButton_Click(object sender, RoutedEventArgs e)
     {
         var categories = LinksTreeView.RootNodes

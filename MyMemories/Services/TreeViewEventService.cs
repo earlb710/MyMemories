@@ -20,11 +20,20 @@ public class TreeViewEventService
         _linkSelectionService = linkSelectionService;
     }
 
-    public async Task HandleSelectionChangedAsync(TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus, Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null)
+    public async Task HandleSelectionChangedAsync(
+        TreeViewNode node, 
+        Action hideAllViewers, 
+        Action showDetailsViewers, 
+        Action<FileViewerType> showViewer, 
+        Action<string> setStatus, 
+        Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null,
+        Func<CategoryItem, TreeViewNode, Task>? refreshUrlStateCallback = null,
+        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null)
     {
         if (node.Content is CategoryItem category)
         {
-            await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus, refreshBookmarksCallback);
+            await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus, 
+                refreshBookmarksCallback, refreshUrlStateCallback, syncBookmarksCallback);
         }
         else if (node.Content is LinkItem linkItem)
         {
@@ -32,7 +41,15 @@ public class TreeViewEventService
         }
     }
 
-    private async Task HandleCategorySelectionAsync(CategoryItem category, TreeViewNode node, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus, Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null)
+    private async Task HandleCategorySelectionAsync(
+        CategoryItem category, 
+        TreeViewNode node, 
+        Action hideAllViewers, 
+        Action showDetailsViewers, 
+        Action<string> setStatus, 
+        Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null,
+        Func<CategoryItem, TreeViewNode, Task>? refreshUrlStateCallback = null,
+        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null)
     {
         hideAllViewers();
         
@@ -41,7 +58,17 @@ public class TreeViewEventService
             ? async () => await refreshBookmarksCallback(category, node)
             : null;
         
-        await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks);
+        // Create URL state refresh callback for bookmark categories
+        Func<Task>? refreshUrlState = category.IsBookmarkCategory && refreshUrlStateCallback != null
+            ? async () => await refreshUrlStateCallback(category, node)
+            : null;
+        
+        // Create sync callback for bookmark import categories
+        Func<Task>? syncBookmarks = category.IsBookmarkImport && syncBookmarksCallback != null
+            ? async () => await syncBookmarksCallback(category, node)
+            : null;
+        
+        await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);

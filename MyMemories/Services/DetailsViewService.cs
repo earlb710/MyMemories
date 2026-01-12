@@ -21,18 +21,31 @@ public class DetailsViewService
     private CategoryDetailsBuilder? _categoryBuilder;
     private LinkDetailsBuilder? _linkBuilder;
 
+    /// <summary>
+    /// Event raised when the user requests to update a URL to its redirect target.
+    /// </summary>
+    public event Action<LinkItem>? UpdateUrlFromRedirectRequested;
+
     public DetailsViewService(StackPanel detailsPanel)
     {
         _detailsPanel = detailsPanel;
         _urlStatusBuilder = new UrlStatusBannerBuilder(detailsPanel);
+        _urlStatusBuilder.UpdateUrlRequested += OnUpdateUrlFromRedirect;
         _categoryBuilder = new CategoryDetailsBuilder(detailsPanel);
         _linkBuilder = new LinkDetailsBuilder(detailsPanel);
+    }
+
+    private void OnUpdateUrlFromRedirect(LinkItem linkItem)
+    {
+        UpdateUrlFromRedirectRequested?.Invoke(linkItem);
     }
 
     public void SetHeaderPanel(StackPanel headerPanel)
     {
         _headerPanel = headerPanel;
         _headerBuilder = new HeaderPanelBuilder(headerPanel);
+        // Wire up the redirect update event from the header builder
+        _headerBuilder.UpdateUrlFromRedirectRequested += OnUpdateUrlFromRedirect;
     }
 
     /// <summary>
@@ -64,20 +77,27 @@ public class DetailsViewService
     }
 
     /// <summary>
-    /// Shows URL status banner at the top of the details panel for non-accessible URLs.
+    /// Shows URL status banner at the top of the details panel for non-accessible URLs or redirects.
+    /// Note: For web URLs, use ShowLinkHeader with linkItem to show redirect button in header instead.
     /// </summary>
     public void ShowUrlStatusBanner(LinkItem linkItem)
     {
-        _urlStatusBuilder?.ShowUrlStatusBanner(linkItem);
+        // Only show error/not found banners in the details panel, not redirect banners
+        // Redirect handling is now done via the header button
+        if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
+        {
+            _urlStatusBuilder?.ShowUrlStatusBanner(linkItem);
+        }
+        // Don't show redirect banner here - it's handled in the header
     }
 
     /// <summary>
     /// Shows category details.
     /// </summary>
     public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, 
-        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null)
+        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null)
     {
-        return await _categoryBuilder!.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks, onRefreshUrlState);
+        return await _categoryBuilder!.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks, onRefreshUrlState, onSyncBookmarks);
     }
 
     /// <summary>

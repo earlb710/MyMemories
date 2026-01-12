@@ -87,6 +87,304 @@ public class BookmarkImporterService
     }
 
     /// <summary>
+    /// Gets the folder structure from a browser's bookmarks file for selective import.
+    /// </summary>
+    public async Task<BrowserFolderStructure?> GetBrowserFolderStructureAsync(string bookmarksPath)
+    {
+        try
+        {
+            if (IsFileLocked(bookmarksPath))
+            {
+                return null;
+            }
+
+            var json = await File.ReadAllTextAsync(bookmarksPath);
+            var bookmarkFile = JsonSerializer.Deserialize<ChromeBookmarkFile>(json);
+
+            if (bookmarkFile?.roots == null)
+            {
+                return null;
+            }
+
+            var structure = new BrowserFolderStructure
+            {
+                SourcePath = bookmarksPath
+            };
+
+            // Parse bookmark bar
+            if (bookmarkFile.roots.bookmark_bar != null)
+            {
+                var barFolder = ParseFolderNode(bookmarkFile.roots.bookmark_bar, "Bookmarks Bar", "");
+                structure.RootFolders.Add(barFolder);
+            }
+
+            // Parse other bookmarks
+            if (bookmarkFile.roots.other != null)
+            {
+                var otherFolder = ParseFolderNode(bookmarkFile.roots.other, "Other Bookmarks", "");
+                structure.RootFolders.Add(otherFolder);
+            }
+
+            // Parse synced/mobile bookmarks
+            if (bookmarkFile.roots.synced != null)
+            {
+                var syncedFolder = ParseFolderNode(bookmarkFile.roots.synced, "Mobile Bookmarks", "");
+                structure.RootFolders.Add(syncedFolder);
+            }
+
+            // Extract unique domains
+            ExtractDomainsFromFolders(structure.RootFolders, structure.UniqueDomains);
+
+            return structure;
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("BookmarkImporterService.GetBrowserFolderStructureAsync", 
+                "Failed to parse folder structure", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses a bookmark folder node into a BrowserFolder structure.
+    /// </summary>
+    private BrowserFolder ParseFolderNode(ChromeBookmarkNode node, string name, string parentPath)
+    {
+        var currentPath = string.IsNullOrEmpty(parentPath) ? name : $"{parentPath} > {name}";
+        
+        var folder = new BrowserFolder
+        {
+            Name = name,
+            FullPath = currentPath
+        };
+
+        if (node.children != null)
+        {
+            foreach (var child in node.children)
+            {
+                if (child.type == "url")
+                {
+                    folder.BookmarkCount++;
+                    folder.TotalBookmarkCount++;
+                }
+                else if (child.type == "folder")
+                {
+                    var subFolder = ParseFolderNode(child, child.name ?? "Unnamed", currentPath);
+                    folder.SubFolders.Add(subFolder);
+                    folder.TotalBookmarkCount += subFolder.TotalBookmarkCount;
+                }
+            }
+        }
+
+        return folder;
+    }
+
+    /// <summary>
+    /// Extracts unique domains from bookmark folders.
+    /// </summary>
+    private void ExtractDomainsFromFolders(List<BrowserFolder> folders, HashSet<string> domains)
+    {
+        // We need to re-parse to get URLs - this is a separate pass
+    }
+
+    /// <summary>
+    /// Gets all unique domains from a browser's bookmarks.
+    /// </summary>
+    public async Task<List<string>> GetUniqueDomains(string bookmarksPath)
+    {
+        var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            if (IsFileLocked(bookmarksPath))
+            {
+                return domains.ToList();
+            }
+
+            var json = await File.ReadAllTextAsync(bookmarksPath);
+            var bookmarkFile = JsonSerializer.Deserialize<ChromeBookmarkFile>(json);
+
+            if (bookmarkFile?.roots == null)
+            {
+                return domains.ToList();
+            }
+
+            // Collect domains from all root folders
+            if (bookmarkFile.roots.bookmark_bar != null)
+                CollectDomainsFromNode(bookmarkFile.roots.bookmark_bar, domains);
+            if (bookmarkFile.roots.other != null)
+                CollectDomainsFromNode(bookmarkFile.roots.other, domains);
+            if (bookmarkFile.roots.synced != null)
+                CollectDomainsFromNode(bookmarkFile.roots.synced, domains);
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("BookmarkImporterService.GetUniqueDomains", 
+                "Failed to extract domains", ex);
+        }
+
+        return domains.OrderBy(d => d).ToList();
+    }
+
+    /// <summary>
+    /// Collects unique domains from a bookmark node recursively.
+    /// </summary>
+    private void CollectDomainsFromNode(ChromeBookmarkNode node, HashSet<string> domains)
+    {
+        if (node.children == null)
+            return;
+
+        foreach (var child in node.children)
+        {
+            if (child.type == "url" && !string.IsNullOrEmpty(child.url))
+            {
+                try
+                {
+                    var uri = new Uri(child.url);
+                    if (uri.Scheme == "http" || uri.Scheme == "https")
+                    {
+                        // Get domain without www prefix
+                        var host = uri.Host;
+                        if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                            host = host.Substring(4);
+                        domains.Add(host);
+                    }
+                }
+                catch
+                {
+                    // Invalid URL, skip
+                }
+            }
+            else if (child.type == "folder")
+            {
+                CollectDomainsFromNode(child, domains);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Detects changes between browser bookmarks and existing MyMemories links.
+    /// Returns a sync result showing new, modified, and deleted bookmarks.
+    /// </summary>
+    public async Task<BookmarkSyncResult> DetectChangesAsync(
+        string bookmarksPath, 
+        IEnumerable<LinkItem> existingLinks,
+        ImportOptions? options = null)
+    {
+        options ??= new ImportOptions();
+        var result = new BookmarkSyncResult { SourcePath = bookmarksPath };
+
+        try
+        {
+            // Import current browser bookmarks
+            var importResult = await ImportBookmarksAsync(bookmarksPath, options);
+            
+            if (!importResult.IsSuccess)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = importResult.ErrorMessage;
+                return result;
+            }
+
+            // Build lookup of existing URLs
+            var existingUrls = existingLinks
+                .Where(l => !l.IsDirectory && IsWebUrl(l.Url))
+                .ToDictionary(l => NormalizeUrl(l.Url), l => l, StringComparer.OrdinalIgnoreCase);
+
+            // Build lookup of browser bookmarks
+            var browserUrls = importResult.Bookmarks
+                .ToDictionary(b => NormalizeUrl(b.Url), b => b, StringComparer.OrdinalIgnoreCase);
+
+            // Find new bookmarks (in browser but not in MyMemories)
+            foreach (var bookmark in importResult.Bookmarks)
+            {
+                var normalizedUrl = NormalizeUrl(bookmark.Url);
+                if (!existingUrls.ContainsKey(normalizedUrl))
+                {
+                    result.NewBookmarks.Add(bookmark);
+                }
+            }
+
+            // Find deleted bookmarks (in MyMemories but not in browser)
+            foreach (var link in existingLinks.Where(l => !l.IsDirectory && IsWebUrl(l.Url)))
+            {
+                var normalizedUrl = NormalizeUrl(link.Url);
+                if (!browserUrls.ContainsKey(normalizedUrl))
+                {
+                    result.DeletedBookmarks.Add(new BookmarkItem
+                    {
+                        Name = link.Title,
+                        Url = link.Url,
+                        FolderPath = link.CategoryPath,
+                        DateAdded = link.CreatedDate,
+                        DateModified = link.ModifiedDate
+                    });
+                }
+            }
+
+            // Find modified bookmarks (same URL but different title)
+            foreach (var bookmark in importResult.Bookmarks)
+            {
+                var normalizedUrl = NormalizeUrl(bookmark.Url);
+                if (existingUrls.TryGetValue(normalizedUrl, out var existingLink))
+                {
+                    if (!string.Equals(bookmark.Name, existingLink.Title, StringComparison.Ordinal))
+                    {
+                        result.ModifiedBookmarks.Add((bookmark, existingLink));
+                    }
+                }
+            }
+
+            result.TotalBrowserBookmarks = importResult.Bookmarks.Count;
+            result.TotalExistingLinks = existingLinks.Count(l => !l.IsDirectory && IsWebUrl(l.Url));
+            result.IsSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            result.IsSuccess = false;
+            result.ErrorMessage = $"Error detecting changes: {ex.Message}";
+            LogUtilities.LogError("BookmarkImporterService.DetectChangesAsync", 
+                "Failed to detect changes", ex);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Normalizes a URL for comparison (removes trailing slash, normalizes scheme).
+    /// </summary>
+    private string NormalizeUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return string.Empty;
+
+        try
+        {
+            var uri = new Uri(url);
+            var normalized = $"{uri.Scheme}://{uri.Host}{uri.AbsolutePath}";
+            if (!string.IsNullOrEmpty(uri.Query))
+                normalized += uri.Query;
+            return normalized.TrimEnd('/').ToLowerInvariant();
+        }
+        catch
+        {
+            return url.TrimEnd('/').ToLowerInvariant();
+        }
+    }
+
+    /// <summary>
+    /// Checks if a URL is a web URL (http/https).
+    /// </summary>
+    private static bool IsWebUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        return url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+               url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Imports bookmarks from a Chrome-based browser.
     /// </summary>
     public async Task<BookmarkImportResult> ImportBookmarksAsync(string bookmarksPath, ImportOptions? options = null)
@@ -159,6 +457,7 @@ public class BookmarkImporterService
 
     /// <summary>
     /// Recursively parses a bookmark folder.
+    /// Respects excluded folders, domain filter, and folder filter options.
     /// </summary>
     private void ParseBookmarkFolder(ChromeBookmarkNode folder, List<BookmarkItem> bookmarks, 
         string parentPath, ImportOptions options, int depth = 0)
@@ -170,9 +469,48 @@ public class BookmarkImporterService
         {
             if (child.type == "url")
             {
-                // Skip if URL doesn't match filter
+                // Skip if URL doesn't match URL filter
                 if (options.UrlFilter != null && !child.url?.Contains(options.UrlFilter, StringComparison.OrdinalIgnoreCase) == true)
                     continue;
+
+                // Skip if URL doesn't match domain filter
+                if (!string.IsNullOrEmpty(options.DomainFilter))
+                {
+                    if (!MatchesDomainFilter(child.url, options.DomainFilter))
+                        continue;
+                }
+
+                // Skip if URL doesn't match any of the multi-domain filters
+                if (options.DomainFilters.Count > 0)
+                {
+                    if (!options.DomainFilters.Any(df => MatchesDomainFilter(child.url, df)))
+                        continue;
+                }
+
+                // Skip if folder path doesn't match folder filter
+                if (!string.IsNullOrEmpty(options.FolderFilter))
+                {
+                    if (!parentPath.Contains(options.FolderFilter, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                // Skip if folder is not in selected folders list
+                if (options.SelectedFolders.Count > 0)
+                {
+                    var matchesSelectedFolder = options.SelectedFolders.Any(sf => 
+                        parentPath.StartsWith(sf, StringComparison.OrdinalIgnoreCase) ||
+                        sf.StartsWith(parentPath, StringComparison.OrdinalIgnoreCase));
+                    if (!matchesSelectedFolder)
+                        continue;
+                }
+
+                // Skip if bookmark is older than the date filter
+                if (options.DateAddedAfter.HasValue && child.date_added_value.HasValue)
+                {
+                    var dateAdded = DateTimeOffset.FromUnixTimeMilliseconds(child.date_added_value.Value / 1000).DateTime;
+                    if (dateAdded < options.DateAddedAfter.Value)
+                        continue;
+                }
 
                 bookmarks.Add(new BookmarkItem
                 {
@@ -189,12 +527,41 @@ public class BookmarkImporterService
             }
             else if (child.type == "folder" && options.IncludeFolders)
             {
+                // Skip excluded folders (e.g., "MyMemories" export folder)
+                if (options.ExcludedFolders.Any(ef => 
+                    string.Equals(child.name, ef, StringComparison.OrdinalIgnoreCase)))
+                {
+                    LogUtilities.LogInfo("BookmarkImporterService.ParseBookmarkFolder",
+                        $"Skipping excluded folder: '{child.name}'");
+                    continue;
+                }
+
                 var newPath = string.IsNullOrEmpty(parentPath) 
                     ? child.name 
                     : $"{parentPath} > {child.name}";
                 
                 ParseBookmarkFolder(child, bookmarks, newPath, options, depth + 1);
             }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a URL matches the domain filter.
+    /// </summary>
+    private bool MatchesDomainFilter(string? url, string domainFilter)
+    {
+        if (string.IsNullOrEmpty(url))
+            return false;
+
+        try
+        {
+            var uri = new Uri(url);
+            return uri.Host.Contains(domainFilter, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // If URL parsing fails, do simple string match
+            return url.Contains(domainFilter, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -360,53 +727,89 @@ public class ImportOptions
     public bool IncludeFolders { get; set; } = true;
     public string? UrlFilter { get; set; }
     public bool SkipDuplicates { get; set; } = true;
+    
+    /// <summary>
+    /// Folder names to exclude during import (e.g., "MyMemories" export folder).
+    /// </summary>
+    public List<string> ExcludedFolders { get; set; } = new() { "MyMemories" };
+    
+    /// <summary>
+    /// Domain filter - only import URLs containing this domain (e.g., "github.com").
+    /// </summary>
+    public string? DomainFilter { get; set; }
+    
+    /// <summary>
+    /// Multiple domain filters - only import URLs matching any of these domains.
+    /// </summary>
+    public List<string> DomainFilters { get; set; } = new();
+    
+    /// <summary>
+    /// Folder path filter - only import from folders matching this path (e.g., "Bookmarks Bar > Dev").
+    /// </summary>
+    public string? FolderFilter { get; set; }
+    
+    /// <summary>
+    /// Selected folder paths - only import from these specific folders.
+    /// </summary>
+    public List<string> SelectedFolders { get; set; } = new();
+    
+    /// <summary>
+    /// Only import bookmarks added after this date.
+    /// </summary>
+    public DateTime? DateAddedAfter { get; set; }
 }
 
 /// <summary>
-/// Bookmark item.
+/// Represents the folder structure of a browser's bookmarks.
 /// </summary>
-public class BookmarkItem
+public class BrowserFolderStructure
+{
+    public string SourcePath { get; set; } = string.Empty;
+    public List<BrowserFolder> RootFolders { get; set; } = new();
+    public HashSet<string> UniqueDomains { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Represents a folder in the browser's bookmarks.
+/// </summary>
+public class BrowserFolder
 {
     public string Name { get; set; } = string.Empty;
-    public string Url { get; set; } = string.Empty;
-    public string FolderPath { get; set; } = string.Empty;
-    public DateTime DateAdded { get; set; }
-    public DateTime DateModified { get; set; }
+    public string FullPath { get; set; } = string.Empty;
+    public int BookmarkCount { get; set; }
+    public int TotalBookmarkCount { get; set; }
+    public List<BrowserFolder> SubFolders { get; set; } = new();
+    public bool IsSelected { get; set; } = true;
+
+    public override string ToString() => $"{Name} ({TotalBookmarkCount} bookmarks)";
 }
 
-// Chrome Bookmarks JSON Structure
-public class ChromeBookmarkFile
+/// <summary>
+/// Result of bookmark sync detection.
+/// </summary>
+public class BookmarkSyncResult
 {
-    public int version { get; set; }
-    public string? checksum { get; set; }
-    public ChromeBookmarkRoots? roots { get; set; }
-}
-
-public class ChromeBookmarkRoots
-{
-    public ChromeBookmarkNode? bookmark_bar { get; set; }
-    public ChromeBookmarkNode? other { get; set; }
-    public ChromeBookmarkNode? synced { get; set; }
-}
-
-public class ChromeBookmarkNode
-{
-    [JsonPropertyName("date_added")]
-    public string? date_added_str { get; set; }
+    public bool IsSuccess { get; set; }
+    public string? ErrorMessage { get; set; }
+    public string SourcePath { get; set; } = string.Empty;
     
-    [JsonPropertyName("date_modified")]
-    public string? date_modified_str { get; set; }
+    /// <summary>
+    /// Bookmarks in browser that don't exist in MyMemories.
+    /// </summary>
+    public List<BookmarkItem> NewBookmarks { get; set; } = new();
     
-    // Computed property that converts string to long for reading
-    [JsonIgnore]
-    public long? date_added_value => long.TryParse(date_added_str, out var val) ? val : null;
+    /// <summary>
+    /// Bookmarks in MyMemories that don't exist in browser.
+    /// </summary>
+    public List<BookmarkItem> DeletedBookmarks { get; set; } = new();
     
-    [JsonIgnore]
-    public long? date_modified_value => long.TryParse(date_modified_str, out var val) ? val : null;
+    /// <summary>
+    /// Bookmarks with same URL but different title (browser bookmark, existing link).
+    /// </summary>
+    public List<(BookmarkItem BrowserBookmark, LinkItem ExistingLink)> ModifiedBookmarks { get; set; } = new();
     
-    public string? id { get; set; }
-    public string? name { get; set; }
-    public string? type { get; set; }
-    public string? url { get; set; }
-    public List<ChromeBookmarkNode>? children { get; set; }
+    public int TotalBrowserBookmarks { get; set; }
+    public int TotalExistingLinks { get; set; }
+    
+    public bool HasChanges => NewBookmarks.Count > 0 || DeletedBookmarks.Count > 0 || ModifiedBookmarks.Count > 0;
 }

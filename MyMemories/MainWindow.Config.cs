@@ -12,8 +12,6 @@ namespace MyMemories;
 
 public sealed partial class MainWindow
 {
-    private FolderPickerService? _folderPickerService;
-
     // Menu click handlers - delegate to extracted methods in partial classes
     private async void MenuConfig_DirectorySetup_Click(object sender, RoutedEventArgs e)
     {
@@ -35,6 +33,11 @@ public sealed partial class MainWindow
         await ShowTagManagementDialogAsync();
     }
 
+    private async void MenuConfig_RatingManagement_Click(object sender, RoutedEventArgs e)
+    {
+        await ShowRatingManagementDialogAsync();
+    }
+
     private async Task ShowTagManagementDialogAsync()
     {
         // _tagService is initialized during app startup in InitializeAsync
@@ -45,6 +48,19 @@ public sealed partial class MainWindow
         }
 
         var dialog = new TagManagementDialog(Content.XamlRoot, _tagService);
+        await dialog.RefreshAndShowDialogAsync();
+    }
+
+    private async Task ShowRatingManagementDialogAsync()
+    {
+        // _ratingService is initialized during app startup in InitializeAsync
+        if (_ratingService == null)
+        {
+            await ShowErrorDialogAsync("Error", "Rating service not initialized.");
+            return;
+        }
+
+        var dialog = new RatingManagementDialog(Content.XamlRoot, _ratingService);
         await dialog.RefreshAndShowDialogAsync();
     }
 

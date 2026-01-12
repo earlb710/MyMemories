@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -418,8 +417,6 @@ public sealed partial class MainWindow
                 catch (InvalidDataException)
                 {
                     // Fallback to SharpZipLib for unsupported compression methods or encrypted zips
-                    Debug.WriteLine("[GetManifestRootCategoryAsync] Using SharpZipLib fallback");
-                    
                     try
                     {
                         using var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipFilePath);
@@ -448,17 +445,15 @@ public sealed partial class MainWindow
 
                         return null;
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Debug.WriteLine($"[GetManifestRootCategoryAsync] SharpZipLib also failed: {ex.Message}");
                         return null;
                     }
                 }
             });
         }
-        catch (Exception ex)
+        catch
         {
-            Debug.WriteLine($"[GetManifestRootCategoryAsync] Error: {ex.Message}");
             return null;
         }
     }
@@ -470,33 +465,22 @@ public sealed partial class MainWindow
     {
         try
         {
-            Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Starting for zip: {zipLinkItem.Url}");
-            
             // Check if zip is password-protected and get password if needed
             string? zipPassword = null;
             if (zipLinkItem.IsZipPasswordProtected)
             {
-                Debug.WriteLine("[RefreshArchiveFromManifestAsync] Zip is password-protected, attempting to get password");
-                
                 // First try to get password from root category (global or category password)
                 var rootCategoryNode = GetRootCategoryNode(zipLinkNode);
                 var rootCategory = rootCategoryNode?.Content as CategoryItem;
                 
                 if (rootCategory?.PasswordProtection != PasswordProtectionType.None)
                 {
-                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Root category has password protection: {rootCategory.PasswordProtection}");
-                    
                     // Try to get the password from the service (which has it cached)
                     var passwordService = new PasswordDialogService(Content.XamlRoot, _categoryService!);
                     zipPassword = await passwordService.GetCategoryPasswordAsync(rootCategory);
                     
-                    if (!string.IsNullOrEmpty(zipPassword))
+                    if (string.IsNullOrEmpty(zipPassword))
                     {
-                        Debug.WriteLine("[RefreshArchiveFromManifestAsync] Successfully retrieved password from category");
-                    }
-                    else
-                    {
-                        Debug.WriteLine("[RefreshArchiveFromManifestAsync] Failed to retrieve password from category");
                         StatusText.Text = "Archive refresh cancelled - password required";
                         return;
                     }
@@ -505,8 +489,6 @@ public sealed partial class MainWindow
                 {
                     // Category has no password protection, but zip is password-protected
                     // This means it has its own password - prompt for it
-                    Debug.WriteLine("[RefreshArchiveFromManifestAsync] Zip has own password, prompting user");
-                    
                     var passwordDialog = new ContentDialog
                     {
                         Title = "Password Required",
@@ -555,8 +537,6 @@ public sealed partial class MainWindow
             // Get the root category from the manifest (with password if needed)
             var rootCategoryName = await GetManifestRootCategoryAsync(zipLinkItem.Url, zipPassword);
             
-            Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Got root category name: '{rootCategoryName ?? "(null)"}'");
-            
             if (string.IsNullOrEmpty(rootCategoryName))
             {
                 var errorDialog = new ContentDialog
@@ -579,13 +559,11 @@ public sealed partial class MainWindow
             if (zipLinkNode.Parent?.Content is CategoryItem zipParentCategory && zipParentCategory.Name == rootCategoryName)
             {
                 manifestCategoryNode = zipLinkNode.Parent;
-                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Found manifest category as parent: {zipParentCategory.Name}");
             }
             else
             {
                 // Search the entire tree for the category
                 manifestCategoryNode = FindCategoryByName(rootCategoryName);
-                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Searched tree for category '{rootCategoryName}': {(manifestCategoryNode != null ? "Found" : "Not Found")}");
             }
 
             if (manifestCategoryNode == null)
@@ -714,7 +692,7 @@ public sealed partial class MainWindow
 
             // Re-catalog the updated zip with retry logic (reduced retries since file is properly closed)
             int maxRetries = 3;
-            int retryDelay = 500; // Reduced from 2000ms
+            int retryDelay = 500;
             Exception? lastException = null;
             
             for (int attempt = 0; attempt < maxRetries; attempt++)
@@ -723,7 +701,6 @@ public sealed partial class MainWindow
                 {
                     if (attempt > 0)
                     {
-                        Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Retry attempt {attempt + 1} for cataloging");
                         StatusText.Text = $"Retrying catalog creation (attempt {attempt + 1}/{maxRetries})...";
                         
                         // Force GC before each retry
@@ -741,28 +718,24 @@ public sealed partial class MainWindow
                 catch (ICSharpCode.SharpZipLib.Zip.ZipException ex) when (ex.Message.Contains("Cannot find central directory") && attempt < maxRetries - 1)
                 {
                     // Zip file not fully written yet, retry
-                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Zip not ready yet (attempt {attempt + 1}): {ex.Message}");
                     lastException = ex;
                     continue;
                 }
                 catch (InvalidDataException ex) when (attempt < maxRetries - 1)
                 {
                     // Might be temporary file corruption or file still being written, retry
-                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Invalid data (attempt {attempt + 1}), retrying: {ex.Message}");
                     lastException = ex;
                     continue;
                 }
                 catch (IOException ex) when (ex.Message.Contains("being used by another process") && attempt < maxRetries - 1)
                 {
                     // File is still locked, retry
-                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] File locked (attempt {attempt + 1}), retrying: {ex.Message}");
                     lastException = ex;
                     continue;
                 }
                 catch (Exception ex)
                 {
                     // Other errors, don't retry
-                    Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Non-retryable error: {ex.GetType().Name} - {ex.Message}");
                     lastException = ex;
                     break;
                 }
@@ -771,8 +744,6 @@ public sealed partial class MainWindow
             if (lastException != null)
             {
                 // All retries failed
-                Debug.WriteLine($"[RefreshArchiveFromManifestAsync] All {maxRetries} attempts failed. Last error: {lastException.Message}");
-                
                 if (lastException is ICSharpCode.SharpZipLib.Zip.ZipException || 
                     lastException is InvalidDataException ||
                     (lastException is IOException && lastException.Message.Contains("being used")))
@@ -847,7 +818,6 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[RefreshArchiveFromManifestAsync] Error: {ex}");
             StatusText.Text = $"Error refreshing archive: {ex.Message}";
 
             var errorDialog = new ContentDialog
@@ -911,12 +881,6 @@ public sealed partial class MainWindow
         var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
 
         // Create new zip with manifest using SharpZipLib for maximum compatibility
-        Debug.WriteLine($"[ReZipCategoryAsync] Creating zip file: {zipFilePath}");
-        Debug.WriteLine($"[ReZipCategoryAsync] Folder paths to zip: {string.Join(", ", folderPaths)}");
-        Debug.WriteLine($"[ReZipCategoryAsync] Manifest content length: {manifestContent.Length} chars");
-        
-        int filesAdded = 0;
-        
         await Task.Run(() =>
         {
             // Use explicit file stream with no buffering for immediate write
@@ -946,7 +910,6 @@ public sealed partial class MainWindow
 
             // Create and add the manifest file
             var manifestBytes = Encoding.UTF8.GetBytes(manifestContent);
-            Debug.WriteLine($"[ReZipCategoryAsync] Adding manifest file ({manifestBytes.Length} bytes)");
             
             var manifestEntry = new ICSharpCode.SharpZipLib.Zip.ZipEntry("_MANIFEST.txt")
             {
@@ -963,21 +926,14 @@ public sealed partial class MainWindow
             zipOutputStream.PutNextEntry(manifestEntry);
             zipOutputStream.Write(manifestBytes, 0, manifestBytes.Length);
             zipOutputStream.CloseEntry();
-            filesAdded++;
 
             // Add all folder contents
             foreach (var folderPath in folderPaths)
             {
-                Debug.WriteLine($"[ReZipCategoryAsync] Processing folder: {folderPath}");
-                
                 if (!Directory.Exists(folderPath))
-                {
-                    Debug.WriteLine($"[ReZipCategoryAsync] Folder does not exist: {folderPath}");
                     continue;
-                }
 
                 var files = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories);
-                Debug.WriteLine($"[ReZipCategoryAsync] Found {files.Length} files in folder");
                 var folderName = new DirectoryInfo(folderPath).Name;
 
                 foreach (var file in files)
@@ -1009,41 +965,28 @@ public sealed partial class MainWindow
                         }
                         
                         zipOutputStream.CloseEntry();
-                        filesAdded++;
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        Debug.WriteLine($"[ReZipCategoryAsync] Error adding file {file}: {ex.Message}");
                         // Continue with other files
                     }
                 }
             }
 
-            Debug.WriteLine($"[ReZipCategoryAsync] Added {filesAdded} entries to zip");
-            
             // CRITICAL: Finish writing the central directory
-            Debug.WriteLine($"[ReZipCategoryAsync] Calling Finish()...");
             zipOutputStream.Finish();
             
             // Flush the zip stream
-            Debug.WriteLine($"[ReZipCategoryAsync] Calling Flush()...");
             zipOutputStream.Flush();
             
             // Close the zip stream (this writes any remaining data)
-            Debug.WriteLine($"[ReZipCategoryAsync] Closing zip stream...");
             zipOutputStream.Close();
             
             // Now flush and close the file stream
-            Debug.WriteLine($"[ReZipCategoryAsync] Flushing file stream...");
             fileStream.Flush(true); // Force flush to disk
             
-            Debug.WriteLine($"[ReZipCategoryAsync] Closing file stream...");
             fileStream.Close();
-            
-            Debug.WriteLine($"[ReZipCategoryAsync] Successfully created zip file: {zipFilePath}");
         });
-        
-        Debug.WriteLine($"[ReZipCategoryAsync] Task.Run completed, checking file...");
         
         // Verify the file was created and is valid
         if (!File.Exists(zipFilePath))
@@ -1052,7 +995,6 @@ public sealed partial class MainWindow
         }
         
         var createdFileInfo = new FileInfo(zipFilePath);
-        Debug.WriteLine($"[ReZipCategoryAsync] Zip file size: {createdFileInfo.Length} bytes");
         
         if (createdFileInfo.Length < 22) // Minimum valid zip file size (empty zip with end of central directory)
         {

@@ -161,11 +161,22 @@ public class TagManagementService
     }
 
     /// <summary>
-    /// Gets a tag by ID.
+    /// Gets a tag by name or ID (for legacy support).
+    /// First tries to match by name (case-insensitive), then by GUID ID.
     /// </summary>
-    public TagItem? GetTag(string tagId)
+    public TagItem? GetTag(string tagNameOrId)
     {
-        return _tagCollection.Tags.Find(t => t.Id == tagId);
+        if (string.IsNullOrEmpty(tagNameOrId))
+            return null;
+            
+        // First try to find by name (case-insensitive)
+        var tagByName = _tagCollection.Tags.Find(t => 
+            string.Equals(t.Name, tagNameOrId, StringComparison.OrdinalIgnoreCase));
+        if (tagByName != null)
+            return tagByName;
+            
+        // Fallback: try to find by ID (legacy GUID support)
+        return _tagCollection.Tags.Find(t => t.Id == tagNameOrId);
     }
 
     /// <summary>
@@ -188,25 +199,26 @@ public class TagManagementService
     }
 
     /// <summary>
-    /// Gets formatted display text for a list of tag IDs.
+    /// Gets formatted display text for a list of tag names.
     /// Format: [tag icon] TagName  [tag icon] TagName2
     /// For use in tooltips and detail views.
+    /// If a tag is not found, displays the raw name.
     /// </summary>
-    public string GetTagDisplayText(IEnumerable<string> tagIds)
+    public string GetTagDisplayText(IEnumerable<string> tagNames)
     {
-        if (tagIds == null || !tagIds.Any())
+        if (tagNames == null || !tagNames.Any())
             return string.Empty;
 
         var sb = new StringBuilder();
-        foreach (var tagId in tagIds)
+        foreach (var tagName in tagNames)
         {
-            var tag = GetTag(tagId);
-            if (tag != null)
-            {
-                if (sb.Length > 0)
-                    sb.Append("  ");
-                sb.Append($"{TagIconGlyph} {tag.Name}");
-            }
+            var tag = GetTag(tagName);
+            if (sb.Length > 0)
+                sb.Append("  ");
+            
+            // Use tag name if found, otherwise show raw name
+            var displayName = tag?.Name ?? tagName;
+            sb.Append($"{TagIconGlyph} {displayName}");
         }
         return sb.ToString();
     }
@@ -214,20 +226,15 @@ public class TagManagementService
     /// <summary>
     /// Gets tag icons only (no names) for tree node display.
     /// Returns one tag icon glyph per tag.
+    /// Includes orphaned tags (those not found in definitions).
     /// </summary>
-    public string GetTagIconsOnly(IEnumerable<string> tagIds)
+    public string GetTagIconsOnly(IEnumerable<string> tagNames)
     {
-        if (tagIds == null || !tagIds.Any())
+        if (tagNames == null || !tagNames.Any())
             return string.Empty;
 
-        int count = 0;
-        foreach (var tagId in tagIds)
-        {
-            if (GetTag(tagId) != null)
-            {
-                count++;
-            }
-        }
+        // Count all tags (including orphaned ones)
+        int count = tagNames.Count();
 
         if (count == 0)
             return string.Empty;
@@ -245,21 +252,27 @@ public class TagManagementService
     }
 
     /// <summary>
-    /// Gets tag information for display (name and color) for a list of tag IDs.
-    /// Returns a list of tuples with (Name, Color) for each valid tag.
+    /// Gets tag information for display (name and color) for a list of tag names.
+    /// Returns a list of tuples with (Name, Color) for each tag.
+    /// Orphaned tags use a default gray color.
     /// </summary>
-    public List<(string Name, string Color)> GetTagsInfo(IEnumerable<string> tagIds)
+    public List<(string Name, string Color)> GetTagsInfo(IEnumerable<string> tagNames)
     {
         var result = new List<(string Name, string Color)>();
-        if (tagIds == null)
+        if (tagNames == null)
             return result;
 
-        foreach (var tagId in tagIds)
+        foreach (var tagName in tagNames)
         {
-            var tag = GetTag(tagId);
+            var tag = GetTag(tagName);
             if (tag != null)
             {
                 result.Add((tag.Name, tag.Color));
+            }
+            else
+            {
+                // Orphaned tag - use raw name and gray color
+                result.Add((tagName, "#808080"));
             }
         }
         return result;
@@ -268,8 +281,9 @@ public class TagManagementService
     /// <summary>
     /// Creates a styled StackPanel with tag badges for display in UI.
     /// Each tag shows: [tag icon] TagName with tag color background and white text.
+    /// Orphaned tags are displayed with gray background.
     /// </summary>
-    public StackPanel CreateTagBadgesPanel(IEnumerable<string> tagIds, double fontSize = 11, double spacing = 6)
+    public StackPanel CreateTagBadgesPanel(IEnumerable<string> tagNames, double fontSize = 11, double spacing = 6)
     {
         var panel = new StackPanel
         {
@@ -277,28 +291,26 @@ public class TagManagementService
             Spacing = spacing
         };
 
-        if (tagIds == null)
+        if (tagNames == null)
             return panel;
 
-        foreach (var tagId in tagIds)
+        foreach (var tagName in tagNames)
         {
-            var tag = GetTag(tagId);
-            if (tag != null)
-            {
-                var badge = CreateTagBadge(tag, fontSize);
-                panel.Children.Add(badge);
-            }
+            var tag = GetTag(tagName);
+            var badge = CreateTagBadgeWithFallback(tag, tagName, fontSize);
+            panel.Children.Add(badge);
         }
 
         return panel;
     }
 
     /// <summary>
-    /// Creates a single tag badge with icon, name, colored background, and white text.
+    /// Creates a tag badge, using the raw tag name if tag definition is not found.
     /// </summary>
-    public Border CreateTagBadge(TagItem tag, double fontSize = 11)
+    private Border CreateTagBadgeWithFallback(TagItem? tag, string tagName, double fontSize = 11)
     {
-        var backgroundColor = ParseColor(tag.Color);
+        var displayName = tag?.Name ?? tagName;
+        var backgroundColor = tag != null ? ParseColor(tag.Color) : Colors.Gray;
         
         var contentPanel = new StackPanel
         {
@@ -315,7 +327,7 @@ public class TagManagementService
 
         contentPanel.Children.Add(new TextBlock
         {
-            Text = tag.Name,
+            Text = displayName,
             FontSize = fontSize,
             Foreground = new SolidColorBrush(Colors.White),
             VerticalAlignment = VerticalAlignment.Center
@@ -331,20 +343,29 @@ public class TagManagementService
     }
 
     /// <summary>
-    /// Creates a tag badge from a tag ID.
+    /// Creates a single tag badge with icon, name, colored background, and white text.
     /// </summary>
-    public Border? CreateTagBadgeById(string tagId, double fontSize = 11)
+    public Border CreateTagBadge(TagItem tag, double fontSize = 11)
     {
-        var tag = GetTag(tagId);
-        return tag != null ? CreateTagBadge(tag, fontSize) : null;
+        return CreateTagBadgeWithFallback(tag, tag.Name, fontSize);
+    }
+
+    /// <summary>
+    /// Creates a tag badge from a tag name or ID.
+    /// </summary>
+    public Border? CreateTagBadgeById(string tagNameOrId, double fontSize = 11)
+    {
+        var tag = GetTag(tagNameOrId);
+        return CreateTagBadgeWithFallback(tag, tagNameOrId, fontSize);
     }
 
     /// <summary>
     /// Creates a styled StackPanel with small colored tag icon badges for tree node display.
     /// Each tag shows only the icon with the tag's background color.
     /// Limited to 3 visible tags, with a "+N" indicator for additional tags.
+    /// Orphaned tags are shown with gray background.
     /// </summary>
-    public StackPanel CreateTagIconsPanel(IEnumerable<string> tagIds, double iconSize = 10, double spacing = 2)
+    public StackPanel CreateTagIconsPanel(IEnumerable<string> tagNames, double iconSize = 10, double spacing = 2)
     {
         var panel = new StackPanel
         {
@@ -353,37 +374,29 @@ public class TagManagementService
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        if (tagIds == null)
+        if (tagNames == null)
             return panel;
 
-        var validTags = new List<TagItem>();
-        foreach (var tagId in tagIds)
-        {
-            var tag = GetTag(tagId);
-            if (tag != null)
-            {
-                validTags.Add(tag);
-            }
-        }
-
-        if (validTags.Count == 0)
+        var tagNamesList = tagNames.ToList();
+        if (tagNamesList.Count == 0)
             return panel;
 
         // Show up to 3 tag icons
-        int displayCount = Math.Min(validTags.Count, 3);
+        int displayCount = Math.Min(tagNamesList.Count, 3);
         for (int i = 0; i < displayCount; i++)
         {
-            var tag = validTags[i];
-            var badge = CreateTagIconBadge(tag, iconSize);
+            var tagName = tagNamesList[i];
+            var tag = GetTag(tagName);
+            var badge = CreateTagIconBadgeWithFallback(tag, tagName, iconSize);
             panel.Children.Add(badge);
         }
 
         // Show "+N" for additional tags
-        if (validTags.Count > 3)
+        if (tagNamesList.Count > 3)
         {
             var moreText = new TextBlock
             {
-                Text = $"+{validTags.Count - 3}",
+                Text = $"+{tagNamesList.Count - 3}",
                 FontSize = iconSize,
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = new SolidColorBrush(Colors.Gray),
@@ -396,11 +409,12 @@ public class TagManagementService
     }
 
     /// <summary>
-    /// Creates a single small tag icon badge with colored background for tree node display.
+    /// Creates a tag icon badge, using gray for orphaned tags.
     /// </summary>
-    public Border CreateTagIconBadge(TagItem tag, double iconSize = 10)
+    private Border CreateTagIconBadgeWithFallback(TagItem? tag, string tagName, double iconSize = 10)
     {
-        var backgroundColor = ParseColor(tag.Color);
+        var displayName = tag?.Name ?? tagName;
+        var backgroundColor = tag != null ? ParseColor(tag.Color) : Colors.Gray;
 
         var icon = new FontIcon
         {
@@ -419,9 +433,17 @@ public class TagManagementService
         };
 
         // Add tooltip with tag name
-        ToolTipService.SetToolTip(badge, tag.Name);
+        ToolTipService.SetToolTip(badge, displayName);
 
         return badge;
+    }
+
+    /// <summary>
+    /// Creates a single small tag icon badge with colored background for tree node display.
+    /// </summary>
+    public Border CreateTagIconBadge(TagItem tag, double iconSize = 10)
+    {
+        return CreateTagIconBadgeWithFallback(tag, tag.Name, iconSize);
     }
 
     private static Color ParseColor(string hex)

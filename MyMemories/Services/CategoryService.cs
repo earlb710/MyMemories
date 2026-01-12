@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -262,15 +262,18 @@ public class CategoryService
         var fileName = SanitizeFileName(category.Name);
         var shouldEncrypt = ShouldEncryptCategory(category);
 
+        string savedFilePath;
+
         if (shouldEncrypt)
         {
             await SaveEncryptedCategoryAsync(fileName, json, category);
+            savedFilePath = Path.Combine(_dataFolder, fileName + ".zip.json");
         }
         else
         {
             // Save as regular JSON
-            var filePath = Path.Combine(_dataFolder, fileName + ".json");
-            await File.WriteAllTextAsync(filePath, json);
+            savedFilePath = Path.Combine(_dataFolder, fileName + ".json");
+            await File.WriteAllTextAsync(savedFilePath, json);
 
             // Delete encrypted version if it exists
             var encryptedPath = Path.Combine(_dataFolder, fileName + ".zip.json");
@@ -278,6 +281,12 @@ public class CategoryService
             {
                 File.Delete(encryptedPath);
             }
+        }
+
+        // Backup to configured directories if any
+        if (category.HasBackupDirectories)
+        {
+            await BackupCategoryFileAsync(savedFilePath, category.BackupDirectories);
         }
 
         // Log the save operation if logging is enabled (always log when log directory is set)
@@ -290,6 +299,40 @@ public class CategoryService
                 "Category saved", 
                 $"Links: {linkCount}, Subcategories: {subcategoryCount}",
                 category.IsAuditLoggingEnabled);
+        }
+    }
+
+    /// <summary>
+    /// Backs up the category file to configured backup directories.
+    /// </summary>
+    private async Task BackupCategoryFileAsync(string sourceFilePath, List<string> backupDirectories)
+    {
+        if (backupDirectories.Count == 0 || !File.Exists(sourceFilePath))
+            return;
+
+        try
+        {
+            var summary = await BackupService.Instance.BackupFileAsync(sourceFilePath, backupDirectories);
+
+            if (summary.HasFailures)
+            {
+                foreach (var failure in summary.Results.Where(r => !r.Success))
+                {
+                    LogUtilities.LogError("CategoryService.BackupCategoryFileAsync",
+                        $"Backup failed to {failure.DestinationPath}: {failure.ErrorMessage}", null);
+                }
+            }
+
+            if (summary.SuccessCount > 0)
+            {
+                LogUtilities.LogInfo("CategoryService.BackupCategoryFileAsync",
+                    $"Successfully backed up to {summary.SuccessCount} location(s)");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("CategoryService.BackupCategoryFileAsync",
+                "Error during backup operation", ex);
         }
     }
 
@@ -449,7 +492,7 @@ public class CategoryService
         {
             Name = category.Name,
             Description = string.IsNullOrWhiteSpace(category.Description) ? null : category.Description,
-            Icon = category.Icon == "📁" ? null : category.Icon,
+            Icon = category.Icon == "??" ? null : category.Icon,
             Keywords = string.IsNullOrWhiteSpace(category.Keywords) ? null : category.Keywords,
             TagIds = category.TagIds.Count > 0 ? category.TagIds : null,
             CreatedDate = category.CreatedDate,
@@ -466,6 +509,7 @@ public class CategoryService
             IsBookmarkCategory = category.IsBookmarkCategory,
             IsBookmarkLookup = category.IsBookmarkLookup,
             IsAuditLoggingEnabled = category.IsAuditLoggingEnabled,
+            BackupDirectories = category.BackupDirectories.Count > 0 ? category.BackupDirectories : null,
             Links = null,
             SubCategories = null
         };
@@ -502,6 +546,7 @@ public class CategoryService
                     FileSize = link.FileSize,
                     AutoRefreshCatalog = link.AutoRefreshCatalog ? true : null,
                     IsZipPasswordProtected = link.IsZipPasswordProtected ? true : null,
+                    BackupDirectories = link.BackupDirectories.Count > 0 ? link.BackupDirectories : null,
                     CatalogSortOrder = link.CatalogSortOrder,
                     UrlStatus = link.UrlStatus,
                     UrlLastChecked = link.UrlLastChecked,
@@ -543,6 +588,9 @@ public class CategoryService
                                 // Save subdirectory file count and size for display
                                 CatalogFileCount = catalogEntry.IsDirectory && catalogEntry.CatalogFileCount > 0 ? catalogEntry.CatalogFileCount : null,
                                 CatalogTotalSize = catalogEntry.IsDirectory && catalogEntry.CatalogTotalSize > 0 ? catalogEntry.CatalogTotalSize : null,
+                                // Save tags and ratings for catalog entries
+                                TagIds = catalogEntry.TagIds.Count > 0 ? catalogEntry.TagIds : null,
+                                Ratings = catalogEntry.Ratings.Count > 0 ? catalogEntry.Ratings : null,
                                 CatalogEntries = null
                             };
 
@@ -576,6 +624,9 @@ public class CategoryService
                                             // Save subdirectory file count and size for display
                                             CatalogFileCount = subCatalogEntry.IsDirectory && subCatalogEntry.CatalogFileCount > 0 ? subCatalogEntry.CatalogFileCount : null,
                                             CatalogTotalSize = subCatalogEntry.IsDirectory && subCatalogEntry.CatalogTotalSize > 0 ? subCatalogEntry.CatalogTotalSize : null,
+                                            // Save tags and ratings for sub-catalog entries
+                                            TagIds = subCatalogEntry.TagIds.Count > 0 ? subCatalogEntry.TagIds : null,
+                                            Ratings = subCatalogEntry.Ratings.Count > 0 ? subCatalogEntry.Ratings : null,
                                             CatalogEntries = null  // IMPORTANT: Don't go deeper than 2 levels
                                         });
                                     }
@@ -664,7 +715,7 @@ public class CategoryService
         {
             Name = categoryData.Name,
             Description = categoryData.Description ?? string.Empty,
-            Icon = categoryData.Icon ?? "📁",
+            Icon = categoryData.Icon ?? "??",
             Keywords = categoryData.Keywords ?? string.Empty,
             CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
             ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
@@ -686,6 +737,12 @@ public class CategoryService
         if (categoryData.TagIds != null && categoryData.TagIds.Count > 0)
         {
             categoryItem.TagIds = new List<string>(categoryData.TagIds);
+        }
+        
+        // Copy BackupDirectories if present
+        if (categoryData.BackupDirectories != null && categoryData.BackupDirectories.Count > 0)
+        {
+            categoryItem.BackupDirectories = new List<string>(categoryData.BackupDirectories);
         }
 
         var categoryNode = new TreeViewNode { Content = categoryItem };
@@ -734,6 +791,12 @@ public class CategoryService
                     linkItem.TagIds = new List<string>(linkData.TagIds);
                 }
 
+                // Copy BackupDirectories if present
+                if (linkData.BackupDirectories != null && linkData.BackupDirectories.Count > 0)
+                {
+                    linkItem.BackupDirectories = new List<string>(linkData.BackupDirectories);
+                }
+
                 if (linkData.CatalogEntries != null)
                 {
                     // Count only files (not subdirectories) for the file count
@@ -762,6 +825,9 @@ public class CategoryService
                 // Add catalog entries as children
                 if (linkData.CatalogEntries != null)
                 {
+                    // Get reference time from parent link's LastCatalogUpdate
+                    var referenceTime = linkItem.LastCatalogUpdate;
+                    
                     foreach (var catalogData in linkData.CatalogEntries)
                     {
                         var fullUrl = string.IsNullOrEmpty(linkData.Url)
@@ -786,6 +852,24 @@ public class CategoryService
                             CatalogFileCount = catalogData.CatalogFileCount ?? 0,
                             CatalogTotalSize = catalogData.CatalogTotalSize ?? 0
                         };
+
+                        // Restore TagIds if present
+                        if (catalogData.TagIds != null && catalogData.TagIds.Count > 0)
+                        {
+                            catalogEntry.TagIds = new List<string>(catalogData.TagIds);
+                        }
+
+                        // Restore Ratings if present
+                        if (catalogData.Ratings != null && catalogData.Ratings.Count > 0)
+                        {
+                            catalogEntry.Ratings = new List<RatingValue>(catalogData.Ratings);
+                        }
+
+                        // Check if this directory has changed since the catalog was last updated
+                        if (catalogEntry.IsDirectory && referenceTime.HasValue)
+                        {
+                            CheckAndMarkCatalogEntryAsChanged(catalogEntry, referenceTime.Value);
+                        }
 
                         var catalogEntryNode = new TreeViewNode { Content = catalogEntry };
 
@@ -813,6 +897,24 @@ public class CategoryService
                                     CatalogFileCount = subCatalogData.CatalogFileCount ?? 0,
                                     CatalogTotalSize = subCatalogData.CatalogTotalSize ?? 0
                                 };
+
+                                // Restore TagIds if present
+                                if (subCatalogData.TagIds != null && subCatalogData.TagIds.Count > 0)
+                                {
+                                    subCatalogEntry.TagIds = new List<string>(subCatalogData.TagIds);
+                                }
+
+                                // Restore Ratings if present
+                                if (subCatalogData.Ratings != null && subCatalogData.Ratings.Count > 0)
+                                {
+                                    subCatalogEntry.Ratings = new List<RatingValue>(subCatalogData.Ratings);
+                                }
+
+                                // Check if this subdirectory has changed since the catalog was last updated
+                                if (subCatalogEntry.IsDirectory && referenceTime.HasValue)
+                                {
+                                    CheckAndMarkCatalogEntryAsChanged(subCatalogEntry, referenceTime.Value);
+                                }
 
                                 var subCatalogEntryNode = new TreeViewNode { Content = subCatalogEntry };
                                 catalogEntryNode.Children.Add(subCatalogEntryNode);
@@ -862,6 +964,47 @@ public class CategoryService
         }
 
         return categoryNode;
+    }
+
+    /// <summary>
+    /// Checks if a catalog entry directory has been modified since the reference time and marks it as changed.
+    /// Used when loading catalog entries from saved JSON.
+    /// </summary>
+    private static void CheckAndMarkCatalogEntryAsChanged(LinkItem catalogEntry, DateTime referenceTime)
+    {
+        if (!catalogEntry.IsDirectory || !catalogEntry.IsCatalogEntry)
+            return;
+
+        if (string.IsNullOrEmpty(catalogEntry.Url))
+            return;
+
+        try
+        {
+            if (!Directory.Exists(catalogEntry.Url))
+                return;
+
+            var dirInfo = new DirectoryInfo(catalogEntry.Url);
+
+            // Compare the directory's current LastWriteTime to the catalog entry's stored ModifiedDate
+            // This detects if the directory has changed since we last cataloged it
+            // The stored ModifiedDate was set to dirInfo.LastWriteTime when the catalog was created
+            // If current LastWriteTime > stored ModifiedDate, the directory has changed
+            
+            // Use a 2 second tolerance to avoid false positives from timestamp precision
+            var storedModifiedDate = catalogEntry.ModifiedDate;
+            var currentLastWriteTime = dirInfo.LastWriteTime;
+            
+            // Only mark as changed if the current timestamp is significantly newer than what we stored
+            if (currentLastWriteTime > storedModifiedDate.AddSeconds(2))
+            {
+                catalogEntry.CatalogEntryHasChanged = true;
+                System.Diagnostics.Debug.WriteLine($"[CheckAndMarkCatalogEntryAsChanged] Directory '{catalogEntry.Title}' marked as changed (Current: {currentLastWriteTime}, Stored: {storedModifiedDate})");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CheckAndMarkCatalogEntryAsChanged] Error checking '{catalogEntry.Title}': {ex.Message}");
+        }
     }
 
     /// <summary>

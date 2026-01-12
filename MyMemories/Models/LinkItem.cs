@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml;
@@ -21,6 +22,7 @@ public class LinkItem : INotifyPropertyChanged
     private DateTime? _urlLastChecked;
     private string _urlStatusMessage = string.Empty;
     private string _description = string.Empty;
+    private string? _redirectUrl;
 
     public string Title { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
@@ -45,28 +47,61 @@ public class LinkItem : INotifyPropertyChanged
     public string Keywords { get; set; } = string.Empty;
     
     /// <summary>
-    /// List of tag IDs assigned to this link.
+    /// List of tag names assigned to this link.
     /// </summary>
-    public List<string> TagIds { get; set; } = new();
+    public List<string> Tags { get; set; } = new();
+    
+    /// <summary>
+    /// Legacy property for backwards compatibility. Maps to Tags property.
+    /// </summary>
+    [JsonIgnore]
+    public List<string> TagIds
+    {
+        get => Tags;
+        set => Tags = value;
+    }
+    
+    /// <summary>
+    /// List of ratings assigned to this link.
+    /// </summary>
+    public List<RatingValue> Ratings { get; set; } = new();
     
     /// <summary>
     /// Gets formatted display text showing all tags with their names.
     /// Format: [tag icon] TagName  [tag icon] TagName2
     /// </summary>
     [JsonIgnore]
-    public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(TagIds) ?? string.Empty;
+    public string TagDisplayText => Services.TagManagementService.Instance?.GetTagDisplayText(Tags) ?? string.Empty;
     
     /// <summary>
     /// Gets whether this link has any tags assigned.
     /// </summary>
     [JsonIgnore]
-    public Visibility HasTags => TagIds.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility HasTags => Tags.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     
     /// <summary>
     /// Gets tag icons only for tree node display (no names).
     /// </summary>
     [JsonIgnore]
-    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(TagIds) ?? string.Empty;
+    public string TagIndicator => Services.TagManagementService.Instance?.GetTagIconsOnly(Tags) ?? string.Empty;
+    
+    /// <summary>
+    /// Gets whether this link has any ratings assigned.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility HasRatings => Ratings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    
+    /// <summary>
+    /// Gets the average rating score for this link.
+    /// </summary>
+    [JsonIgnore]
+    public double AverageRating => Ratings.Count > 0 ? Ratings.Average(r => r.Score) : 0;
+    
+    /// <summary>
+    /// Gets formatted display text showing all ratings.
+    /// </summary>
+    [JsonIgnore]
+    public string RatingDisplayText => Services.RatingManagementService.Instance?.GetRatingsDisplayText(Ratings) ?? string.Empty;
     
     public bool IsDirectory { get; set; }
     public string CategoryPath { get; set; } = string.Empty;
@@ -126,6 +161,37 @@ public class LinkItem : INotifyPropertyChanged
             }
         }
     }
+
+    /// <summary>
+    /// The URL that this link redirects to, if a redirect was detected.
+    /// </summary>
+    public string? RedirectUrl
+    {
+        get => _redirectUrl;
+        set
+        {
+            if (_redirectUrl != value)
+            {
+                _redirectUrl = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasRedirect));
+                OnPropertyChanged(nameof(ShowRedirectBadge));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets whether a redirect was detected for this URL.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasRedirect => !string.IsNullOrEmpty(RedirectUrl) && 
+                               !string.Equals(Url, RedirectUrl, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets the visibility of the redirect badge.
+    /// </summary>
+    [JsonIgnore]
+    public Visibility ShowRedirectBadge => HasRedirect ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
     /// Gets the visibility of the URL status badge.
@@ -240,12 +306,23 @@ public class LinkItem : INotifyPropertyChanged
         {
             if (_isZipPasswordProtected != value)
             {
-                System.Diagnostics.Debug.WriteLine($"[LinkItem] IsZipPasswordProtected changing: {_isZipPasswordProtected} -> {value} for '{Title}'");
                 _isZipPasswordProtected = value;
                 OnPropertyChanged();
             }
         }
     }
+
+    /// <summary>
+    /// List of directories to automatically backup this zip file to.
+    /// Only applies to zip archive links.
+    /// </summary>
+    public List<string> BackupDirectories { get; set; } = new();
+
+    /// <summary>
+    /// Gets whether this link has backup directories configured.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasBackupDirectories => BackupDirectories.Count > 0;
 
     [JsonIgnore]
     public int CatalogFileCount
@@ -333,101 +410,104 @@ public class LinkItem : INotifyPropertyChanged
 
     /// <summary>
     /// Gets the visibility of the change badge.
+    /// Shows if the directory has been modified since the last catalog update.
+    /// For catalog entry subdirectories, compares against the parent's LastCatalogUpdate.
     /// </summary>
     [JsonIgnore]
     public Visibility HasChanged
     {
         get
         {
-            // Only check for directories with catalog (CatalogueFiles or FilteredCatalogue)
-            if (!IsDirectory || !LastCatalogUpdate.HasValue)
+            // Only check for directories
+            if (!IsDirectory)
                 return Visibility.Collapsed;
 
-            // Skip catalog entries themselves - they don't need change detection
-            if (IsCatalogEntry)
-                return Visibility.Collapsed;
-
-            // Only check folders that are cataloged
-            if (FolderType == FolderLinkType.LinkOnly)
-                return Visibility.Collapsed;
-
-            if (!Directory.Exists(Url))
-                return Visibility.Collapsed;
-
-            try
+            // For main catalog folders (not catalog entries)
+            if (!IsCatalogEntry)
             {
-                return HasDirectoryChangedRecursive(Url, LastCatalogUpdate.Value)
-                    ? Visibility.Visible
-                    : Visibility.Collapsed;
+                if (!LastCatalogUpdate.HasValue)
+                    return Visibility.Collapsed;
+
+                // Only check folders that are cataloged
+                if (FolderType == FolderLinkType.LinkOnly)
+                    return Visibility.Collapsed;
+
+                if (!Directory.Exists(Url))
+                    return Visibility.Collapsed;
+
+                try
+                {
+                    // Only check the immediate directory - not recursive
+                    // Recursive checking is too aggressive and causes false positives
+                    return HasDirectoryChanged(Url, LastCatalogUpdate.Value)
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                }
+                catch
+                {
+                    return Visibility.Collapsed;
+                }
             }
-            catch
+            else
             {
-                return Visibility.Collapsed;
+                // For catalog entry subdirectories, use the CatalogEntryChanged flag
+                return _catalogEntryHasChanged ? Visibility.Visible : Visibility.Collapsed;
             }
         }
     }
 
-    private bool HasDirectoryChangedRecursive(string directoryPath, DateTime lastUpdate)
+    /// <summary>
+    /// Flag indicating whether this catalog entry subdirectory has changed
+    /// since the parent's last catalog update.
+    /// </summary>
+    private bool _catalogEntryHasChanged;
+
+    /// <summary>
+    /// Gets or sets whether this catalog entry has changed.
+    /// Used for catalog entry subdirectories to show the change badge.
+    /// </summary>
+    [JsonIgnore]
+    public bool CatalogEntryHasChanged
+    {
+        get => _catalogEntryHasChanged;
+        set
+        {
+            if (_catalogEntryHasChanged != value)
+            {
+                _catalogEntryHasChanged = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HasChanged));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a directory has changed based on LastWriteTime and file count.
+    /// Only checks the immediate directory, not recursively.
+    /// </summary>
+    private bool HasDirectoryChanged(string directoryPath, DateTime lastUpdate)
     {
         try
         {
             var dirInfo = new DirectoryInfo(directoryPath);
 
             // Check if the directory's LastWriteTime is newer than our catalog
-            // Add a small tolerance (1 second) to avoid false positives from timestamp precision
-            if (dirInfo.LastWriteTime > lastUpdate.AddSeconds(1))
+            // Add a small tolerance (2 seconds) to avoid false positives from timestamp precision
+            if (dirInfo.LastWriteTime > lastUpdate.AddSeconds(2))
                 return true;
 
             // Check the current file count against our stored count
             try
             {
                 var currentFileCount = Directory.GetFiles(directoryPath).Length;
-                var currentDirCount = Directory.GetDirectories(directoryPath).Length;
                 
-                // For catalog entries, compare file count
-                if (IsCatalogEntry && currentFileCount != CatalogFileCount)
+                // Only compare file count if we have a stored count (CatalogFileCount > 0)
+                if (CatalogFileCount > 0 && currentFileCount != CatalogFileCount)
                     return true;
             }
             catch (UnauthorizedAccessException)
             {
                 // Can't access - assume no change
-            }
-
-            // Check subdirectories
-            var subdirectories = Directory.GetDirectories(directoryPath);
-            foreach (var subdir in subdirectories)
-            {
-                try
-                {
-                    var subdirInfo = new DirectoryInfo(subdir);
-                    // Add tolerance for subdirectory check too
-                    if (subdirInfo.LastWriteTime > lastUpdate.AddSeconds(1))
-                        return true;
-
-                    if (HasDirectoryChangedRecursive(subdir, lastUpdate))
-                        return true;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    // Skip inaccessible subdirectories
-                }
-            }
-
-            // Check files - only compare LastWriteTime, not LastAccessTime
-            var files = Directory.GetFiles(directoryPath);
-            foreach (var file in files)
-            {
-                try
-                {
-                    var fileInfo = new FileInfo(file);
-                    // Add tolerance for file check
-                    if (fileInfo.LastWriteTime > lastUpdate.AddSeconds(1))
-                        return true;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    // Skip inaccessible files
-                }
             }
 
             return false;

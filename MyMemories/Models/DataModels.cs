@@ -22,6 +22,9 @@ public class CategoryData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? TagIds { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<RatingValue>? Ratings { get; set; }
 
     public DateTime? CreatedDate { get; set; }
     public DateTime? ModifiedDate { get; set; }
@@ -61,6 +64,13 @@ public class CategoryData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsAuditLoggingEnabled { get; set; }
+    
+    /// <summary>
+    /// List of directories to automatically copy the category file to on save.
+    /// Only applies to root categories.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? BackupDirectories { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? Links { get; set; }
@@ -85,6 +95,9 @@ public class LinkData
     
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<string>? TagIds { get; set; }
+    
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<RatingValue>? Ratings { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsDirectory { get; set; }
@@ -125,6 +138,13 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? IsZipPasswordProtected { get; set; }
+
+    /// <summary>
+    /// List of directories to automatically backup this zip file to.
+    /// Only applies to zip archive links.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? BackupDirectories { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public SortOption CatalogSortOrder { get; set; }

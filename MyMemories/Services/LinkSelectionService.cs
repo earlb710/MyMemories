@@ -226,7 +226,7 @@ public class LinkSelectionService
         }
         else
         {
-            // For web URLs, always check and update the URL status
+            // For web URLs, always check and update the URL status with redirect detection
             if (_urlStateCheckerService != null)
             {
                 setStatus($"Checking URL accessibility...");
@@ -234,15 +234,28 @@ public class LinkSelectionService
                 try
                 {
                     var previousStatus = linkItem.UrlStatus;
-                    var (status, message) = await _urlStateCheckerService.CheckSingleUrlAsync(linkItem.Url);
+                    var previousRedirectUrl = linkItem.RedirectUrl;
+                    
+                    // Use the redirect-aware check
+                    var checkResult = await _urlStateCheckerService.CheckUrlWithRedirectAsync(linkItem.Url);
                     
                     // Update the link item
-                    linkItem.UrlStatus = status;
-                    linkItem.UrlStatusMessage = message;
+                    linkItem.UrlStatus = checkResult.Status;
+                    linkItem.UrlStatusMessage = checkResult.Message;
                     linkItem.UrlLastChecked = DateTime.Now;
                     
-                    // Save the updated status if status changed and we have a node
-                    bool statusChanged = previousStatus != status;
+                    // Update redirect information
+                    if (checkResult.RedirectDetected && !string.IsNullOrEmpty(checkResult.RedirectUrl))
+                    {
+                        linkItem.RedirectUrl = checkResult.RedirectUrl;
+                    }
+                    else
+                    {
+                        linkItem.RedirectUrl = null;
+                    }
+                    
+                    // Save the updated status if status or redirect changed and we have a node
+                    bool statusChanged = previousStatus != checkResult.Status || previousRedirectUrl != linkItem.RedirectUrl;
                     if (statusChanged && linkNode != null)
                     {
                         // Refresh the tree node visual
@@ -269,8 +282,12 @@ public class LinkSelectionService
             // Show web viewer for URLs
             showViewer(FileViewerType.Web);
             
-            // Show URL status banner if not accessible
+            // Show URL status banner if not accessible or if redirect detected
             if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
+            {
+                _detailsViewService.ShowUrlStatusBanner(linkItem);
+            }
+            else if (linkItem.HasRedirect)
             {
                 _detailsViewService.ShowUrlStatusBanner(linkItem);
             }

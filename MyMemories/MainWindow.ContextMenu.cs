@@ -55,15 +55,25 @@ public sealed partial class MainWindow
     {
         // Get menu items by name
         var changePasswordItem = FindMenuItemByName(menu, "CategoryMenu_ChangePassword");
+        var backupDirectoriesItem = FindMenuItemByName(menu, "CategoryMenu_BackupDirectories");
         var zipCategoryItem = FindMenuItemByName(menu, "CategoryMenu_ZipCategory");
         var addTagSubItem = FindSubMenuItemByName(menu, "CategoryMenu_AddTag");
         var removeTagItem = FindMenuItemByName(menu, "CategoryMenu_RemoveTag");
+        var ratingsSubItem = FindSubMenuItemByName(menu, "CategoryMenu_Ratings");
 
-        // Change Password: only enabled for root categories
+        // Check if this node is a root category
         bool isRootCategory = LinksTreeView.RootNodes.Contains(node);
+        
+        // Change Password: only enabled for root categories
         if (changePasswordItem != null)
         {
             changePasswordItem.IsEnabled = isRootCategory;
+        }
+
+        // Backup Directories: only enabled for root categories
+        if (backupDirectoriesItem != null)
+        {
+            backupDirectoriesItem.IsEnabled = isRootCategory;
         }
 
         // Zip Category: check if category has any folders
@@ -85,6 +95,12 @@ public sealed partial class MainWindow
         {
             removeTagItem.IsEnabled = category.TagIds.Count > 0;
         }
+
+        // Configure Ratings submenu with templates
+        if (ratingsSubItem != null)
+        {
+            PopulateRatingsSubmenu(ratingsSubItem, category.Ratings.Count, isCategory: true);
+        }
     }
 
     /// <summary>
@@ -99,12 +115,14 @@ public sealed partial class MainWindow
         var moveItem = FindMenuItemByName(menu, "LinkMenu_Move");
         var removeItem = FindMenuItemByName(menu, "LinkMenu_Remove");
         var changePasswordItem = FindMenuItemByName(menu, "LinkMenu_ChangePassword");
+        var backupZipItem = FindMenuItemByName(menu, "LinkMenu_BackupZip");
         var zipFolderItem = FindMenuItemByName(menu, "LinkMenu_ZipFolder");
         var exploreHereItem = FindMenuItemByName(menu, "LinkMenu_ExploreHere");
         var sortCatalogItem = FindMenuItemByName(menu, "LinkMenu_SortCatalog");
         var summarizeItem = FindMenuItemByName(menu, "LinkMenu_Summarize");
         var addTagSubItem = FindSubMenuItemByName(menu, "LinkMenu_AddTag");
         var removeTagItem = FindMenuItemByName(menu, "LinkMenu_RemoveTag");
+        var ratingsSubItem = FindSubMenuItemByName(menu, "LinkMenu_Ratings");
 
         // Check conditions
         bool isCatalogEntry = link.IsCatalogEntry;
@@ -145,6 +163,12 @@ public sealed partial class MainWindow
             changePasswordItem.IsEnabled = isZipFile;
         }
 
+        // Backup Zip: enabled for zip files (not catalog entries)
+        if (backupZipItem != null)
+        {
+            backupZipItem.IsEnabled = isZipFile && !isCatalogEntry;
+        }
+
         // Summarize: only for URLs (http/https)
         if (summarizeItem != null)
         {
@@ -169,20 +193,22 @@ public sealed partial class MainWindow
             sortCatalogItem.IsEnabled = isDirectory && hasCatalog;
         }
 
-        // Configure Add Tag submenu: disabled for catalog entries
+        // Configure Add Tag submenu: ENABLED for catalog entries (allow tagging catalog items)
         if (addTagSubItem != null)
         {
-            addTagSubItem.IsEnabled = !isCatalogEntry;
-            if (!isCatalogEntry)
-            {
-                PopulateAddTagSubmenu(addTagSubItem, link.TagIds, isCategory: false);
-            }
+            PopulateAddTagSubmenu(addTagSubItem, link.TagIds, isCategory: false);
         }
 
-        // Remove Tag: only enabled if link has tags and is not a catalog entry
+        // Remove Tag: enabled if link has tags (including catalog entries)
         if (removeTagItem != null)
         {
-            removeTagItem.IsEnabled = !isCatalogEntry && link.TagIds.Count > 0;
+            removeTagItem.IsEnabled = link.TagIds.Count > 0;
+        }
+
+        // Configure Ratings submenu with templates
+        if (ratingsSubItem != null)
+        {
+            PopulateRatingsSubmenu(ratingsSubItem, link.Ratings.Count, isCategory: false);
         }
     }
 
@@ -219,7 +245,7 @@ public sealed partial class MainWindow
     /// <summary>
     /// Populates the Add Tag submenu with available tags.
     /// </summary>
-    private void PopulateAddTagSubmenu(MenuFlyoutSubItem subMenu, List<string> existingTagIds, bool isCategory)
+    private void PopulateAddTagSubmenu(MenuFlyoutSubItem subMenu, List<string> existingTags, bool isCategory)
     {
         subMenu.Items.Clear();
 
@@ -234,8 +260,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        // Add available tags (excluding already assigned ones)
-        var availableTags = _tagService.Tags.Where(t => !existingTagIds.Contains(t.Id)).ToList();
+        // Add available tags (excluding already assigned ones by name)
+        var availableTags = _tagService.Tags.Where(t => 
+            !existingTags.Any(et => string.Equals(et, t.Name, StringComparison.OrdinalIgnoreCase) || et == t.Id)
+        ).ToList();
 
         if (availableTags.Count == 0)
         {
@@ -253,7 +281,7 @@ public sealed partial class MainWindow
             var tagItem = new MenuFlyoutItem
             {
                 Text = $"🏷️ {tag.Name}",
-                Tag = tag.Id
+                Tag = tag.Name  // Use tag name instead of ID
             };
 
             if (isCategory)
@@ -269,18 +297,122 @@ public sealed partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Populates the Ratings submenu with rating templates that have definitions.
+    /// </summary>
+    private void PopulateRatingsSubmenu(MenuFlyoutSubItem subMenu, int currentRatingCount, bool isCategory)
+    {
+        subMenu.Items.Clear();
+
+        if (_ratingService == null)
+        {
+            var noServiceItem = new MenuFlyoutItem
+            {
+                Text = "Rating service not available",
+                IsEnabled = false
+            };
+            subMenu.Items.Add(noServiceItem);
+            return;
+        }
+
+        // Update the submenu text to show rating count
+        subMenu.Text = currentRatingCount > 0 ? $"Ratings ({currentRatingCount})" : "Ratings";
+
+        // Get all templates and filter to those with definitions
+        var templateNames = _ratingService.GetTemplateNames();
+        var templatesWithRatings = new List<(string Name, string DisplayName, int DefinitionCount)>();
+
+        var originalTemplate = _ratingService.CurrentTemplateName;
+        
+        foreach (var templateName in templateNames)
+        {
+            // Temporarily switch to this template to check definitions
+            _ratingService.SwitchTemplate(templateName);
+            var definitionCount = _ratingService.DefinitionCount;
+
+            if (definitionCount > 0)
+            {
+                var displayName = string.IsNullOrEmpty(templateName) ? "Default" : templateName;
+                templatesWithRatings.Add((templateName, displayName, definitionCount));
+            }
+        }
+        
+        // Switch back to original template
+        _ratingService.SwitchTemplate(originalTemplate);
+
+        if (templatesWithRatings.Count == 0)
+        {
+            var noTemplatesItem = new MenuFlyoutItem
+            {
+                Text = "No rating templates with definitions",
+                IsEnabled = false
+            };
+            subMenu.Items.Add(noTemplatesItem);
+            
+            // Add option to go to rating management
+            subMenu.Items.Add(new MenuFlyoutSeparator());
+            var manageItem = new MenuFlyoutItem
+            {
+                Text = "Manage Rating Templates...",
+                Icon = new FontIcon { Glyph = "\uE713" }
+            };
+            manageItem.Click += async (s, e) =>
+            {
+                var ratingDialog = new Dialogs.RatingManagementDialog(Content.XamlRoot, _ratingService);
+                await ratingDialog.RefreshAndShowDialogAsync();
+            };
+            subMenu.Items.Add(manageItem);
+            return;
+        }
+
+        // Add template options
+        foreach (var (name, displayName, count) in templatesWithRatings)
+        {
+            var templateItem = new MenuFlyoutItem
+            {
+                Text = $"⭐ {displayName} ({count} types)",
+                Tag = name
+            };
+
+            if (isCategory)
+            {
+                templateItem.Click += CategoryMenu_RatingTemplateItem_Click;
+            }
+            else
+            {
+                templateItem.Click += LinkMenu_RatingTemplateItem_Click;
+            }
+
+            subMenu.Items.Add(templateItem);
+        }
+
+        // Add separator and management option
+        subMenu.Items.Add(new MenuFlyoutSeparator());
+        var manageRatingsItem = new MenuFlyoutItem
+        {
+            Text = "Manage Templates...",
+            Icon = new FontIcon { Glyph = "\uE713" }
+        };
+        manageRatingsItem.Click += async (s, e) =>
+        {
+            var ratingDialog = new Dialogs.RatingManagementDialog(Content.XamlRoot, _ratingService);
+            await ratingDialog.RefreshAndShowDialogAsync();
+        };
+        subMenu.Items.Add(manageRatingsItem);
+    }
+
     private async void CategoryMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagName)
             return;
 
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
-        // Add the tag to the category
-        if (!category.TagIds.Contains(tagId))
+        // Add the tag name to the category (check for duplicates case-insensitively)
+        if (!category.Tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase)))
         {
-            category.TagIds.Add(tagId);
+            category.Tags.Add(tagName);
             category.ModifiedDate = DateTime.Now;
             category.NotifyTagsChanged();
 
@@ -292,23 +424,22 @@ public sealed partial class MainWindow
             var rootNode = GetRootCategoryNode(updatedNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
 
-            var tag = TagManagementService.Instance?.GetTag(tagId);
-            StatusText.Text = $"Added tag '{tag?.Name}' to category '{category.Name}'";
+            StatusText.Text = $"Added tag '{tagName}' to category '{category.Name}'";
         }
     }
 
     private async void LinkMenu_AddTagItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagId)
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string tagName)
             return;
 
         if (_contextMenuNode?.Content is not LinkItem link)
             return;
 
-        // Add the tag to the link
-        if (!link.TagIds.Contains(tagId))
+        // Add the tag name to the link (check for duplicates case-insensitively)
+        if (!link.Tags.Any(t => string.Equals(t, tagName, StringComparison.OrdinalIgnoreCase)))
         {
-            link.TagIds.Add(tagId);
+            link.Tags.Add(tagName);
             link.ModifiedDate = DateTime.Now;
             link.NotifyTagsChanged();
 
@@ -320,8 +451,8 @@ public sealed partial class MainWindow
             var rootNode = GetRootCategoryNode(updatedNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
 
-            var tag = TagManagementService.Instance?.GetTag(tagId);
-            StatusText.Text = $"Added tag '{tag?.Name}' to link '{link.Title}'";
+            var itemType = link.IsCatalogEntry ? "catalog entry" : "link";
+            StatusText.Text = $"Added tag '{tagName}' to {itemType} '{link.Title}'";
         }
     }
 
@@ -425,6 +556,47 @@ public sealed partial class MainWindow
         await ShowChangePasswordDialogAsync(category, _contextMenuNode);
     }
 
+    private async void CategoryMenu_BackupDirectories_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        // Check if this node is a root category
+        bool isRootCategory = LinksTreeView.RootNodes.Contains(_contextMenuNode);
+        
+        if (!isRootCategory)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title = "Not a Root Category",
+                Content = "Backup directories can only be configured for root categories.\n\nSubcategories are saved with their parent category.",
+                CloseButtonText = "OK",
+                XamlRoot = Content.XamlRoot
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        // Show the backup directory dialog
+        var dialog = new Dialogs.BackupDirectoryDialog(Content.XamlRoot, _folderPickerService!);
+        var result = await dialog.ShowAsync(category.Name, category.BackupDirectories);
+
+        if (result != null)
+        {
+            // Update the category with new backup directories
+            category.BackupDirectories = result;
+            category.ModifiedDate = DateTime.Now;
+
+            // Save the category
+            await _categoryService!.SaveCategoryAsync(_contextMenuNode);
+
+            var count = result.Count;
+            StatusText.Text = count > 0 
+                ? $"Configured {count} backup directory(s) for '{category.Name}'"
+                : $"Removed backup directories for '{category.Name}'";
+        }
+    }
+
     private async void CategoryMenu_ZipCategory_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is not CategoryItem category)
@@ -459,22 +631,14 @@ public sealed partial class MainWindow
         var rootCategoryNode = GetRootCategoryNode(_contextMenuNode);
         var rootCategory = rootCategoryNode?.Content as CategoryItem;
         
-        // DEBUG OUTPUT
-        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Current category: {category.Name}, PasswordProtection: {category.PasswordProtection}");
-        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Root category: {rootCategory?.Name}, PasswordProtection: {rootCategory?.PasswordProtection}");
-        
         // Check if ROOT category has password protection (not the current subcategory)
         bool categoryHasPassword = rootCategory?.PasswordProtection != PasswordProtectionType.None;
         string? categoryPassword = null;
 
-        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] categoryHasPassword: {categoryHasPassword}");
-
         if (categoryHasPassword && rootCategory != null)
         {
-            System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Attempting to get password for root category: {rootCategory.Name}");
             // Get the password from the ROOT category
             categoryPassword = await GetCategoryPasswordAsync(rootCategory);
-            System.Diagnostics.Debug.WriteLine($"[CategoryMenu_ZipCategory_Click] Password retrieved: {(categoryPassword != null ? "Yes" : "No")}");
             if (categoryPassword == null)
             {
                 // User cancelled password entry or password retrieval failed
@@ -727,7 +891,7 @@ public sealed partial class MainWindow
                             foreach (var file in files)
                             {
                                 var relativePath = Path.GetRelativePath(folderPath, file);
-                                var entryName = Path.Combine(folderName, relativePath);
+                                var entryName = Path.Combine(folderName, file);
                                 archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
                             }
                         }
@@ -1141,6 +1305,68 @@ public sealed partial class MainWindow
         await ShowChangeZipPasswordDialogAsync(link, _contextMenuNode);
     }
 
+    private async void LinkMenu_BackupZip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        // Only allow for zip files
+        bool isZipFile = link.IsDirectory && link.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        
+        if (!isZipFile)
+        {
+            StatusText.Text = "Backup is only available for zip archive files.";
+            return;
+        }
+
+        // Show the backup directory dialog for the zip file
+        var dialog = new Dialogs.BackupDirectoryDialog(Content.XamlRoot, _folderPickerService!);
+        var result = await dialog.ShowAsync(link.Title, link.BackupDirectories);
+
+        if (result != null)
+        {
+            // Update the link with new backup directories
+            link.BackupDirectories = result;
+            link.ModifiedDate = DateTime.Now;
+
+            // Save the category
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var count = result.Count;
+            if (count > 0)
+            {
+                StatusText.Text = $"Configured {count} backup directory(s) for '{link.Title}'";
+                
+                // Check if zip file exists before offering to backup now
+                if (File.Exists(link.Url))
+                {
+                    // Ask if user wants to backup now
+                    var backupNowDialog = new ContentDialog
+                    {
+                        Title = "Backup Now?",
+                        Content = $"Do you want to backup '{link.Title}' to the configured directories now?",
+                        PrimaryButtonText = "Backup Now",
+                        CloseButtonText = "Later",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = Content.XamlRoot
+                    };
+
+                    var backupResult = await backupNowDialog.ShowAsync();
+                    if (backupResult == ContentDialogResult.Primary)
+                    {
+                        StatusText.Text = $"Backing up '{link.Title}'...";
+                        await BackupZipFileAsync(link.Url, link.BackupDirectories, link.Title);
+                    }
+                }
+            }
+            else
+            {
+                StatusText.Text = $"Removed backup directories for '{link.Title}'";
+            }
+        }
+    }
+
     private async void LinkMenu_ZipFolder_Click(object sender, RoutedEventArgs e)
     {
         if (_contextMenuNode?.Content is LinkItem link)
@@ -1323,9 +1549,9 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not LinkItem link)
             return;
 
-        if (link.TagIds.Count == 0)
+        if (link.Tags.Count == 0)
         {
-            StatusText.Text = "This link has no tags to remove";
+            StatusText.Text = "This item has no tags to remove";
             return;
         }
 
@@ -1334,7 +1560,7 @@ public sealed partial class MainWindow
         if (tagService == null)
             return;
 
-        var tagsInfo = tagService.GetTagsInfo(link.TagIds);
+        var tagsInfo = tagService.GetTagsInfo(link.Tags);
         if (tagsInfo.Count == 0)
         {
             StatusText.Text = "No valid tags found";
@@ -1353,6 +1579,7 @@ public sealed partial class MainWindow
         }
         tagComboBox.SelectedIndex = 0;
 
+        var itemType = link.IsCatalogEntry ? "catalog entry" : "link";
         var dialog = new ContentDialog
         {
             Title = "Remove Tag",
@@ -1361,7 +1588,7 @@ public sealed partial class MainWindow
                 Spacing = 12,
                 Children =
                 {
-                    new TextBlock { Text = $"Select tag to remove from '{link.Title}':" },
+                    new TextBlock { Text = $"Select tag to remove from {itemType} '{link.Title}':" },
                     tagComboBox
                 }
             },
@@ -1374,10 +1601,13 @@ public sealed partial class MainWindow
 
         if (result == ContentDialogResult.Primary && tagComboBox.SelectedItem is string selectedTagName)
         {
-            var tagToRemove = tagService.GetTagByName(selectedTagName);
-            if (tagToRemove != null && link.TagIds.Contains(tagToRemove.Id))
+            // Remove the tag by name (case-insensitive match)
+            var tagToRemove = link.Tags.FirstOrDefault(t => 
+                string.Equals(t, selectedTagName, StringComparison.OrdinalIgnoreCase));
+            
+            if (tagToRemove != null)
             {
-                link.TagIds.Remove(tagToRemove.Id);
+                link.Tags.Remove(tagToRemove);
                 link.ModifiedDate = DateTime.Now;
                 link.NotifyTagsChanged();
 
@@ -1387,7 +1617,7 @@ public sealed partial class MainWindow
                 var rootNode = GetRootCategoryNode(updatedNode);
                 await _categoryService!.SaveCategoryAsync(rootNode);
 
-                StatusText.Text = $"Removed tag '{selectedTagName}' from link '{link.Title}'";
+                StatusText.Text = $"Removed tag '{selectedTagName}' from {itemType} '{link.Title}'";
             }
         }
     }
@@ -1397,7 +1627,7 @@ public sealed partial class MainWindow
         if (_contextMenuNode?.Content is not CategoryItem category)
             return;
 
-        if (category.TagIds.Count == 0)
+        if (category.Tags.Count == 0)
         {
             StatusText.Text = "This category has no tags to remove";
             return;
@@ -1407,7 +1637,7 @@ public sealed partial class MainWindow
         if (tagService == null)
             return;
 
-        var tagsInfo = tagService.GetTagsInfo(category.TagIds);
+        var tagsInfo = tagService.GetTagsInfo(category.Tags);
         if (tagsInfo.Count == 0)
         {
             StatusText.Text = "No valid tags found";
@@ -1447,10 +1677,13 @@ public sealed partial class MainWindow
 
         if (result == ContentDialogResult.Primary && tagComboBox.SelectedItem is string selectedTagName)
         {
-            var tagToRemove = tagService.GetTagByName(selectedTagName);
-            if (tagToRemove != null && category.TagIds.Contains(tagToRemove.Id))
+            // Remove the tag by name (case-insensitive match)
+            var tagToRemove = category.Tags.FirstOrDefault(t => 
+                string.Equals(t, selectedTagName, StringComparison.OrdinalIgnoreCase));
+            
+            if (tagToRemove != null)
             {
-                category.TagIds.Remove(tagToRemove.Id);
+                category.Tags.Remove(tagToRemove);
                 category.ModifiedDate = DateTime.Now;
                 category.NotifyTagsChanged();
 
@@ -1879,6 +2112,144 @@ public sealed partial class MainWindow
             await _categoryService!.SaveCategoryAsync(rootNode);
 
             StatusText.Text = $"Sorted by {selectedItem.Content}";
+        }
+    }
+
+    private async void CategoryMenu_RatingTemplateItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string templateName)
+            return;
+
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        if (_ratingService == null)
+        {
+            StatusText.Text = "Rating service not initialized";
+            return;
+        }
+
+        // Switch to the selected template
+        var originalTemplate = _ratingService.CurrentTemplateName;
+        _ratingService.SwitchTemplate(templateName);
+
+        // Show the rating assignment dialog
+        var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
+        var result = await dialog.ShowAsync(category.Name, category.Ratings);
+
+        // Switch back to original template
+        _ratingService.SwitchTemplate(originalTemplate);
+
+        if (result != null)
+        {
+            category.Ratings = result;
+            category.ModifiedDate = DateTime.Now;
+
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var displayName = string.IsNullOrEmpty(templateName) ? "Default" : templateName;
+            StatusText.Text = result.Count > 0 
+                ? $"Saved {result.Count} rating(s) for '{category.Name}' using template '{displayName}'"
+                : $"Removed all ratings from '{category.Name}'";
+        }
+    }
+
+    private async void LinkMenu_RatingTemplateItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem menuItem || menuItem.Tag is not string templateName)
+            return;
+
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (_ratingService == null)
+        {
+            StatusText.Text = "Rating service not initialized";
+            return;
+        }
+
+        // Switch to the selected template
+        var originalTemplate = _ratingService.CurrentTemplateName;
+        _ratingService.SwitchTemplate(templateName);
+
+        // Show the rating assignment dialog
+        var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
+        var result = await dialog.ShowAsync(link.Title, link.Ratings);
+
+        // Switch back to original template
+        _ratingService.SwitchTemplate(originalTemplate);
+
+        if (result != null)
+        {
+            link.Ratings = result;
+            link.ModifiedDate = DateTime.Now;
+
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var itemType = link.IsCatalogEntry ? "catalog entry" : "link";
+            var displayName = string.IsNullOrEmpty(templateName) ? "Default" : templateName;
+            StatusText.Text = result.Count > 0 
+                ? $"Saved {result.Count} rating(s) for {itemType} '{link.Title}' using template '{displayName}'"
+                : $"Removed all ratings from {itemType} '{link.Title}'";
+        }
+    }
+
+    private async void CategoryMenu_Ratings_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+
+        if (_ratingService == null)
+        {
+            StatusText.Text = "Rating service not initialized";
+            return;
+        }
+
+        var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
+        var result = await dialog.ShowAsync(category.Name, category.Ratings);
+
+        if (result != null)
+        {
+            category.Ratings = result;
+            category.ModifiedDate = DateTime.Now;
+
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            StatusText.Text = result.Count > 0 
+                ? $"Saved {result.Count} rating(s) for '{category.Name}'"
+                : $"Removed all ratings from '{category.Name}'";
+        }
+    }
+
+    private async void LinkMenu_Ratings_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+
+        if (_ratingService == null)
+        {
+            StatusText.Text = "Rating service not initialized";
+            return;
+        }
+
+        var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
+        var result = await dialog.ShowAsync(link.Title, link.Ratings);
+
+        if (result != null)
+        {
+            link.Ratings = result;
+            link.ModifiedDate = DateTime.Now;
+
+            var rootNode = GetRootCategoryNode(_contextMenuNode);
+            await _categoryService!.SaveCategoryAsync(rootNode);
+
+            var itemType = link.IsCatalogEntry ? "catalog entry" : "link";
+            StatusText.Text = result.Count > 0 
+                ? $"Saved {result.Count} rating(s) for {itemType} '{link.Title}'"
+                : $"Removed all ratings from {itemType} '{link.Title}'";
         }
     }
 }

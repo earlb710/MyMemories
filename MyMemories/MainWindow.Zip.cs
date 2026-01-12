@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using MyMemories.Utilities;
 using System;
@@ -328,17 +328,23 @@ public sealed partial class MainWindow
             {
                 Title = "Zip Created Successfully",
                 Content = $"The folder has been successfully zipped to:\n\n{zipFilePath}\n\n" +
-                         $"📊 Statistics:\n" +
-                         $"   • Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
-                         $"   • Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
-                         $"   • Compression: {compressionRatio:F1}% reduction\n" +
-                         $"   • Time Taken: {duration.TotalSeconds:F1} seconds" +
-                         (isCatalogFolder ? "\n\n💡 Only cataloged files were included." : "") +
-                         (result.UsePassword ? "\n\n🔒 Zip file is password-protected" : ""),
+                         $"?? Statistics:\n" +
+                         $"   � Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
+                         $"   � Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
+                         $"   � Compression: {compressionRatio:F1}% reduction\n" +
+                         $"   � Time Taken: {duration.TotalSeconds:F1} seconds" +
+                         (isCatalogFolder ? "\n\n?? Only cataloged files were included." : "") +
+                         (result.UsePassword ? "\n\n?? Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
             };
             await successDialog.ShowAsync();
+
+            // Backup the zip file to category's backup directories (if configured)
+            if (rootCategory != null && rootCategory.HasBackupDirectories)
+            {
+                await BackupZipFileAsync(zipFilePath, rootCategory.BackupDirectories, rootCategory.Name);
+            }
         }
         catch (Exception ex)
         {
@@ -486,5 +492,41 @@ public sealed partial class MainWindow
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Backs up a zip file to the configured backup directories.
+    /// </summary>
+    private async Task BackupZipFileAsync(string zipFilePath, List<string> backupDirectories, string categoryName)
+    {
+        if (backupDirectories.Count == 0 || !File.Exists(zipFilePath))
+            return;
+
+        try
+        {
+            var summary = await BackupService.Instance.BackupFileAsync(zipFilePath, backupDirectories);
+
+            if (summary.HasFailures)
+            {
+                foreach (var failure in summary.Results.Where(r => !r.Success))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[BackupZipFileAsync] Backup failed to {failure.DestinationPath}: {failure.ErrorMessage}");
+                }
+
+                // Show warning if some backups failed
+                var failedCount = summary.Results.Count(r => !r.Success);
+                StatusText.Text = $"?? Zip backed up to {summary.SuccessCount} location(s), {failedCount} failed";
+            }
+            else if (summary.SuccessCount > 0)
+            {
+                StatusText.Text = $"? Zip backed up to {summary.SuccessCount} backup location(s)";
+                System.Diagnostics.Debug.WriteLine($"[BackupZipFileAsync] Successfully backed up zip to {summary.SuccessCount} location(s)");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BackupZipFileAsync] Error during backup: {ex.Message}");
+            StatusText.Text = $"?? Zip created but backup failed: {ex.Message}";
+        }
     }
 }

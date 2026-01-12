@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using MyMemories.Utilities;
@@ -42,6 +42,8 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     private LinkSelectionService? _linkSelectionService;
     private UrlStateCheckerService? _urlStateCheckerService;
     private TagManagementService? _tagService;
+    private RatingManagementService? _ratingService;
+    private FolderPickerService? _folderPickerService;
 
     /// <summary>
     /// Gets or sets whether a URL is currently loading.
@@ -98,7 +100,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Sets the window icon to the book emoji icon (📚).
+    /// Sets the window icon to the book emoji icon (??).
     /// </summary>
     private void SetWindowIcon()
     {
@@ -138,7 +140,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             var validationPassed = await ValidateConfigurationDirectoriesAsync();
             if (!validationPassed)
             {
-                StatusText.Text = "⚠️ Warning: Configuration validation failed";
+                StatusText.Text = "?? Warning: Configuration validation failed";
                 // Continue anyway - user chose to proceed
             }
 
@@ -149,6 +151,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _tagService = new TagManagementService(_configService.WorkingDirectory);
             await _tagService.LoadAsync();
             
+            // Initialize RatingManagementService and load rating definitions
+            _ratingService = new RatingManagementService(_configService.WorkingDirectory);
+            await _ratingService.LoadAsync();
+            
             // Initialize other services
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
             _detailsViewService = new DetailsViewService(DetailsPanel);
@@ -158,6 +164,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             
             // Initialize new refactored services
             _fileLauncherService = new FileLauncherService();
+            _folderPickerService = new FolderPickerService(this);
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
                 new ZipCatalogService(_categoryService, _treeViewService),
                 _configService.AuditLogService);
@@ -171,6 +178,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _linkSelectionService = new LinkSelectionService(_detailsViewService, _fileViewerService, _treeViewService, _catalogService, _fileLauncherService, _categoryService, _urlStateCheckerService);
             _linkSelectionService.SetUrlTextBox(UrlTextBox); // Wire up URL text box
             _treeViewEventService = new TreeViewEventService(_detailsViewService, _treeViewService, _linkSelectionService);
+            
+            // Wire up URL redirect update event
+            _detailsViewService.UpdateUrlFromRedirectRequested += OnUpdateUrlFromRedirect;
             
             // Initialize DoubleTapHandlerService with URL state checker, category service, and tree view service for status updates
             _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService, _urlStateCheckerService, _categoryService, _treeViewService);
@@ -201,6 +211,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // NOW load categories (password is cached if needed)
             await LoadAllCategoriesAsync();
             
+            // Check for outdated backups after categories are loaded
+            await CheckOutdatedBackupsAsync();
+            
             // Final cleanup: ensure no blank/invalid nodes exist
             // This catches any nodes that might have been added by the framework
             RemoveInvalidNodes();
@@ -224,6 +237,68 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             {
                 await _configService.LogErrorAsync("Initialization failed", ex);
             }
+        }
+    }
+
+    /// <summary>
+    /// Sets the maximum allowed age for backups to 30 days.
+    /// </summary>
+    private TimeSpan MaximumBackupAge => TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Checks all category folders for outdated backups and removes them if found.
+    /// </summary>
+    private async Task CheckOutdatedBackupsAsync()
+    {
+        if (_configService == null)
+            return;
+
+        try
+        {
+            StatusText.Text = "Checking backup freshness...";
+
+            var freshnessService = new BackupFreshnessService(_configService.WorkingDirectory);
+            var outdatedBackups = await freshnessService.CheckAllBackupsAsync(LinksTreeView.RootNodes);
+
+            if (outdatedBackups.Count == 0)
+            {
+                // All backups are up to date
+                return;
+            }
+
+            // Show dialog with outdated backups
+            var dialog = new Dialogs.BackupFreshnessDialog(Content.XamlRoot);
+            var backupsToUpdate = await dialog.ShowAsync(outdatedBackups);
+
+            if (backupsToUpdate == null)
+            {
+                // User chose "Remind Later" - do nothing
+                StatusText.Text = "Backup check deferred";
+                return;
+            }
+
+            if (backupsToUpdate.Count == 0)
+            {
+                // User chose "Ignore All"
+                StatusText.Text = "Backups ignored";
+                return;
+            }
+
+            // Update selected backups with progress dialog
+            StatusText.Text = $"Updating {backupsToUpdate.Count} backup(s)...";
+            var (succeeded, failed) = await dialog.UpdateBackupsWithProgressAsync(backupsToUpdate, freshnessService);
+
+            // Show summary
+            await dialog.ShowUpdateSummaryAsync(succeeded, failed);
+
+            StatusText.Text = succeeded > 0 
+                ? $"Updated {succeeded} backup(s)" 
+                : "Backup update completed";
+        }
+        catch (Exception ex)
+        {
+            // Don't let backup check failure stop the app from starting
+            StatusText.Text = $"Backup check failed: {ex.Message}";
         }
     }
 
@@ -387,10 +462,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             UpdateBookmarkLookupCategories();
             
             // Check for folder changes and auto-refresh if enabled
-            foreach (var category in LinksTreeView.RootNodes)
-            {
-                CheckFolderChangesRecursively(category);
-            }
+            await CheckAllFoldersForChangesAsync();
 
             StatusText.Text = LinksTreeView.RootNodes.Count > 0
                 ? $"Loaded {LinksTreeView.RootNodes.Count} categor{(LinksTreeView.RootNodes.Count == 1 ? "y" : "ies")}"
@@ -513,50 +585,134 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Recursively checks all folder links for changes and auto-refreshes if enabled.
-    /// Only checks directory links, skips individual file catalog entries.
+    /// Checks all folder links for changes across all root categories and auto-refreshes if enabled.
     /// </summary>
-    private async void CheckFolderChangesRecursively(TreeViewNode node)
+    private async Task CheckAllFoldersForChangesAsync()
+    {
+        // Collect all catalogs that need auto-refresh from ALL root categories
+        var catalogsToRefresh = new List<(LinkItem link, TreeViewNode node)>();
+        
+        foreach (var category in LinksTreeView.RootNodes)
+        {
+            CollectAutoRefreshCatalogs(category, catalogsToRefresh);
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[CheckAllFoldersForChangesAsync] Found {catalogsToRefresh.Count} catalogs to auto-refresh");
+
+        if (catalogsToRefresh.Count == 0)
+        {
+            // No auto-refresh needed, just update change status for display
+            foreach (var category in LinksTreeView.RootNodes)
+            {
+                UpdateChangeStatusRecursively(category);
+            }
+            return;
+        }
+
+        // Show progress bar
+        AutoRefreshProgressBar.Visibility = Visibility.Visible;
+        AutoRefreshProgressCount.Text = $"0 / {catalogsToRefresh.Count}";
+        AutoRefreshProgressText.Text = "Starting auto-refresh...";
+
+        int completed = 0;
+        foreach (var (link, linkNode) in catalogsToRefresh)
+        {
+            try
+            {
+                AutoRefreshProgressText.Text = $"Refreshing: {link.Title}";
+                AutoRefreshProgressCount.Text = $"{completed + 1} / {catalogsToRefresh.Count}";
+
+                System.Diagnostics.Debug.WriteLine($"[CheckAllFoldersForChangesAsync] Refreshing '{link.Title}'");
+                await RefreshCatalogSilentlyAsync(link, linkNode);
+                completed++;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CheckAllFoldersForChangesAsync] Error refreshing '{link.Title}': {ex.Message}");
+                completed++;
+            }
+        }
+
+        // Hide progress bar when done
+        AutoRefreshProgressBar.Visibility = Visibility.Collapsed;
+        System.Diagnostics.Debug.WriteLine($"[CheckAllFoldersForChangesAsync] Completed {completed} auto-refreshes");
+    }
+
+    /// <summary>
+    /// Collects all catalogs that have AutoRefreshCatalog enabled and have changes.
+    /// </summary>
+    private void CollectAutoRefreshCatalogs(TreeViewNode node, List<(LinkItem link, TreeViewNode node)> catalogsToRefresh)
     {
         if (node.Content is LinkItem link)
         {
-            // Only check directory links, skip catalog entry files
-            if (link.IsDirectory && !link.IsCatalogEntry && 
+            // Only check directory links that are catalogued (not catalog entries themselves)
+            if (link.IsDirectory && !link.IsCatalogEntry && link.AutoRefreshCatalog &&
                 link.LastCatalogUpdate.HasValue && Directory.Exists(link.Url))
             {
                 try
                 {
                     var dirInfo = new DirectoryInfo(link.Url);
                     var currentFileCount = Directory.GetFiles(link.Url).Length;
-                    
-                    // Check for changes: either LastWriteTime or file count mismatch
-                    bool hasChanged = dirInfo.LastWriteTime > link.LastCatalogUpdate.Value ||
-                                      currentFileCount != link.CatalogFileCount;
-                    
+
+                    // Check for changes: either LastWriteTime (with 2 second tolerance) or file count mismatch
+                    // Add tolerance to avoid false positives from timestamp precision issues
+                    bool hasChanged = dirInfo.LastWriteTime > link.LastCatalogUpdate.Value.AddSeconds(2) ||
+                                      (link.CatalogFileCount > 0 && currentFileCount != link.CatalogFileCount);
+
                     if (hasChanged)
                     {
-                        // Folder has changed - if auto-refresh is enabled, refresh it
-                        if (link.AutoRefreshCatalog)
+                        catalogsToRefresh.Add((link, node));
+                    }
+                }
+                catch
+                {
+                    // Folder not accessible - skip
+                }
+            }
+        }
+
+        // Recursively check children
+        foreach (var child in node.Children)
+        {
+            if (child.Content is LinkItem childLink)
+            {
+                // Only process directories (not file catalog entries)
+                if (childLink.IsDirectory)
+                {
+                    CollectAutoRefreshCatalogs(child, catalogsToRefresh);
+                }
+            }
+            else if (child.Content is CategoryItem)
+            {
+                CollectAutoRefreshCatalogs(child, catalogsToRefresh);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Updates change status for all folder links recursively (for non-auto-refresh folders).
+    /// </summary>
+    private void UpdateChangeStatusRecursively(TreeViewNode node)
+    {
+        if (node.Content is LinkItem link)
+        {
+            if (link.IsDirectory && !link.IsCatalogEntry && link.LastCatalogUpdate.HasValue)
+            {
+                try
+                {
+                    if (Directory.Exists(link.Url))
+                    {
+                        var dirInfo = new DirectoryInfo(link.Url);
+                        var currentFileCount = Directory.GetFiles(link.Url).Length;
+
+                        // Check for changes with tolerance to avoid false positives
+                        bool hasChanged = dirInfo.LastWriteTime > link.LastCatalogUpdate.Value.AddSeconds(2) ||
+                                          (link.CatalogFileCount > 0 && currentFileCount != link.CatalogFileCount);
+
+                        if (hasChanged && !link.AutoRefreshCatalog)
                         {
-                            await RefreshCatalogSilentlyAsync(link, node);
-                        }
-                        else
-                        {
-                            // Notify the UI that the change status needs updating
                             link.RefreshChangeStatus();
-                            
-                            // Force TreeView to refresh the node visually by recreating it
-                            var refreshedNode = _treeViewService!.RefreshLinkNode(node, link);
-                            
-                            // Continue checking only directory children (skip file entries)
-                            foreach (var child in refreshedNode.Children)
-                            {
-                                if (child.Content is LinkItem childLink && childLink.IsDirectory)
-                                {
-                                    CheckFolderChangesRecursively(child);
-                                }
-                            }
-                            return; // Exit early since we already processed children
+                            _treeViewService!.RefreshLinkNode(node, link);
                         }
                     }
                 }
@@ -567,23 +723,16 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             }
         }
 
-        // Recursively check only directory children (skip file catalog entries)
+        // Recursively check only directory children
         foreach (var child in node.Children)
         {
-            // Skip individual file catalog entries - only recurse into directories
-            if (child.Content is LinkItem childLink)
+            if (child.Content is LinkItem childLink && childLink.IsDirectory)
             {
-                // Only process if it's a directory (not a catalog file entry)
-                if (childLink.IsDirectory)
-                {
-                    CheckFolderChangesRecursively(child);
-                }
-                // Skip: individual files in catalog don't need change checking
+                UpdateChangeStatusRecursively(child);
             }
             else if (child.Content is CategoryItem)
             {
-                // Always recurse into category nodes
-                CheckFolderChangesRecursively(child);
+                UpdateChangeStatusRecursively(child);
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using MyMemories.Utilities;
@@ -115,7 +115,7 @@ public class ZipDialogBuilder
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
             FontSize = 12,
             Margin = new Thickness(0, 0, 0, 16),
-            Text = "📊 Calculating folder statistics..."
+            Text = "?? Calculating folder statistics..."
         };
 
         // Available space text block
@@ -125,7 +125,7 @@ public class ZipDialogBuilder
             Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green),
             FontSize = 12,
             Margin = new Thickness(0, 0, 0, 16),
-            Text = "💾 Calculating available space..."
+            Text = "?? Calculating available space..."
         };
 
         var browseButton = new Button
@@ -167,7 +167,7 @@ public class ZipDialogBuilder
         {
             usePasswordCheckBox = new CheckBox
             {
-                Content = "🔒 Password protect zip with category password",
+                Content = "?? Password protect zip with category password",
                 IsChecked = true,
                 Margin = new Thickness(0, 0, 0, 8)
             };
@@ -200,7 +200,7 @@ public class ZipDialogBuilder
             {
                 var pathTextBlock = new TextBlock
                 {
-                    Text = $"📁 {path}",
+                    Text = $"?? {path}",
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 11,
                     Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
@@ -254,7 +254,7 @@ public class ZipDialogBuilder
             // Show calculating message on UI thread
             statsTextBlock.DispatcherQueue.TryEnqueue(() =>
             {
-                statsTextBlock.Text = "📊 Calculating folder statistics...";
+                statsTextBlock.Text = "?? Calculating folder statistics...";
             });
 
             // Calculate on background thread
@@ -265,15 +265,15 @@ public class ZipDialogBuilder
             {
                 if (stats.FolderCount == 0)
                 {
-                    statsTextBlock.Text = "📊 Source folder statistics unavailable";
+                    statsTextBlock.Text = "?? Source folder statistics unavailable";
                 }
                 else
                 {
-                    statsTextBlock.Text = $"📊 Source Folder Statistics:\n" +
-                                         $"   • Folders to zip: {stats.FolderCount:N0}\n" +
-                                         $"   • Subdirectories: {stats.SubdirectoryCount:N0}\n" +
-                                         $"   • Files: {stats.FileCount:N0}\n" +
-                                         $"   • Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
+                    statsTextBlock.Text = $"?? Source Folder Statistics:\n" +
+                                         $"   � Folders to zip: {stats.FolderCount:N0}\n" +
+                                         $"   � Subdirectories: {stats.SubdirectoryCount:N0}\n" +
+                                         $"   � Files: {stats.FileCount:N0}\n" +
+                                         $"   � Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
                 }
             });
         }
@@ -282,7 +282,7 @@ public class ZipDialogBuilder
             LogUtilities.LogError("ZipDialogBuilder.UpdateFolderStatisticsAsync", "Error calculating folder statistics", ex);
             statsTextBlock.DispatcherQueue.TryEnqueue(() =>
             {
-                statsTextBlock.Text = "📊 Error calculating folder statistics";
+                statsTextBlock.Text = "?? Error calculating folder statistics";
             });
         }
     }
@@ -298,7 +298,7 @@ public class ZipDialogBuilder
             {
                 availableSpaceTextBlock.DispatcherQueue.TryEnqueue(() =>
                 {
-                    availableSpaceTextBlock.Text = "💾 Available space unavailable";
+                    availableSpaceTextBlock.Text = "?? Available space unavailable";
                 });
                 return;
             }
@@ -306,7 +306,7 @@ public class ZipDialogBuilder
             // Show calculating message
             availableSpaceTextBlock.DispatcherQueue.TryEnqueue(() =>
             {
-                availableSpaceTextBlock.Text = "💾 Calculating available space...";
+                availableSpaceTextBlock.Text = "?? Calculating available space...";
             });
 
             // Calculate on background thread
@@ -315,8 +315,8 @@ public class ZipDialogBuilder
             // Update UI on UI thread
             availableSpaceTextBlock.DispatcherQueue.TryEnqueue(() =>
             {
-                availableSpaceTextBlock.Text = $"💾 Available Space on Target Drive:\n" +
-                                               $"   • Free Space: {FileUtilities.FormatFileSize(availableSpace)}";
+                availableSpaceTextBlock.Text = $"?? Available Space on Target Drive:\n" +
+                                               $"   � Free Space: {FileUtilities.FormatFileSize(availableSpace)}";
             });
         }
         catch (Exception ex)
@@ -324,7 +324,7 @@ public class ZipDialogBuilder
             LogUtilities.LogError("ZipDialogBuilder.UpdateAvailableSpaceAsync", "Error calculating available space", ex);
             availableSpaceTextBlock.DispatcherQueue.TryEnqueue(() =>
             {
-                availableSpaceTextBlock.Text = "💾 Error calculating available space";
+                availableSpaceTextBlock.Text = "?? Error calculating available space";
             });
         }
     }
@@ -470,7 +470,7 @@ public class ZipDialogBuilder
             // Show previous error message if any
             if (!string.IsNullOrEmpty(previousErrorMessage))
             {
-                errorTextBlock.Text = $"⚠️ {previousErrorMessage}";
+                errorTextBlock.Text = $"?? {previousErrorMessage}";
                 errorTextBlock.Visibility = Visibility.Visible;
             }
 
