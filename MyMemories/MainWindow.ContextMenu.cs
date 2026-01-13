@@ -253,7 +253,7 @@ public sealed partial class MainWindow
         // Check if zip file already exists
         if (File.Exists(zipFilePath))
         {
-            bool shouldOverwrite = await ShowConfirmDialogAsync(
+            bool shouldOverwrite = await ShowConfirmAsync(
                 "File Already Exists",
                 $"The file '{zipFileName}' already exists in the target directory. Do you want to overwrite it?",
                 "Overwrite",
@@ -928,7 +928,7 @@ public sealed partial class MainWindow
                 
                 if (File.Exists(link.Url))
                 {
-                    bool shouldBackup = await ShowConfirmDialogAsync(
+                    bool shouldBackup = await ShowConfirmAsync(
                         "Backup Now?",
                         $"Do you want to backup '{link.Title}' to the configured directories now?",
                         "Backup Now",

@@ -13,9 +13,9 @@
       "IsDirectory": true,
       "CategoryPath": "Project",
       "CreatedDate": "2026-01-10T22:19:28.9468356+02:00",
-      "ModifiedDate": "2026-01-13T11:29:32.262992+02:00",
+      "ModifiedDate": "2026-01-13T13:03:08.3203846+02:00",
       "FolderType": "CatalogueFiles",
-      "LastCatalogUpdate": "2026-01-13T11:29:32.2629766+02:00",
+      "LastCatalogUpdate": "2026-01-13T13:03:08.3203718+02:00",
       "AutoRefreshCatalog": true,
       "CatalogEntries": [
         {
@@ -851,13 +851,31 @@
           "FileSize": 8460
         },
         {
+          "Title": "MainWindow.ContextMenu.Configuration.cs",
+          "Url": "MainWindow.ContextMenu.Configuration.cs",
+          "Description": "Size: 10,88 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T12:43:59.6772202+02:00",
+          "ModifiedDate": "2026-01-13T12:44:00.7789896+02:00",
+          "FileSize": 11144
+        },
+        {
           "Title": "MainWindow.ContextMenu.cs",
           "Url": "MainWindow.ContextMenu.cs",
-          "Description": "Size: 84,04 KB",
+          "Description": "Size: 61,2 KB",
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:12:05.4780565+02:00",
-          "ModifiedDate": "2026-01-13T11:26:55.4296622+02:00",
-          "FileSize": 86062
+          "ModifiedDate": "2026-01-13T12:58:05.8803649+02:00",
+          "FileSize": 62673
+        },
+        {
+          "Title": "MainWindow.ContextMenu.Helpers.cs",
+          "Url": "MainWindow.ContextMenu.Helpers.cs",
+          "Description": "Size: 10,61 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T12:43:13.4091506+02:00",
+          "ModifiedDate": "2026-01-13T12:56:17.7241903+02:00",
+          "FileSize": 10868
         },
         {
           "Title": "MainWindow.DragDrop.cs",

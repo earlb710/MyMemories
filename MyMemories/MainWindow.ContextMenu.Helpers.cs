@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml.Controls;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using MyMemories.Services;
 
 namespace MyMemories;
 
@@ -192,24 +194,9 @@ public sealed partial class MainWindow
     // ========================================
     
     /// <summary>
-    /// Shows a simple error dialog with consistent styling.
-    /// </summary>
-    private async System.Threading.Tasks.Task ShowErrorDialogAsync(string title, string message)
-    {
-        var errorDialog = new ContentDialog
-        {
-            Title = title,
-            Content = message,
-            CloseButtonText = "OK",
-            XamlRoot = Content.XamlRoot
-        };
-        await errorDialog.ShowAsync();
-    }
-
-    /// <summary>
     /// Shows a confirmation dialog and returns true if user confirmed.
     /// </summary>
-    private async System.Threading.Tasks.Task<bool> ShowConfirmDialogAsync(string title, string message, string confirmText = "Yes", string cancelText = "No")
+    private async System.Threading.Tasks.Task<bool> ShowConfirmAsync(string title, string message, string confirmText = "Yes", string cancelText = "No")
     {
         var confirmDialog = new ContentDialog
         {
