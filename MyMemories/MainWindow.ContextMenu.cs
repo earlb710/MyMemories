@@ -772,8 +772,8 @@ public sealed partial class MainWindow
             var startTime = DateTime.Now;
 
             // CRITICAL: Collect folder info on UI thread BEFORE entering background thread
-            var folderInfoList = CollectFolderInfoFromCategory(_contextMenuNode, category.Name);
-            var manifestContent = GenerateManifestContent(folderInfoList, category.Name);
+            var folderInfoList = _archiveRefreshService!.CollectFolderInfoFromCategory(_contextMenuNode, category.Name);
+            var manifestContent = _archiveRefreshService.GenerateManifestContent(folderInfoList, category.Name);
 
             // Calculate original size for compression ratio
             ulong originalSize = await Task.Run(() =>

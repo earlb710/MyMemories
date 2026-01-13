@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     private TagManagementService? _tagService;
     private RatingManagementService? _ratingService;
     private FolderPickerService? _folderPickerService;
+    private ArchiveRefreshService? _archiveRefreshService;
 
     /// <summary>
     /// Gets or sets whether a URL is currently loading.
@@ -168,6 +169,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _catalogService = new CatalogService(_categoryService, _treeViewService, _detailsViewService, 
                 new ZipCatalogService(_categoryService, _treeViewService),
                 _configService.AuditLogService);
+            
+            // Initialize archive refresh service
+            _archiveRefreshService = new ArchiveRefreshService(_categoryService, _catalogService, _treeViewService);
             
             // Set the refresh archive callback
             _catalogService.SetRefreshArchiveCallback(RefreshArchiveFromManifestAsync);
