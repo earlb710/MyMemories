@@ -78,7 +78,7 @@ public class CatalogService
         }
     }
 
-    public async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode)
+    public async Task RefreshCatalogAsync(LinkItem linkItem, TreeViewNode linkNode, bool silent = false)
     {
         bool wasExpanded = linkNode.IsExpanded;
         bool isZipFile = IsZipFile(linkItem.Url);
@@ -86,7 +86,7 @@ public class CatalogService
 
         try
         {
-            Debug.WriteLine($"[RefreshCatalogAsync] Refreshing catalog for '{linkItem.Title}', IsZip: {isZipFile}");
+            Debug.WriteLine($"[RefreshCatalogAsync] Refreshing catalog for '{linkItem.Title}', IsZip: {isZipFile}, Silent: {silent}");
             
             // Extract existing tags and ratings before removing catalog entries
             var preservedMetadata = ExtractCatalogMetadata(linkNode);
@@ -109,7 +109,7 @@ public class CatalogService
             Debug.WriteLine($"[RefreshCatalogAsync] Restored metadata to catalog entries");
 
             linkNode.Children.Remove(tempNode);
-            await FinalizeCatalogCreationAsync(linkItem, linkNode);
+            await FinalizeCatalogCreationAsync(linkItem, linkNode, silent);
             
             stopwatch.Stop();
             
@@ -128,7 +128,11 @@ public class CatalogService
         }
         finally
         {
-            linkNode.IsExpanded = wasExpanded;
+            // Only restore expansion state if not silent (silent mode = don't modify UI state)
+            if (!silent)
+            {
+                linkNode.IsExpanded = wasExpanded;
+            }
         }
     }
 
@@ -318,7 +322,7 @@ public class CatalogService
         return tempNode;
     }
 
-    private async Task FinalizeCatalogCreationAsync(LinkItem linkItem, TreeViewNode linkNode)
+    private async Task FinalizeCatalogCreationAsync(LinkItem linkItem, TreeViewNode linkNode, bool silent = false)
     {
         linkItem.LastCatalogUpdate = DateTime.Now;
         linkItem.ModifiedDate = DateTime.Now;
@@ -326,16 +330,20 @@ public class CatalogService
         _categoryService.UpdateCatalogFileCount(linkNode);
         var refreshedNode = _treeViewService.RefreshLinkNode(linkNode, linkItem);
 
-        // Expand the node and select it so user can see the refreshed content
-        refreshedNode.IsExpanded = true;
-        
-        // Also expand the parent node if it exists (in case it collapsed)
-        if (refreshedNode.Parent != null)
+        // Only expand and select nodes if NOT in silent mode
+        if (!silent)
         {
-            refreshedNode.Parent.IsExpanded = true;
+            // Expand the node and select it so user can see the refreshed content
+            refreshedNode.IsExpanded = true;
+            
+            // Also expand the parent node if it exists (in case it collapsed)
+            if (refreshedNode.Parent != null)
+            {
+                refreshedNode.Parent.IsExpanded = true;
+            }
+            
+            _treeViewService.SelectNode(refreshedNode);
         }
-        
-        _treeViewService.SelectNode(refreshedNode);
         
         // Only pass RefreshArchiveFromManifestAsync for zip files
         bool isZipFile = IsZipFile(linkItem.Url);
@@ -358,14 +366,18 @@ public class CatalogService
             Debug.WriteLine($"[FinalizeCatalogCreationAsync] Saved catalog for '{linkItem.Title}' to category");
         }
         
-        await _detailsViewService.ShowLinkDetailsAsync(linkItem, refreshedNode,
-            async () => await CreateCatalogAsync(linkItem, refreshedNode),
-            async () => await RefreshCatalogAsync(linkItem, refreshedNode),
-            isZipFile ? async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode) : null,
-            saveCallback);
+        // Only update the details view if NOT in silent mode
+        if (!silent)
+        {
+            await _detailsViewService.ShowLinkDetailsAsync(linkItem, refreshedNode,
+                async () => await CreateCatalogAsync(linkItem, refreshedNode),
+                async () => await RefreshCatalogAsync(linkItem, refreshedNode),
+                isZipFile ? async () => await RefreshArchiveFromManifestAsync(linkItem, refreshedNode) : null,
+                saveCallback);
+        }
 
         var count = refreshedNode.Children.Count(c => c.Content is LinkItem link && link.IsCatalogEntry);
-        Debug.WriteLine($"[CatalogService] Successfully cataloged '{linkItem.Title}' with {count} entries");
+        Debug.WriteLine($"[CatalogService] Successfully cataloged '{linkItem.Title}' with {count} entries (silent: {silent})");
     }
 
     /// <summary>

@@ -1,0 +1,161 @@
+{
+  "Version": "1.0",
+  "Description": "Bulk update URLs and add tags to existing development resources",
+  "ImportDate": "2024-12-21T11:00:00",
+  "Operations": [
+    {
+      "Operation": "Update",
+      "Target": "Category",
+      "Identifier": {
+        "Name": "Development Resources"
+      },
+      "Data": {
+        "Description": "A comprehensive collection of development tools, documentation, and code references - Updated December 2024",
+        "Keywords": "programming coding development software engineering tools resources",
+        "TagIds": ["tag-work", "tag-important", "tag-reference"]
+      },
+      "Options": {
+        "MergeTagIds": true,
+        "PreserveTimestamps": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "Microsoft .NET Documentation"
+      },
+      "Data": {
+        "Description": "Official .NET documentation including C#, F#, VB.NET, and ASP.NET Core - Covers .NET 8",
+        "Keywords": "dotnet csharp microsoft net8 aspnet",
+        "TagIds": ["tag-microsoft", "tag-documentation", "tag-dotnet"]
+      },
+      "Options": {
+        "MergeTagIds": true,
+        "UpdateUrlStatus": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "MDN Web Docs"
+      },
+      "Data": {
+        "Description": "Comprehensive web development documentation for HTML5, CSS3, JavaScript ES2024, and Web APIs",
+        "Keywords": "html css javascript web mdn mozilla es2024",
+        "TagIds": ["tag-web", "tag-documentation", "tag-javascript"]
+      },
+      "Options": {
+        "MergeTagIds": true,
+        "UpdateUrlStatus": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "React Documentation"
+      },
+      "Data": {
+        "Url": "https://react.dev/",
+        "Description": "Official React framework documentation - React 18 with hooks, suspense, and server components",
+        "Keywords": "react javascript frontend ui library hooks",
+        "TagIds": ["tag-react", "tag-frontend", "tag-javascript"]
+      },
+      "Options": {
+        "MergeTagIds": true,
+        "UpdateUrlStatus": true
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Code Samples"
+      },
+      "Data": {
+        "TagIds": ["tag-samples", "tag-code", "tag-examples"]
+      },
+      "Options": {
+        "CreateTagsIfMissing": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "VS Code"
+      },
+      "Data": {
+        "Description": "Lightweight but powerful code editor from Microsoft - Free and open source",
+        "Keywords": "editor vscode microsoft free opensource",
+        "TagIds": ["tag-microsoft", "tag-tools", "tag-editor", "tag-free"]
+      },
+      "Options": {
+        "MergeTagIds": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "MDN Web Docs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Quality",
+            "Value": 5
+          },
+          {
+            "Name": "Completeness",
+            "Value": 5
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "React Documentation"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Quality",
+            "Value": 4
+          },
+          {
+            "Name": "Usefulness",
+            "Value": 5
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "SubCategory",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation"
+      },
+      "Data": {
+        "Description": "Official documentation and API references - Updated regularly",
+        "Keywords": "docs api reference manual guides tutorials"
+      }
+    }
+  ]
+}

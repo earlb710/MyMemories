@@ -144,6 +144,23 @@ public class CategoryDetailsBuilder
             _detailsPanel.Children.Add(refreshUrlStateButton);
         }
 
+        // Add ratings display if ratings exist
+        if (category.Ratings.Count > 0)
+        {
+            var ratingsPanel = RatingManagementService.Instance?.CreateRatingsDetailsPanel(category.Ratings);
+            if (ratingsPanel != null && ratingsPanel.Children.Count > 0)
+            {
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Ratings",
+                    FontSize = 18,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+                _detailsPanel.Children.Add(ratingsPanel);
+            }
+        }
+
         AddCategoryTimestamps(category);
         AddStatistics(node);
 

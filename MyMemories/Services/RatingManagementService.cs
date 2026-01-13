@@ -837,4 +837,163 @@ public class RatingManagementService
             Foreground = new SolidColorBrush(GetScoreColor(score))
         };
     }
+
+    /// <summary>
+    /// Creates a detailed ratings display panel grouped by template for the details view.
+    /// </summary>
+    public StackPanel CreateRatingsDetailsPanel(IEnumerable<RatingValue> ratings)
+    {
+        var panel = new StackPanel { Spacing = 12 };
+
+        if (ratings == null || !ratings.Any())
+            return panel;
+
+        // Group ratings by template
+        var ratingsByTemplate = ratings
+            .GroupBy(r => r.TemplateName)
+            .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "A" : g.Key); // Default template first
+
+        foreach (var templateGroup in ratingsByTemplate)
+        {
+            var templateName = string.IsNullOrEmpty(templateGroup.Key) ? "General Ratings" : $"{templateGroup.Key} Ratings";
+            
+            // Template header
+            var templateHeader = new TextBlock
+            {
+                Text = templateName,
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+            panel.Children.Add(templateHeader);
+
+            // Ratings grid
+            var ratingsPanel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 12) };
+
+            foreach (var rating in templateGroup.OrderBy(r => r.RatingName))
+            {
+                var definition = GetDefinition(rating.Rating);
+                var displayName = definition?.Name ?? rating.RatingName;
+
+                var ratingCard = new Border
+                {
+                    BorderBrush = new SolidColorBrush(GetScoreColor(rating.Score)),
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(12, 8, 12, 8),
+                    Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(20, 
+                        GetScoreColor(rating.Score).R,
+                        GetScoreColor(rating.Score).G,
+                        GetScoreColor(rating.Score).B))
+                };
+
+                var contentStack = new StackPanel { Spacing = 4 };
+
+                // Rating name and score row
+                var headerRow = new Grid();
+                headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var nameText = new TextBlock
+                {
+                    Text = displayName,
+                    FontSize = 14,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(nameText, 0);
+                headerRow.Children.Add(nameText);
+
+                var scorePanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                scorePanel.Children.Add(new FontIcon
+                {
+                    Glyph = GetScoreIconGlyph(rating.Score),
+                    FontSize = 14,
+                    Foreground = new SolidColorBrush(GetScoreColor(rating.Score))
+                });
+
+                scorePanel.Children.Add(new TextBlock
+                {
+                    Text = FormatScore(rating.Score),
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    Foreground = new SolidColorBrush(GetScoreColor(rating.Score)),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+
+                scorePanel.Children.Add(new TextBlock
+                {
+                    Text = GetScoreLabel(rating.Score),
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(Colors.Gray),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(4, 0, 0, 0)
+                });
+
+                Grid.SetColumn(scorePanel, 1);
+                headerRow.Children.Add(scorePanel);
+
+                contentStack.Children.Add(headerRow);
+
+                // Description (if definition exists)
+                if (definition != null && !string.IsNullOrWhiteSpace(definition.Description))
+                {
+                    contentStack.Children.Add(new TextBlock
+                    {
+                        Text = definition.Description,
+                        FontSize = 11,
+                        Foreground = new SolidColorBrush(Colors.Gray),
+                        FontStyle = Windows.UI.Text.FontStyle.Italic,
+                        TextWrapping = TextWrapping.Wrap
+                    });
+                }
+
+                // Reason (if provided)
+                if (!string.IsNullOrWhiteSpace(rating.Reason))
+                {
+                    contentStack.Children.Add(new TextBlock
+                    {
+                        Text = $"Reason: {rating.Reason}",
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 4, 0, 0)
+                    });
+                }
+
+                // Dates
+                if (rating.CreatedDate != DateTime.MinValue || rating.ModifiedDate != DateTime.MinValue)
+                {
+                    var datesText = new List<string>();
+                    if (rating.CreatedDate != DateTime.MinValue)
+                        datesText.Add($"Created: {rating.CreatedDate:yyyy-MM-dd}");
+                    if (rating.ModifiedDate != DateTime.MinValue && rating.ModifiedDate != rating.CreatedDate)
+                        datesText.Add($"Modified: {rating.ModifiedDate:yyyy-MM-dd}");
+
+                    if (datesText.Count > 0)
+                    {
+                        contentStack.Children.Add(new TextBlock
+                        {
+                            Text = string.Join(" • ", datesText),
+                            FontSize = 10,
+                            Foreground = new SolidColorBrush(Colors.Gray),
+                            Margin = new Thickness(0, 4, 0, 0)
+                        });
+                    }
+                }
+
+                ratingCard.Child = contentStack;
+                ratingsPanel.Children.Add(ratingCard);
+            }
+
+            panel.Children.Add(ratingsPanel);
+        }
+
+        return panel;
+    }
 }

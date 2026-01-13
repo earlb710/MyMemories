@@ -1,0 +1,272 @@
+{
+  "Version": "1.0",
+  "Description": "Import ratings with reasons from MyMemories.json documentation file to project links",
+  "ImportDate": "2024-12-21T14:30:00",
+  "Operations": [
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Assets",
+        "Title": "AppIcon.ico"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "",
+            "Value": -2,
+            "Reason": ""
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Dialogs",
+        "Title": "LinkDialogBuilder.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 2,
+            "Reason": "Dialog builder (50KB) with moderate complexity. Good separation into BuildAddLinkUI, BuildEditLinkUI, and event handlers. BrowseBookmarksAsync (~100 lines) handles flyout-based selection well. Some UI building code is verbose but unavoidable in WinUI. Could extract more helper methods for repeated patterns."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 1,
+            "Reason": "Application-specific dialog builder for link editing. Tightly coupled to LinkItem, CategoryNode, and app-specific models. Pattern of separating UI building into methods could be extracted. FolderType handling is app-specific. Not reusable outside this application."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Dialogs",
+        "Title": "LinkDialogBuilder_New.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "",
+            "Value": 0,
+            "Reason": ""
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "AuditLogService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 6,
+            "Reason": "Well-designed logging service (36KB). Clean API with specific log methods (LogLinkChangeAsync, LogZipCreatedAsync, etc.). Good rotation logic. Thread-safe with lock object. Some verbose debug logging could be removed for production. Appropriate complexity for comprehensive audit trail."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 4,
+            "Reason": "Core logging pattern (LogAsync, rotation, line numbers) is reusable. Specific log methods (LogZipCreatedAsync, LogLinkChangeAsync) are app-specific. Could extract generic AuditLogger base class. Thread-safe file writing and rotation logic valuable for other projects."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "BookmarkImporterService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5,
+            "Reason": "Browser bookmark import service (30KB). Good browser detection pattern. Clean JSON parsing with ChromeBookmarkFile model. DetectChangesAsync provides useful sync comparison. Flexible ImportOptions with folder/domain filters. IsFileLocked check prevents data corruption. Well-structured for browser integration."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 7,
+            "Reason": "Highly reusable Chrome/Edge/Brave bookmark importer. Browser detection, JSON parsing, and ImportOptions are generic. BrowserFolderStructure model is clean. Could be extracted as standalone NuGet package for bookmark management. Only LinkItem dependency is in DetectChangesAsync."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "CategoryService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 4,
+            "Reason": "Core service (60KB) with appropriate complexity for data persistence. Handles JSON serialization, encryption, backup, and recursive tree operations. ConvertNodeToCategoryData (~200 lines) is complex but necessarily so. Good error handling and logging. Well-documented with XML comments."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 2,
+            "Reason": "Core persistence service tightly coupled to CategoryItem, LinkItem, and TreeViewNode. Encryption/backup patterns could be extracted. JSON serialization approach is reusable concept. Password caching and recursive tree conversion are app-specific. Not reusable as-is."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "RatingManagementService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 6,
+            "Reason": "Comprehensive rating management (30KB). Good template-based design with multiple predefined templates (Image, Programming, Book, etc.). Clean UI helper methods (CreateRatingBadge, GetScoreColor). Qualified naming scheme (Template.RatingName) is elegant. Fallback handling for orphaned ratings is thorough."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 6,
+            "Reason": "Template-based rating system is generic and reusable. RatingDefinition/RatingValue models are clean. UI helpers (CreateRatingBadge, GetScoreColor) depend on WinUI but pattern is portable. Predefined templates could be externalized. Minor WinUI coupling in badge creation."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "WebSummaryService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 7,
+            "Reason": "Clean web scraping service (32KB). Excellent binary content detection before downloading. Well-organized extraction methods (ExtractTitle, ExtractMetaDescription, etc.). Good regex patterns for meta tags. Robust HTML entity decoding. Handles edge cases gracefully. High quality for web parsing complexity."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 9,
+            "Reason": "Standalone web summary service with zero app dependencies. WebPageSummary model is clean and generic. Binary content detection, meta tag extraction, and HTML entity decoding are universally useful. Could be published as independent NuGet package. Only uses standard HttpClient."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.TreeView.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 4,
+            "Reason": "TreeView event handlers (32KB). Good keyboard shortcut handling (Delete, F2, Ctrl+C, etc.). Clean separation of concerns with handler methods. URL status display in status bar is well-implemented. RefreshUrlStateAsync with progress UI is thorough. Some methods could be extracted to reduce length."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -1,
+            "Reason": "MainWindow partial class for TreeView events. Keyboard shortcut pattern (LinksTreeView_KeyDown) is reusable concept. Handler methods access app-specific services directly. FindVisualChildren<T> is a reusable utility. Overall tightly coupled to MainWindow state."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.xaml"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5,
+            "Reason": "XAML layout file (50KB) is appropriately complex for a full-featured WinUI app. Defines TreeView, context menus, status bar, and detail panels. Well-organized with named elements for code-behind access. Uses proper data templates and converters. Size is justified by comprehensive UI."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -4,
+            "Reason": "Application-specific XAML layout. TreeView structure, context menus, and panel organization are specific to MyMemories. References app-specific converters and resources. No reusable components - purely this application's UI definition."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.xaml.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5,
+            "Reason": "Main window code-behind (35KB) with good structure. InitializeAsync is well-organized with clear service initialization order. Good separation into partial classes. CheckAllFoldersForChangesAsync handles auto-refresh well. LoadAllCategoriesAsync with RemoveInvalidNodes shows defensive coding. Appropriate for main application entry point."
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -3,
+            "Reason": "Application entry point with service orchestration. All services are app-specific (CategoryService, TagManagementService, etc.). InitializeAsync pattern is reusable concept but implementation is not. GetRootCategoryNode and NodeContainsDescendant are utility methods but coupled to TreeViewNode."
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    }
+  ]
+}

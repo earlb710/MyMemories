@@ -743,13 +743,15 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
     /// <summary>
     /// Silently refreshes a catalog in the background without user interaction.
+    /// Does NOT navigate to or expand nodes during the process.
     /// </summary>
     private async Task RefreshCatalogSilentlyAsync(LinkItem linkItem, TreeViewNode linkNode)
     {
         try
         {
             // Delegate to CatalogService for the actual refresh
-            await _catalogService!.RefreshCatalogAsync(linkItem, linkNode);
+            // Pass silent=true to prevent navigation/expansion
+            await _catalogService!.RefreshCatalogAsync(linkItem, linkNode, silent: true);
 
             // Save the changes
             var rootNode = GetRootCategoryNode(linkNode);

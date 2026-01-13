@@ -138,6 +138,23 @@ public class LinkDetailsBuilder
             DetailsUIHelpers.AddWarning(_detailsPanel, "No path or URL specified for this link");
         }
 
+        // Add ratings display if ratings exist
+        if (linkItem.Ratings.Count > 0)
+        {
+            var ratingsPanel = RatingManagementService.Instance?.CreateRatingsDetailsPanel(linkItem.Ratings);
+            if (ratingsPanel != null && ratingsPanel.Children.Count > 0)
+            {
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Ratings",
+                    FontSize = 18,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8)
+                });
+                _detailsPanel.Children.Add(ratingsPanel);
+            }
+        }
+
         AddTimestamps(linkItem);
         await AddFileSystemInfoAsync(linkItem, isZipFile);
 

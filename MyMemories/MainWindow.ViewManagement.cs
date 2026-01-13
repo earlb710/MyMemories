@@ -233,6 +233,15 @@ public sealed partial class MainWindow
                     });
                 }
             }
+            
+            // Recursively search all children (catalog entries, subdirectories, sub-links)
+            if (node.Children.Count > 0)
+            {
+                foreach (var child in node.Children)
+                {
+                    SearchNodeRecursive(child, searchLower, results);
+                }
+            }
         }
     }
 
@@ -401,20 +410,88 @@ public sealed partial class MainWindow
         {
             var tagItem = new MenuFlyoutItem
             {
-                Text = $"??? {tag.Name}",
                 Tag = tag.Id
             };
 
-            // Mark the active tag with a checkmark
+            // Mark the active tag with a checkmark and bold
             if (tag.Id == _activeTagFilterId)
             {
-                tagItem.Text = $"? ??? {tag.Name}";
+                // For active tag: checkmark + colored icon + name (bold)
+                var activePanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8
+                };
+                
+                activePanel.Children.Add(new TextBlock
+                {
+                    Text = "?",
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                
+                activePanel.Children.Add(new FontIcon
+                {
+                    Glyph = "\uE8EC", // Tag glyph
+                    FontSize = 14,
+                    Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
+                });
+                
+                activePanel.Children.Add(new TextBlock
+                {
+                    Text = tag.Name,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                
+                // Set the custom content as Icon
+                tagItem.Icon = new IconSourceElement
+                {
+                    IconSource = new BitmapIconSource() // Dummy, we'll use the panel
+                };
+                
+                // Actually, just use Text and Icon separately
+                tagItem.Text = $"? {tag.Name}";
+                tagItem.Icon = new FontIcon
+                {
+                    Glyph = "\uE8EC",
+                    Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
+                };
                 tagItem.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            }
+            else
+            {
+                // For inactive tag: colored icon + name
+                tagItem.Text = tag.Name;
+                tagItem.Icon = new FontIcon
+                {
+                    Glyph = "\uE8EC",
+                    Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
+                };
             }
 
             tagItem.Click += TagFilterItem_Click;
             TagFilterFlyout.Items.Add(tagItem);
         }
+    }
+
+    private static Windows.UI.Color ParseTagColor(string hex)
+    {
+        try
+        {
+            hex = hex.TrimStart('#');
+            if (hex.Length == 6)
+            {
+                return Windows.UI.Color.FromArgb(
+                    255,
+                    Convert.ToByte(hex.Substring(0, 2), 16),
+                    Convert.ToByte(hex.Substring(2, 2), 16),
+                    Convert.ToByte(hex.Substring(4, 2), 16));
+            }
+        }
+        catch { }
+        
+        return Microsoft.UI.Colors.Gray;
     }
 
     /// <summary>

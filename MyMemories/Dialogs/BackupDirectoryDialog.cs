@@ -34,7 +34,7 @@ public class BackupDirectoryDialog
         var directories = new ObservableCollection<BackupDirectoryItem>(
             currentDirectories.Select(d => new BackupDirectoryItem { Path = d }));
 
-        var mainPanel = new StackPanel { Spacing = 16, MinWidth = 500 };
+        var mainPanel = new StackPanel { Spacing = 16, MinWidth = 650 };
 
         // Header
         mainPanel.Children.Add(new TextBlock
@@ -67,12 +67,15 @@ public class BackupDirectoryDialog
         mainPanel.Children.Add(listView);
 
         // Button panel
-        var buttonPanel = new StackPanel
+        var buttonPanel = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
             Margin = new Thickness(0, 8, 0, 0)
         };
+        
+        buttonPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        buttonPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        buttonPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        buttonPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var addButton = new Button
         {
@@ -85,7 +88,24 @@ public class BackupDirectoryDialog
                     new FontIcon { Glyph = "\uE710", FontSize = 14 },
                     new TextBlock { Text = "Add Directory", VerticalAlignment = VerticalAlignment.Center }
                 }
-            }
+            },
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+
+        var editButton = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE70F", FontSize = 14 },
+                    new TextBlock { Text = "Edit Selected", VerticalAlignment = VerticalAlignment.Center }
+                }
+            },
+            IsEnabled = false,
+            Margin = new Thickness(0, 0, 8, 0)
         };
 
         var removeButton = new Button
@@ -100,7 +120,8 @@ public class BackupDirectoryDialog
                     new TextBlock { Text = "Remove Selected", VerticalAlignment = VerticalAlignment.Center }
                 }
             },
-            IsEnabled = false
+            IsEnabled = false,
+            Margin = new Thickness(0, 0, 8, 0)
         };
 
         var validateButton = new Button
@@ -117,7 +138,14 @@ public class BackupDirectoryDialog
             }
         };
 
+        // Grid positions
+        Grid.SetColumn(addButton, 0);
+        Grid.SetColumn(editButton, 1);
+        Grid.SetColumn(removeButton, 2);
+        Grid.SetColumn(validateButton, 3);
+
         buttonPanel.Children.Add(addButton);
+        buttonPanel.Children.Add(editButton);
         buttonPanel.Children.Add(removeButton);
         buttonPanel.Children.Add(validateButton);
         mainPanel.Children.Add(buttonPanel);
@@ -137,7 +165,9 @@ public class BackupDirectoryDialog
         // Event handlers
         listView.SelectionChanged += (s, e) =>
         {
-            removeButton.IsEnabled = listView.SelectedItem != null;
+            var selectedItem = listView.SelectedItem;
+            removeButton.IsEnabled = selectedItem != null;
+            editButton.IsEnabled = selectedItem != null;
         };
 
         addButton.Click += (s, e) =>
@@ -161,6 +191,34 @@ public class BackupDirectoryDialog
             }
         };
 
+        editButton.Click += (s, e) =>
+        {
+            if (listView.SelectedItem is Grid grid && grid.Tag is BackupDirectoryItem selectedDir)
+            {
+                var folderPath = _folderPickerService.BrowseForFolder(selectedDir.Path, "Select Backup Directory");
+                if (!string.IsNullOrEmpty(folderPath))
+                {
+                    // Check for duplicate (excluding the current directory being edited)
+                    if (directories.Any(d => d != selectedDir && d.Path.Equals(folderPath, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        statusText.Text = "? This directory is already in the backup list.";
+                        statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
+                        return;
+                    }
+
+                    // Update the directory path
+                    selectedDir.Path = folderPath;
+                    selectedDir.IsValid = true; // Reset validation status
+                    selectedDir.ValidationMessage = string.Empty;
+
+                    // Refresh the list
+                    RefreshListView(listView, directories);
+                    statusText.Text = $"? Updated backup directory";
+                    statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen);
+                }
+            }
+        };
+
         removeButton.Click += (s, e) =>
         {
             if (listView.SelectedIndex >= 0 && listView.SelectedIndex < directories.Count)
@@ -171,6 +229,7 @@ public class BackupDirectoryDialog
                     ? $"{directories.Count} backup directory(s) configured" 
                     : "No backup directories configured";
                 removeButton.IsEnabled = false;
+                editButton.IsEnabled = false;
             }
         };
 
@@ -240,7 +299,7 @@ public class BackupDirectoryDialog
         
         foreach (var dir in directories)
         {
-            var grid = new Grid();
+            var grid = new Grid { Tag = dir }; // Store reference to BackupDirectoryItem
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

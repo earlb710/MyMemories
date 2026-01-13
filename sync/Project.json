@@ -2,9 +2,9 @@
   "Name": "Project",
   "Icon": "\uD83D\uDCDA",
   "CreatedDate": "2026-01-10T22:18:14.7974919+02:00",
-  "ModifiedDate": "2026-01-12T23:48:41.4772427+02:00",
+  "ModifiedDate": "2026-01-13T13:49:53.0143418+02:00",
   "BackupDirectories": [
-    "C:\\Users\\Earl\\source\\repos\\MyMemories\\docs"
+    "C:\\Users\\Earl\\source\\repos\\MyMemories\\sync"
   ],
   "Links": [
     {
@@ -13,9 +13,9 @@
       "IsDirectory": true,
       "CategoryPath": "Project",
       "CreatedDate": "2026-01-10T22:19:28.9468356+02:00",
-      "ModifiedDate": "2026-01-13T13:03:08.3203846+02:00",
+      "ModifiedDate": "2026-01-13T20:25:22.690672+02:00",
       "FolderType": "CatalogueFiles",
-      "LastCatalogUpdate": "2026-01-13T13:03:08.3203718+02:00",
+      "LastCatalogUpdate": "2026-01-13T20:25:22.6906576+02:00",
       "AutoRefreshCatalog": true,
       "CatalogEntries": [
         {
@@ -172,18 +172,18 @@
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-06T12:05:03.5745798+02:00",
-          "ModifiedDate": "2026-01-12T23:10:49.7014743+02:00",
+          "ModifiedDate": "2026-01-13T13:53:13.0029491+02:00",
           "CatalogFileCount": 11,
-          "CatalogTotalSize": 197551,
+          "CatalogTotalSize": 200402,
           "CatalogEntries": [
             {
               "Title": "BackupDirectoryDialog.cs",
               "Url": "BackupDirectoryDialog.cs",
-              "Description": "Size: 17,51 KB",
+              "Description": "Size: 20,29 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-12T08:07:14.784817+02:00",
-              "ModifiedDate": "2026-01-12T09:31:35.9326542+02:00",
-              "FileSize": 17927
+              "ModifiedDate": "2026-01-13T13:53:12.9928126+02:00",
+              "FileSize": 20778
             },
             {
               "Title": "BackupFreshnessDialog.cs",
@@ -225,6 +225,22 @@
               "Title": "LinkDialogBuilder.cs",
               "Url": "LinkDialogBuilder.cs",
               "Description": "Size: 48,81 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 2,
+                  "Reason": "Dialog builder (50KB) with moderate complexity. Good separation into BuildAddLinkUI, BuildEditLinkUI, and event handlers. BrowseBookmarksAsync (~100 lines) handles flyout-based selection well. Some UI building code is verbose but unavoidable in WinUI. Could extract more helper methods for repeated patterns.",
+                  "CreatedDate": "2026-01-13T20:25:51.6373413+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.6373415+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 1,
+                  "Reason": "Application-specific dialog builder for link editing. Tightly coupled to LinkItem, CategoryNode, and app-specific models. Pattern of separating UI building into methods could be extracted. FolderType handling is app-specific. Not reusable outside this application.",
+                  "CreatedDate": "2026-01-13T20:25:51.6373454+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.6373455+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-08T14:03:18.1780514+02:00",
               "ModifiedDate": "2026-01-12T14:03:52.3308337+02:00",
@@ -293,28 +309,12 @@
           "Title": "Models",
           "Url": "Models",
           "Description": "Subfolder",
-          "Ratings": [
-            {
-              "Rating": "",
-              "Score": 2,
-              "Reason": "",
-              "CreatedDate": "2026-01-12T22:57:57.4011004+02:00",
-              "ModifiedDate": "2026-01-12T22:57:57.4011007+02:00"
-            },
-            {
-              "Rating": "",
-              "Score": 2,
-              "Reason": "",
-              "CreatedDate": "2026-01-12T22:57:57.4011089+02:00",
-              "ModifiedDate": "2026-01-12T22:57:57.401109+02:00"
-            }
-          ],
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-10T21:44:46.7894658+02:00",
-          "ModifiedDate": "2026-01-12T23:20:46.1412639+02:00",
-          "CatalogFileCount": 8,
-          "CatalogTotalSize": 46493,
+          "ModifiedDate": "2026-01-13T17:41:58.2685903+02:00",
+          "CatalogFileCount": 9,
+          "CatalogTotalSize": 51283,
           "CatalogEntries": [
             {
               "Title": "BookmarkModels.cs",
@@ -362,6 +362,15 @@
               "FileSize": 1108
             },
             {
+              "Title": "ImportModels.cs",
+              "Url": "ImportModels.cs",
+              "Description": "Size: 4,68 KB",
+              "CategoryPath": "Project",
+              "CreatedDate": "2026-01-13T13:23:10.0207746+02:00",
+              "ModifiedDate": "2026-01-13T17:41:58.2606537+02:00",
+              "FileSize": 4790
+            },
+            {
               "Title": "LinkItem.cs",
               "Url": "LinkItem.cs",
               "Description": "Size: 20,65 KB",
@@ -406,9 +415,9 @@
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-07T12:28:03.6681424+02:00",
-          "ModifiedDate": "2026-01-13T11:21:49.1332872+02:00",
-          "CatalogFileCount": 32,
-          "CatalogTotalSize": 534558,
+          "ModifiedDate": "2026-01-13T19:47:26.9346303+02:00",
+          "CatalogFileCount": 33,
+          "CatalogTotalSize": 569391,
           "CatalogEntries": [
             {
               "Title": "ArchiveRefreshService.cs",
@@ -423,6 +432,22 @@
               "Title": "AuditLogService.cs",
               "Url": "AuditLogService.cs",
               "Description": "Size: 35,05 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 6,
+                  "Reason": "Well-designed logging service (36KB). Clean API with specific log methods (LogLinkChangeAsync, LogZipCreatedAsync, etc.). Good rotation logic. Thread-safe with lock object. Some verbose debug logging could be removed for production. Appropriate complexity for comprehensive audit trail.",
+                  "CreatedDate": "2026-01-13T20:25:51.6912128+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.6912128+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 4,
+                  "Reason": "Core logging pattern (LogAsync, rotation, line numbers) is reusable. Specific log methods (LogZipCreatedAsync, LogLinkChangeAsync) are app-specific. Could extract generic AuditLogger base class. Thread-safe file writing and rotation logic valuable for other projects.",
+                  "CreatedDate": "2026-01-13T20:25:51.6912159+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.6912159+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-09T07:27:12.0007575+02:00",
               "ModifiedDate": "2026-01-12T14:03:52.5699047+02:00",
@@ -459,6 +484,22 @@
               "Title": "BookmarkImporterService.cs",
               "Url": "BookmarkImporterService.cs",
               "Description": "Size: 29,12 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 5,
+                  "Reason": "Browser bookmark import service (30KB). Good browser detection pattern. Clean JSON parsing with ChromeBookmarkFile model. DetectChangesAsync provides useful sync comparison. Flexible ImportOptions with folder/domain filters. IsFileLocked check prevents data corruption. Well-structured for browser integration.",
+                  "CreatedDate": "2026-01-13T20:25:51.7182086+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7182086+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 7,
+                  "Reason": "Highly reusable Chrome/Edge/Brave bookmark importer. Browser detection, JSON parsing, and ImportOptions are generic. BrowserFolderStructure model is clean. Could be extracted as standalone NuGet package for bookmark management. Only LinkItem dependency is in DetectChangesAsync.",
+                  "CreatedDate": "2026-01-13T20:25:51.7182103+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7182103+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-08T10:40:13.5421469+02:00",
               "ModifiedDate": "2026-01-11T19:27:05.1961801+02:00",
@@ -467,20 +508,45 @@
             {
               "Title": "CatalogService.cs",
               "Url": "CatalogService.cs",
-              "Description": "Size: 18,68 KB",
+              "Description": "Size: 19,19 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-07T12:28:23.2848245+02:00",
-              "ModifiedDate": "2026-01-12T16:44:00.3710326+02:00",
-              "FileSize": 19130
+              "ModifiedDate": "2026-01-13T13:11:50.4157442+02:00",
+              "FileSize": 19648
+            },
+            {
+              "Title": "CategoryImportService.cs",
+              "Url": "CategoryImportService.cs",
+              "Description": "Size: 24,62 KB",
+              "CategoryPath": "Project",
+              "CreatedDate": "2026-01-13T13:23:49.9207788+02:00",
+              "ModifiedDate": "2026-01-13T19:47:26.9281837+02:00",
+              "FileSize": 25214
             },
             {
               "Title": "CategoryService.cs",
               "Url": "CategoryService.cs",
-              "Description": "Size: 58,34 KB",
+              "Description": "Size: 59,34 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 4,
+                  "Reason": "Core service (60KB) with appropriate complexity for data persistence. Handles JSON serialization, encryption, backup, and recursive tree operations. ConvertNodeToCategoryData (~200 lines) is complex but necessarily so. Good error handling and logging. Well-documented with XML comments.",
+                  "CreatedDate": "2026-01-13T20:25:51.7499357+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7499357+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 2,
+                  "Reason": "Core persistence service tightly coupled to CategoryItem, LinkItem, and TreeViewNode. Encryption/backup patterns could be extracted. JSON serialization approach is reusable concept. Password caching and recursive tree conversion are app-specific. Not reusable as-is.",
+                  "CreatedDate": "2026-01-13T20:25:51.7499383+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7499383+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-03T22:07:16.8193584+02:00",
-              "ModifiedDate": "2026-01-12T16:41:49.8066233+02:00",
-              "FileSize": 59745
+              "ModifiedDate": "2026-01-13T16:38:39.2023988+02:00",
+              "FileSize": 60765
             },
             {
               "Title": "CategoryStatisticsService.cs",
@@ -584,11 +650,27 @@
             {
               "Title": "RatingManagementService.cs",
               "Url": "RatingManagementService.cs",
-              "Description": "Size: 31,85 KB",
+              "Description": "Size: 38,39 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 6,
+                  "Reason": "Comprehensive rating management (30KB). Good template-based design with multiple predefined templates (Image, Programming, Book, etc.). Clean UI helper methods (CreateRatingBadge, GetScoreColor). Qualified naming scheme (Template.RatingName) is elegant. Fallback handling for orphaned ratings is thorough.",
+                  "CreatedDate": "2026-01-13T20:25:51.7997047+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7997048+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 6,
+                  "Reason": "Template-based rating system is generic and reusable. RatingDefinition/RatingValue models are clean. UI helpers (CreateRatingBadge, GetScoreColor) depend on WinUI but pattern is portable. Predefined templates could be externalized. Minor WinUI coupling in badge creation.",
+                  "CreatedDate": "2026-01-13T20:25:51.7997061+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.7997061+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-12T14:52:42.2032535+02:00",
-              "ModifiedDate": "2026-01-12T23:42:37.935037+02:00",
-              "FileSize": 32611
+              "ModifiedDate": "2026-01-13T14:01:20.5124004+02:00",
+              "FileSize": 39310
             },
             {
               "Title": "SortingService.cs",
@@ -639,6 +721,22 @@
               "Title": "WebSummaryService.cs",
               "Url": "WebSummaryService.cs",
               "Description": "Size: 31,74 KB",
+              "Ratings": [
+                {
+                  "Rating": "Programming.Complexity",
+                  "Score": 7,
+                  "Reason": "Clean web scraping service (32KB). Excellent binary content detection before downloading. Well-organized extraction methods (ExtractTitle, ExtractMetaDescription, etc.). Good regex patterns for meta tags. Robust HTML entity decoding. Handles edge cases gracefully. High quality for web parsing complexity.",
+                  "CreatedDate": "2026-01-13T20:25:51.8514693+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.8514693+02:00"
+                },
+                {
+                  "Rating": "Programming.Reusability",
+                  "Score": 9,
+                  "Reason": "Standalone web summary service with zero app dependencies. WebPageSummary model is clean and generic. Binary content detection, meta tag extraction, and HTML entity decoding are universally useful. Could be published as independent NuGet package. Only uses standard HttpClient.",
+                  "CreatedDate": "2026-01-13T20:25:51.8514726+02:00",
+                  "ModifiedDate": "2026-01-13T20:25:51.8514727+02:00"
+                }
+              ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-09T13:37:42.3230578+02:00",
               "ModifiedDate": "2026-01-09T21:34:20.367495+02:00",
@@ -660,9 +758,9 @@
               "IsDirectory": true,
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-10T22:51:44.5856386+02:00",
-              "ModifiedDate": "2026-01-12T17:35:48.4899503+02:00",
+              "ModifiedDate": "2026-01-13T14:02:28.6943594+02:00",
               "CatalogFileCount": 5,
-              "CatalogTotalSize": 74765
+              "CatalogTotalSize": 76147
             }
           ]
         },
@@ -851,6 +949,15 @@
           "FileSize": 8460
         },
         {
+          "Title": "MainWindow.ContextMenu.Category.cs",
+          "Url": "MainWindow.ContextMenu.Category.cs",
+          "Description": "Size: 28,56 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T13:06:15.7812268+02:00",
+          "ModifiedDate": "2026-01-13T13:06:16.0897887+02:00",
+          "FileSize": 29245
+        },
+        {
           "Title": "MainWindow.ContextMenu.Configuration.cs",
           "Url": "MainWindow.ContextMenu.Configuration.cs",
           "Description": "Size: 10,88 KB",
@@ -862,11 +969,11 @@
         {
           "Title": "MainWindow.ContextMenu.cs",
           "Url": "MainWindow.ContextMenu.cs",
-          "Description": "Size: 61,2 KB",
+          "Description": "Size: 1,31 KB",
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:12:05.4780565+02:00",
-          "ModifiedDate": "2026-01-13T12:58:05.8803649+02:00",
-          "FileSize": 62673
+          "ModifiedDate": "2026-01-13T13:08:32.587399+02:00",
+          "FileSize": 1342
         },
         {
           "Title": "MainWindow.ContextMenu.Helpers.cs",
@@ -876,6 +983,33 @@
           "CreatedDate": "2026-01-13T12:43:13.4091506+02:00",
           "ModifiedDate": "2026-01-13T12:56:17.7241903+02:00",
           "FileSize": 10868
+        },
+        {
+          "Title": "MainWindow.ContextMenu.Link.cs",
+          "Url": "MainWindow.ContextMenu.Link.cs",
+          "Description": "Size: 17,1 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T13:07:17.3674965+02:00",
+          "ModifiedDate": "2026-01-13T13:07:17.811306+02:00",
+          "FileSize": 17512
+        },
+        {
+          "Title": "MainWindow.ContextMenu.Shared.cs",
+          "Url": "MainWindow.ContextMenu.Shared.cs",
+          "Description": "Size: 2,84 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T13:07:36.074411+02:00",
+          "ModifiedDate": "2026-01-13T13:07:36.3229159+02:00",
+          "FileSize": 2910
+        },
+        {
+          "Title": "MainWindow.ContextMenu.Summarize.cs",
+          "Url": "MainWindow.ContextMenu.Summarize.cs",
+          "Description": "Size: 13,13 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T13:08:16.8721651+02:00",
+          "ModifiedDate": "2026-01-13T13:08:17.132491+02:00",
+          "FileSize": 13444
         },
         {
           "Title": "MainWindow.DragDrop.cs",
@@ -903,6 +1037,15 @@
           "CreatedDate": "2026-01-08T18:23:39.8300695+02:00",
           "ModifiedDate": "2026-01-13T11:19:34.3384621+02:00",
           "FileSize": 29215
+        },
+        {
+          "Title": "MainWindow.Import.cs",
+          "Url": "MainWindow.Import.cs",
+          "Description": "Size: 18,76 KB",
+          "CategoryPath": "Project",
+          "CreatedDate": "2026-01-13T13:26:09.0664719+02:00",
+          "ModifiedDate": "2026-01-13T19:46:56.5395024+02:00",
+          "FileSize": 19206
         },
         {
           "Title": "MainWindow.Links.cs",
@@ -935,6 +1078,22 @@
           "Title": "MainWindow.TreeView.cs",
           "Url": "MainWindow.TreeView.cs",
           "Description": "Size: 31,76 KB",
+          "Ratings": [
+            {
+              "Rating": "Programming.Complexity",
+              "Score": 4,
+              "Reason": "TreeView event handlers (32KB). Good keyboard shortcut handling (Delete, F2, Ctrl\u002BC, etc.). Clean separation of concerns with handler methods. URL status display in status bar is well-implemented. RefreshUrlStateAsync with progress UI is thorough. Some methods could be extracted to reduce length.",
+              "CreatedDate": "2026-01-13T20:25:51.9114996+02:00",
+              "ModifiedDate": "2026-01-13T20:25:51.9114996+02:00"
+            },
+            {
+              "Rating": "Programming.Reusability",
+              "Score": -1,
+              "Reason": "MainWindow partial class for TreeView events. Keyboard shortcut pattern (LinksTreeView_KeyDown) is reusable concept. Handler methods access app-specific services directly. FindVisualChildren\u003CT\u003E is a reusable utility. Overall tightly coupled to MainWindow state.",
+              "CreatedDate": "2026-01-13T20:25:51.9115011+02:00",
+              "ModifiedDate": "2026-01-13T20:25:51.9115011+02:00"
+            }
+          ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:08:50.6093322+02:00",
           "ModifiedDate": "2026-01-12T17:43:45.6815318+02:00",
@@ -943,29 +1102,61 @@
         {
           "Title": "MainWindow.ViewManagement.cs",
           "Url": "MainWindow.ViewManagement.cs",
-          "Description": "Size: 16,68 KB",
+          "Description": "Size: 19,46 KB",
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:12:19.5096838+02:00",
-          "ModifiedDate": "2026-01-12T14:03:52.1676485+02:00",
-          "FileSize": 17078
+          "ModifiedDate": "2026-01-13T16:53:01.6228037+02:00",
+          "FileSize": 19931
         },
         {
           "Title": "MainWindow.xaml",
           "Url": "MainWindow.xaml",
-          "Description": "Size: 48,99 KB",
+          "Description": "Size: 50,92 KB",
+          "Ratings": [
+            {
+              "Rating": "Programming.Complexity",
+              "Score": 5,
+              "Reason": "XAML layout file (50KB) is appropriately complex for a full-featured WinUI app. Defines TreeView, context menus, status bar, and detail panels. Well-organized with named elements for code-behind access. Uses proper data templates and converters. Size is justified by comprehensive UI.",
+              "CreatedDate": "2026-01-13T20:25:51.9768359+02:00",
+              "ModifiedDate": "2026-01-13T20:25:51.976836+02:00"
+            },
+            {
+              "Rating": "Programming.Reusability",
+              "Score": -4,
+              "Reason": "Application-specific XAML layout. TreeView structure, context menus, and panel organization are specific to MyMemories. References app-specific converters and resources. No reusable components - purely this application\u0027s UI definition.",
+              "CreatedDate": "2026-01-13T20:25:51.9768375+02:00",
+              "ModifiedDate": "2026-01-13T20:25:51.9768375+02:00"
+            }
+          ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-02T19:26:59.9038549+02:00",
-          "ModifiedDate": "2026-01-12T20:50:17.3948663+02:00",
-          "FileSize": 50163
+          "ModifiedDate": "2026-01-13T16:22:33.6816098+02:00",
+          "FileSize": 52144
         },
         {
           "Title": "MainWindow.xaml.cs",
           "Url": "MainWindow.xaml.cs",
-          "Description": "Size: 34,27 KB",
+          "Description": "Size: 34,41 KB",
+          "Ratings": [
+            {
+              "Rating": "Programming.Complexity",
+              "Score": 5,
+              "Reason": "Main window code-behind (35KB) with good structure. InitializeAsync is well-organized with clear service initialization order. Good separation into partial classes. CheckAllFoldersForChangesAsync handles auto-refresh well. LoadAllCategoriesAsync with RemoveInvalidNodes shows defensive coding. Appropriate for main application entry point.",
+              "CreatedDate": "2026-01-13T20:25:52.0422853+02:00",
+              "ModifiedDate": "2026-01-13T20:25:52.0422853+02:00"
+            },
+            {
+              "Rating": "Programming.Reusability",
+              "Score": -3,
+              "Reason": "Application entry point with service orchestration. All services are app-specific (CategoryService, TagManagementService, etc.). InitializeAsync pattern is reusable concept but implementation is not. GetRootCategoryNode and NodeContainsDescendant are utility methods but coupled to TreeViewNode.",
+              "CreatedDate": "2026-01-13T20:25:52.0422869+02:00",
+              "ModifiedDate": "2026-01-13T20:25:52.042287+02:00"
+            }
+          ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-02T19:26:59.9043511+02:00",
-          "ModifiedDate": "2026-01-13T11:21:05.6934502+02:00",
-          "FileSize": 35092
+          "ModifiedDate": "2026-01-13T13:11:04.2926851+02:00",
+          "FileSize": 35235
         },
         {
           "Title": "MainWindow.Zip.cs",

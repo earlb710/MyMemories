@@ -1,0 +1,59 @@
+{
+  "Version": "1.0",
+  "Description": "Clean up outdated links and remove old tags",
+  "ImportDate": "2024-12-21T11:30:00",
+  "Operations": [
+    {
+      "Operation": "Delete",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Imported Bookmarks",
+        "Title": "GitHub - Old Repository"
+      },
+      "Options": {
+        "DeleteCatalogEntries": true
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Imported Bookmarks",
+        "Title": "Internal Wiki (VPN Required)"
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "Visual Studio 2022"
+      },
+      "Data": {
+        "TagIds": ["tag-old", "tag-deprecated"]
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "Old API Docs"
+      },
+      "Data": {
+        "RatingNames": ["Quality", "Usefulness"]
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "SubCategory",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Archived"
+      },
+      "Options": {
+        "Recursive": true,
+        "BackupBeforeDelete": true
+      }
+    }
+  ]
+}

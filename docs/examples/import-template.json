@@ -1,0 +1,208 @@
+{
+  "Version": "1.0",
+  "Description": "Template for category import operations - Replace with your description",
+  "ImportDate": "2024-12-21T00:00:00",
+  "Operations": [
+    {
+      "_comment": "ADD CATEGORY - Creates a new root category",
+      "Operation": "Add",
+      "Target": "Category",
+      "Data": {
+        "Name": "New Category Name",
+        "Description": "Category description",
+        "Icon": "??",
+        "Keywords": "keywords for search",
+        "TagIds": [],
+        "SortOrder": "NameAscending",
+        "IsBookmarkCategory": false,
+        "IsBookmarkLookup": false,
+        "IsAuditLoggingEnabled": false
+      },
+      "Options": {
+        "MergeIfExists": false,
+        "UpdateExisting": false
+      }
+    },
+    {
+      "_comment": "ADD SUBCATEGORY - Creates a subcategory under existing category",
+      "Operation": "Add",
+      "Target": "SubCategory",
+      "Identifier": {
+        "ParentCategoryPath": "Parent Category Name"
+      },
+      "Data": {
+        "Name": "Sub Category Name",
+        "Description": "Subcategory description",
+        "Icon": "??",
+        "SortOrder": "NameAscending"
+      }
+    },
+    {
+      "_comment": "ADD LINK - Adds a link to a category",
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Category Name"
+      },
+      "Data": {
+        "Title": "Link Title",
+        "Url": "https://example.com",
+        "Description": "Link description",
+        "Keywords": "link keywords",
+        "TagIds": [],
+        "IsDirectory": false,
+        "FolderType": "LinkOnly"
+      },
+      "Options": {
+        "SkipIfExists": true,
+        "UpdateIfExists": false
+      }
+    },
+    {
+      "_comment": "UPDATE CATEGORY - Updates properties of existing category",
+      "Operation": "Update",
+      "Target": "Category",
+      "Identifier": {
+        "Name": "Existing Category Name"
+      },
+      "Data": {
+        "Description": "Updated description",
+        "Keywords": "updated keywords",
+        "TagIds": ["tag-id-1", "tag-id-2"]
+      },
+      "Options": {
+        "MergeTagIds": false,
+        "PreserveTimestamps": false
+      }
+    },
+    {
+      "_comment": "UPDATE LINK - Updates properties of existing link",
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Existing Link Title"
+      },
+      "Data": {
+        "Url": "https://new-url.com",
+        "Description": "Updated description",
+        "Keywords": "updated keywords",
+        "TagIds": ["tag-id-1"]
+      },
+      "Options": {
+        "MergeTagIds": false,
+        "UpdateUrlStatus": false
+      }
+    },
+    {
+      "_comment": "ADD TAGS - Adds tags to a link or category",
+      "Operation": "Add",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Link Title"
+      },
+      "Data": {
+        "TagIds": ["tag-id-1", "tag-id-2"]
+      },
+      "Options": {
+        "CreateTagsIfMissing": false
+      }
+    },
+    {
+      "_comment": "UPDATE RATINGS - Updates or adds ratings to a link",
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Link Title"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Quality",
+            "Value": 5
+          },
+          {
+            "Name": "Usefulness",
+            "Value": 4
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "_comment": "DELETE LINK - Removes a link from category",
+      "Operation": "Delete",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Link to Delete"
+      },
+      "Options": {
+        "DeleteCatalogEntries": true
+      }
+    },
+    {
+      "_comment": "DELETE SUBCATEGORY - Removes a subcategory and its contents",
+      "Operation": "Delete",
+      "Target": "SubCategory",
+      "Identifier": {
+        "CategoryPath": "Parent Category/SubCategory Name"
+      },
+      "Options": {
+        "Recursive": true,
+        "BackupBeforeDelete": true
+      }
+    },
+    {
+      "_comment": "DELETE TAGS - Removes specific tags from a link",
+      "Operation": "Delete",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Link Title"
+      },
+      "Data": {
+        "TagIds": ["tag-to-remove-1", "tag-to-remove-2"]
+      }
+    },
+    {
+      "_comment": "DELETE RATINGS - Removes specific ratings from a link",
+      "Operation": "Delete",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Category Name",
+        "Title": "Link Title"
+      },
+      "Data": {
+        "RatingNames": ["Quality", "Usefulness"]
+      }
+    }
+  ],
+  "_instructions": {
+    "usage": "Copy this template and modify for your needs",
+    "tips": [
+      "Remove unused operations",
+      "Replace placeholder values with your data",
+      "Remove _comment and _instructions fields before importing",
+      "Test with 1-2 operations first",
+      "Always backup before importing",
+      "Use forward slashes (/) in CategoryPath",
+      "Check operation order (Add categories before links)",
+      "Review options for each operation type"
+    ],
+    "commonOptions": {
+      "Add": "SkipIfExists, UpdateIfExists, MergeIfExists",
+      "Update": "MergeTagIds, MergeRatings, PreserveTimestamps, UpdateUrlStatus",
+      "Delete": "Recursive, BackupBeforeDelete, DeleteCatalogEntries"
+    },
+    "requiredFields": {
+      "Category": ["Name"],
+      "Link": ["Title", "Url"],
+      "Identifier": ["CategoryPath for links, Name for categories"]
+    }
+  }
+}

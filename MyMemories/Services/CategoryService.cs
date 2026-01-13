@@ -863,6 +863,8 @@ public class CategoryService
                         if (catalogData.Ratings != null && catalogData.Ratings.Count > 0)
                         {
                             catalogEntry.Ratings = new List<RatingValue>(catalogData.Ratings);
+                            // Clean up corrupt ratings (those without names)
+                            CleanupCorruptRatings(catalogEntry.Ratings);
                         }
 
                         // Check if this directory has changed since the catalog was last updated
@@ -1379,5 +1381,28 @@ public class CategoryService
             return categoryPassword;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Removes corrupt ratings (those without valid names) from a ratings list.
+    /// A rating is considered corrupt if its Rating property is null, empty, or whitespace.
+    /// </summary>
+    private static void CleanupCorruptRatings(List<RatingValue> ratings)
+    {
+        if (ratings == null || ratings.Count == 0)
+            return;
+
+        // Remove ratings without names
+        var corruptRatings = ratings.Where(r => string.IsNullOrWhiteSpace(r.Rating)).ToList();
+        
+        if (corruptRatings.Count > 0)
+        {
+            foreach (var corrupt in corruptRatings)
+            {
+                ratings.Remove(corrupt);
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"[CleanupCorruptRatings] Removed {corruptRatings.Count} corrupt rating(s) without names");
+        }
     }
 }

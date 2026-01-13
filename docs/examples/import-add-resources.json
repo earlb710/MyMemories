@@ -1,0 +1,207 @@
+{
+  "Version": "1.0",
+  "Description": "Add new development resources and update existing bookmarks",
+  "ImportDate": "2024-12-21T10:30:00",
+  "Operations": [
+    {
+      "Operation": "Add",
+      "Target": "Category",
+      "Data": {
+        "Name": "Learning Resources",
+        "Description": "Online courses, tutorials, and educational materials",
+        "Icon": "??",
+        "Keywords": "education learning tutorial course",
+        "TagIds": ["tag-education"],
+        "SortOrder": "NameAscending",
+        "IsBookmarkCategory": true,
+        "IsBookmarkLookup": true,
+        "IsAuditLoggingEnabled": false
+      },
+      "Options": {
+        "MergeIfExists": true,
+        "UpdateExisting": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "SubCategory",
+      "Identifier": {
+        "ParentCategoryPath": "Learning Resources"
+      },
+      "Data": {
+        "Name": "Video Courses",
+        "Description": "Video-based learning platforms",
+        "Icon": "??",
+        "SortOrder": "NameAscending"
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources/Video Courses"
+      },
+      "Data": {
+        "Title": "Pluralsight",
+        "Url": "https://www.pluralsight.com/",
+        "Description": "Technology skills platform with expert-led courses",
+        "Keywords": "video courses training tech",
+        "TagIds": ["tag-video", "tag-paid"],
+        "IsDirectory": false
+      },
+      "Options": {
+        "SkipIfExists": true,
+        "UpdateIfExists": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources/Video Courses"
+      },
+      "Data": {
+        "Title": "Udemy",
+        "Url": "https://www.udemy.com/",
+        "Description": "Online learning platform with thousands of courses",
+        "Keywords": "video courses online learning",
+        "TagIds": ["tag-video"],
+        "IsDirectory": false
+      },
+      "Options": {
+        "SkipIfExists": true
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources/Video Courses"
+      },
+      "Data": {
+        "Title": "YouTube - Programming Channels",
+        "Url": "https://www.youtube.com/",
+        "Description": "Free programming tutorials and tech talks",
+        "Keywords": "video free programming youtube",
+        "TagIds": ["tag-video", "tag-free"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "SubCategory",
+      "Identifier": {
+        "ParentCategoryPath": "Learning Resources"
+      },
+      "Data": {
+        "Name": "Interactive Platforms",
+        "Description": "Learn by doing - interactive coding platforms",
+        "Icon": "??",
+        "SortOrder": "NameAscending"
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources/Interactive Platforms"
+      },
+      "Data": {
+        "Title": "Codecademy",
+        "Url": "https://www.codecademy.com/",
+        "Description": "Interactive coding lessons for beginners and advanced",
+        "Keywords": "interactive coding learn",
+        "TagIds": ["tag-interactive", "tag-coding"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources/Interactive Platforms"
+      },
+      "Data": {
+        "Title": "LeetCode",
+        "Url": "https://leetcode.com/",
+        "Description": "Practice coding problems and prepare for interviews",
+        "Keywords": "coding practice algorithms interview",
+        "TagIds": ["tag-interactive", "tag-interview"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Learning Resources"
+      },
+      "Data": {
+        "Title": "freeCodeCamp",
+        "Url": "https://www.freecodecamp.org/",
+        "Description": "Free coding bootcamp with certifications",
+        "Keywords": "free coding bootcamp certification",
+        "TagIds": ["tag-free", "tag-certification"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "Visual Studio 2022"
+      },
+      "Data": {
+        "Description": "Download page for Visual Studio IDE - Latest 2022 version with .NET 8 support",
+        "Keywords": "ide microsoft visual studio 2022 dotnet8",
+        "TagIds": ["tag-microsoft", "tag-tools", "tag-ide"]
+      },
+      "Options": {
+        "MergeTagIds": true,
+        "UpdateUrlStatus": true
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "GitHub REST API"
+      },
+      "Data": {
+        "TagIds": ["tag-api", "tag-github"]
+      },
+      "Options": {
+        "CreateTagsIfMissing": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Documentation",
+        "Title": "Microsoft .NET Documentation"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Quality",
+            "Value": 5
+          },
+          {
+            "Name": "Completeness",
+            "Value": 5
+          },
+          {
+            "Name": "Usefulness",
+            "Value": 5
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    }
+  ]
+}

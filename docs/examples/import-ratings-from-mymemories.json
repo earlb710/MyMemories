@@ -1,0 +1,275 @@
+{
+  "Version": "1.0",
+  "Description": "Import ratings from MyMemories.json documentation file to project links",
+  "ImportDate": "2024-12-21T14:00:00",
+  "Operations": [
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Assets",
+        "Title": "AppIcon.ico"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "",
+            "Value": -2
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Dialogs",
+        "Title": "LinkDialogBuilder.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 2
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 1
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Dialogs",
+        "Title": "LinkDialogBuilder_New.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "",
+            "Value": 0
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Models",
+        "Title": "Models"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "",
+            "Value": 2
+          },
+          {
+            "Name": "",
+            "Value": 2
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "AuditLogService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 6
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 4
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "BookmarkImporterService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 7
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "CategoryService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 4
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 2
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "RatingManagementService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 6
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 6
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories/Services",
+        "Title": "WebSummaryService.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 7
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": 9
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.TreeView.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 4
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -1
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.xaml"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -4
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Project/MyMemories",
+        "Title": "MainWindow.xaml.cs"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Programming.Complexity",
+            "Value": 5
+          },
+          {
+            "Name": "Programming.Reusability",
+            "Value": -3
+          }
+        ]
+      },
+      "Options": {
+        "MergeRatings": false
+      }
+    }
+  ]
+}

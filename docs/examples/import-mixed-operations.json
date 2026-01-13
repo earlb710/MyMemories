@@ -1,0 +1,202 @@
+{
+  "Version": "1.0",
+  "Description": "Mixed operations: add new category, update existing links, and clean up old entries",
+  "ImportDate": "2024-12-21T12:00:00",
+  "Operations": [
+    {
+      "Operation": "Add",
+      "Target": "Category",
+      "Data": {
+        "Name": "Quick Links",
+        "Description": "Frequently accessed websites and tools",
+        "Icon": "?",
+        "Keywords": "quick access frequent shortcuts",
+        "SortOrder": "NameAscending",
+        "IsBookmarkCategory": true,
+        "IsBookmarkLookup": true
+      },
+      "Options": {
+        "MergeIfExists": false,
+        "UpdateExisting": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Quick Links"
+      },
+      "Data": {
+        "Title": "Gmail",
+        "Url": "https://mail.google.com/",
+        "Description": "Google email service",
+        "Keywords": "email google mail",
+        "TagIds": ["tag-email", "tag-google"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Quick Links"
+      },
+      "Data": {
+        "Title": "GitHub Dashboard",
+        "Url": "https://github.com/dashboard",
+        "Description": "GitHub activity dashboard",
+        "Keywords": "github git code repository",
+        "TagIds": ["tag-github", "tag-dev"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Quick Links"
+      },
+      "Data": {
+        "Title": "Azure Portal",
+        "Url": "https://portal.azure.com/",
+        "Description": "Microsoft Azure cloud services portal",
+        "Keywords": "azure cloud microsoft portal",
+        "TagIds": ["tag-azure", "tag-microsoft", "tag-cloud"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Category",
+      "Identifier": {
+        "Name": "Development Resources"
+      },
+      "Data": {
+        "IsAuditLoggingEnabled": true
+      },
+      "Options": {
+        "PreserveTimestamps": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Code Samples",
+        "Title": "C# Projects"
+      },
+      "Data": {
+        "AutoRefreshCatalog": true,
+        "Description": "Collection of C# sample projects and experiments - Auto-refreshed on startup"
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "Old Link 1"
+      }
+    },
+    {
+      "Operation": "Delete",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources",
+        "Title": "Old Link 2"
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Tag",
+      "Identifier": {
+        "CategoryPath": "Quick Links"
+      },
+      "Data": {
+        "TagIds": ["tag-frequent", "tag-daily"]
+      },
+      "Options": {
+        "CreateTagsIfMissing": true
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "Rating",
+      "Identifier": {
+        "CategoryPath": "Quick Links",
+        "Title": "GitHub Dashboard"
+      },
+      "Data": {
+        "Ratings": [
+          {
+            "Name": "Usefulness",
+            "Value": 5
+          },
+          {
+            "Name": "Frequency",
+            "Value": 5
+          }
+        ]
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "SubCategory",
+      "Identifier": {
+        "ParentCategoryPath": "Development Resources"
+      },
+      "Data": {
+        "Name": "Docker Resources",
+        "Description": "Container and orchestration documentation",
+        "Icon": "??",
+        "SortOrder": "NameAscending"
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Docker Resources"
+      },
+      "Data": {
+        "Title": "Docker Documentation",
+        "Url": "https://docs.docker.com/",
+        "Description": "Official Docker documentation for containers and images",
+        "Keywords": "docker container kubernetes devops",
+        "TagIds": ["tag-docker", "tag-devops", "tag-documentation"],
+        "IsDirectory": false
+      },
+      "Options": {
+        "SkipIfExists": true
+      }
+    },
+    {
+      "Operation": "Add",
+      "Target": "Link",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Docker Resources"
+      },
+      "Data": {
+        "Title": "Kubernetes Docs",
+        "Url": "https://kubernetes.io/docs/",
+        "Description": "Official Kubernetes container orchestration documentation",
+        "Keywords": "kubernetes k8s orchestration containers",
+        "TagIds": ["tag-kubernetes", "tag-devops", "tag-documentation"],
+        "IsDirectory": false
+      }
+    },
+    {
+      "Operation": "Update",
+      "Target": "SubCategory",
+      "Identifier": {
+        "CategoryPath": "Development Resources/Code Samples"
+      },
+      "Data": {
+        "TagIds": ["tag-samples", "tag-code", "tag-learning"]
+      },
+      "Options": {
+        "MergeTagIds": true
+      }
+    }
+  ]
+}
