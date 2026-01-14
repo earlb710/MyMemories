@@ -784,6 +784,106 @@
                     <StackPanel x:Name="DetailsPanel" Spacing="12"/>
                 </ScrollViewer>
 
+                <!-- Tabbed Details View (Summary + Content) -->
+                <TabView
+                    Grid.Row="2"
+                    x:Name="DetailsTabView"
+                    Visibility="Collapsed"
+                    IsAddTabButtonVisible="False"
+                    TabWidthMode="Equal"
+                    CloseButtonOverlayMode="Auto"
+                    CanDragTabs="False"
+                    CanReorderTabs="False"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <TabView.Resources>
+                        <!-- Make tabs more prominent with larger font and padding -->
+                        <x:Double x:Key="TabViewItemHeaderFontSize">14</x:Double>
+                        <Thickness x:Key="TabViewItemHeaderPadding">16,10,16,10</Thickness>
+                        <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="#FF0078D4"/>
+                        <SolidColorBrush x:Key="TabViewItemHeaderForegroundSelected" Color="White"/>
+                    </TabView.Resources>
+                    <TabView.TabItems>
+                        <!-- Summary Tab -->
+                        <TabViewItem Header="📋 Summary" IsClosable="False">
+                            <ScrollViewer Padding="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                <StackPanel x:Name="SummaryPanel" Spacing="12"/>
+                            </ScrollViewer>
+                        </TabViewItem>
+                        
+                        <!-- Content Tab -->
+                        <TabViewItem Header="📄 Content" IsClosable="False">
+                            <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                <Grid x:Name="ContentTabGrid">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <!-- All content elements fill the entire grid cell -->
+                                    <!-- Only ONE should be visible at a time -->
+                                    
+                                    <!-- ScrollViewer for custom content panels -->
+                                    <ScrollViewer Grid.Row="0" x:Name="ContentTabScroll" Padding="20" Visibility="Collapsed">
+                                        <StackPanel x:Name="ContentPanel" Spacing="12"/>
+                                    </ScrollViewer>
+                                    
+                                    <!-- Image viewer for content tab -->
+                                    <Image 
+                                        Grid.Row="0"
+                                        x:Name="ContentTabImage"
+                                        Visibility="Collapsed"
+                                        Stretch="Uniform"/>
+                                    
+                                    <!-- Text viewer for content tab -->
+                                    <ScrollViewer
+                                        Grid.Row="0"
+                                        x:Name="ContentTabTextScroll"
+                                        Visibility="Collapsed">
+                                        <TextBox 
+                                            x:Name="ContentTabText"
+                                            IsReadOnly="True"
+                                            AcceptsReturn="True"
+                                            TextWrapping="Wrap"
+                                            BorderThickness="0"
+                                            Background="Transparent"
+                                            FontFamily="Consolas"
+                                            Padding="12"/>
+                                    </ScrollViewer>
+                                    
+                                    <!-- WebView for content tab (HTML, PDF, URLs) - MUST fill available space -->
+                                    <WebView2 
+                                        Grid.Row="0"
+                                        x:Name="ContentTabWeb"
+                                        Visibility="Collapsed"/>
+                                    
+                                    <!-- No content message -->
+                                    <StackPanel 
+                                        Grid.Row="0"
+                                        x:Name="ContentTabNoContent"
+                                        Visibility="Collapsed"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="8">
+                                        <FontIcon Glyph="&#xE8A5;" FontSize="48" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock 
+                                            x:Name="ContentTabNoContentText"
+                                            Text="No content to display"
+                                            FontSize="14"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            HorizontalAlignment="Center"
+                                            TextWrapping="Wrap"
+                                            TextAlignment="Center"
+                                            MaxWidth="300"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </TabViewItem>
+                    </TabView.TabItems>
+                </TabView>
+
                 <!-- Welcome Panel -->
                 <StackPanel 
                     Grid.Row="2"

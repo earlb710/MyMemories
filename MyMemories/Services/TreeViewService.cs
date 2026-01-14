@@ -238,10 +238,18 @@ public class TreeViewService
         // Insert at same position
         parentNode.Children.Insert(nodeIndex, newNode);
 
-        // Restore selection if needed
+        // Restore selection if needed - but set flag to prevent re-entry in SelectionChanged
         if (wasSelected)
         {
-            _treeView.SelectedNode = newNode;
+            _mainWindow.SetNodeRefreshingFlag(true);
+            try
+            {
+                _treeView.SelectedNode = newNode;
+            }
+            finally
+            {
+                _mainWindow.SetNodeRefreshingFlag(false);
+            }
         }
 
         return newNode;

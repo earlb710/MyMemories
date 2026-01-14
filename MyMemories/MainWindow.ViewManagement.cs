@@ -30,6 +30,7 @@ public sealed partial class MainWindow
         WebViewer.Visibility = Visibility.Collapsed;
         TextViewerScroll.Visibility = Visibility.Collapsed;
         DetailsViewerScroll.Visibility = Visibility.Collapsed;
+        DetailsTabView.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
         HeaderViewerScroll.Visibility = Visibility.Collapsed;
         UrlBarPanel.Visibility = Visibility.Collapsed;
@@ -52,10 +53,10 @@ public sealed partial class MainWindow
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Web:
-                WebViewer.Visibility = Visibility.Visible;
-                HeaderViewerScroll.Visibility = Visibility.Visible;
-                DetailsViewerScroll.Visibility = Visibility.Collapsed;
+                // For web content with URL bar: show URL bar only, content goes in tabs
+                // Don't hide/show the main WebViewer here - tabs handle content
                 UrlBarPanel.Visibility = Visibility.Visible;
+                HeaderViewerScroll.Visibility = Visibility.Visible;
                 break;
             case FileViewerType.Document:
                 WebViewer.Visibility = Visibility.Visible;
@@ -74,7 +75,10 @@ public sealed partial class MainWindow
 
     private void ShowDetailsViewers()
     {
-        DetailsViewerScroll.Visibility = Visibility.Visible;
+        // Use the tabbed view instead of the simple details scroll viewer
+        DetailsTabView.Visibility = Visibility.Visible;
+        // Don't change tab selection - preserve user's choice
+        // Tab selection is only reset when explicitly needed (e.g., first load)
         HeaderViewerScroll.Visibility = Visibility.Visible;
     }
 

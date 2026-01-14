@@ -53,6 +53,9 @@ public class TreeViewEventService
     {
         hideAllViewers();
         
+        // Clear content but preserve tab selection
+        _detailsViewService.ClearTabbedViewContent();
+        
         // Create refresh callback for bookmark import categories
         Func<Task>? refreshBookmarks = category.IsBookmarkImport && refreshBookmarksCallback != null
             ? async () => await refreshBookmarksCallback(category, node)
@@ -68,10 +71,14 @@ public class TreeViewEventService
             ? async () => await syncBookmarksCallback(category, node)
             : null;
         
+        // Populate Summary tab with category details
         await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
+
+        // Show Content tab message for categories
+        _detailsViewService.ShowContentMessage("Categories do not have content. Select a link to view content.");
 
         showDetailsViewers();
         setStatus($"Viewing: {categoryPath} ({node.Children.Count} item(s))");

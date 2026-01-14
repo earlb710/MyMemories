@@ -147,7 +147,12 @@ public class CategoryDetailsBuilder
         // Add ratings display if ratings exist
         if (category.Ratings.Count > 0)
         {
+            System.Diagnostics.Debug.WriteLine($"[CategoryDetailsBuilder] Category has {category.Ratings.Count} ratings");
+            
             var ratingsPanel = RatingManagementService.Instance?.CreateRatingsDetailsPanel(category.Ratings);
+            
+            System.Diagnostics.Debug.WriteLine($"[CategoryDetailsBuilder] ratingsPanel Children.Count = {ratingsPanel?.Children.Count ?? -1}");
+            
             if (ratingsPanel != null && ratingsPanel.Children.Count > 0)
             {
                 _detailsPanel.Children.Add(new TextBlock
@@ -158,6 +163,10 @@ public class CategoryDetailsBuilder
                     Margin = new Thickness(0, 0, 0, 8)
                 });
                 _detailsPanel.Children.Add(ratingsPanel);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[CategoryDetailsBuilder] Ratings panel was null or empty!");
             }
         }
 

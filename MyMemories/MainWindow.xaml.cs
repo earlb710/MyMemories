@@ -130,8 +130,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     {
         try
         {
-            // Initialize WebView2
+            // Initialize WebView2 controls
             await WebViewer.EnsureCoreWebView2Async();
+            await ContentTabWeb.EnsureCoreWebView2Async();
 
             // Initialize configuration service FIRST
             _configService = new ConfigurationService();
@@ -160,6 +161,21 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _fileViewerService = new FileViewerService(ImageViewer, WebViewer, TextViewer);
             _detailsViewService = new DetailsViewService(DetailsPanel);
             _detailsViewService.SetHeaderPanel(HeaderPanel);
+            
+            // Setup tabbed view for Summary and Content tabs
+            _detailsViewService.SetupTabbedView(
+                DetailsTabView,
+                SummaryPanel,
+                ContentTabGrid,
+                ContentTabScroll,
+                ContentPanel,
+                ContentTabImage,
+                ContentTabTextScroll,
+                ContentTabText,
+                ContentTabWeb,
+                ContentTabNoContent,
+                ContentTabNoContentText);
+            
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
             
@@ -190,6 +206,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _doubleTapHandlerService = new DoubleTapHandlerService(_fileLauncherService, _urlStateCheckerService, _categoryService, _treeViewService);
 
             // Set up WebView2 navigation events to update URL bar
+            // Handle both the main WebViewer (for legacy) and ContentTabWeb (for tabbed view)
             WebViewer.CoreWebView2.NavigationStarting += (s, e) =>
             {
                 UrlTextBox.Text = e.Uri;
@@ -206,6 +223,26 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 if (WebViewer.CoreWebView2.Source != null)
                 {
                     UrlTextBox.Text = WebViewer.CoreWebView2.Source;
+                }
+            };
+            
+            // Set up ContentTabWeb navigation events for the tabbed view
+            ContentTabWeb.CoreWebView2.NavigationStarting += (s, e) =>
+            {
+                UrlTextBox.Text = e.Uri;
+                IsUrlLoading = true;
+            };
+            
+            ContentTabWeb.CoreWebView2.NavigationCompleted += (s, e) =>
+            {
+                IsUrlLoading = false;
+            };
+            
+            ContentTabWeb.CoreWebView2.SourceChanged += (s, e) =>
+            {
+                if (ContentTabWeb.CoreWebView2?.Source != null)
+                {
+                    UrlTextBox.Text = ContentTabWeb.CoreWebView2.Source;
                 }
             };
 
@@ -850,7 +887,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Loads the URL from the text box into the WebView2.
+    /// Loads the URL from the text box into the Content tab's WebView2.
     /// </summary>
     private async void LoadUrlFromTextBox()
     {
@@ -875,7 +912,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             if (Uri.TryCreate(urlText, UriKind.Absolute, out Uri? uri))
             {
                 IsUrlLoading = true; // Start loading animation
-                await _fileViewerService!.LoadUrlAsync(uri);
+                
+                // Load URL in the Content tab's WebView, not the main WebViewer
+                await _detailsViewService!.ShowContentWebAsync(urlText);
+                
                 StatusText.Text = $"Loaded: {uri}";
             }
             else

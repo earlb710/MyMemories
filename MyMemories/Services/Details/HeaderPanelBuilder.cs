@@ -139,6 +139,7 @@ public class HeaderPanelBuilder
 
     /// <summary>
     /// Shows link header in the header panel with icon on the left and optional link badge.
+    /// Description is now shown in Summary tab, not header.
     /// </summary>
     public void ShowLinkHeader(string linkTitle, string? description, string icon, bool showLinkBadge = false, 
         ulong? fileSize = null, DateTime? createdDate = null, DateTime? modifiedDate = null, LinkItem? linkItem = null)
@@ -232,7 +233,7 @@ public class HeaderPanelBuilder
             }
         }
 
-        // Ratings row
+        // Ratings row (compact badges only, full details in Summary tab)
         if (linkItem != null && linkItem.Ratings.Count > 0)
         {
             var ratingsPanel = CreateRatingsDisplayPanel(linkItem.Ratings);
@@ -242,6 +243,7 @@ public class HeaderPanelBuilder
             }
         }
 
+        // Timestamp info
         if (createdDate.HasValue || modifiedDate.HasValue)
         {
             var timestampParts = new List<string>();
@@ -262,16 +264,8 @@ public class HeaderPanelBuilder
             });
         }
 
-        if (!string.IsNullOrWhiteSpace(description))
-        {
-            textPanel.Children.Add(new TextBlock
-            {
-                Text = description,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Colors.Gray)
-            });
-        }
+        // NOTE: Description is now shown in Summary tab, not in header
+        // This keeps the header compact and moves details to the appropriate tab
 
         horizontalPanel.Children.Add(textPanel);
         containerGrid.Children.Add(horizontalPanel);

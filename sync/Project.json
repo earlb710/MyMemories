@@ -2,7 +2,7 @@
   "Name": "Project",
   "Icon": "\uD83D\uDCDA",
   "CreatedDate": "2026-01-10T22:18:14.7974919+02:00",
-  "ModifiedDate": "2026-01-13T13:49:53.0143418+02:00",
+  "ModifiedDate": "2026-01-14T12:12:10.4370395+02:00",
   "BackupDirectories": [
     "C:\\Users\\Earl\\source\\repos\\MyMemories\\sync"
   ],
@@ -13,9 +13,9 @@
       "IsDirectory": true,
       "CategoryPath": "Project",
       "CreatedDate": "2026-01-10T22:19:28.9468356+02:00",
-      "ModifiedDate": "2026-01-13T20:25:22.690672+02:00",
+      "ModifiedDate": "2026-01-14T12:02:52.1770792+02:00",
       "FolderType": "CatalogueFiles",
-      "LastCatalogUpdate": "2026-01-13T20:25:22.6906576+02:00",
+      "LastCatalogUpdate": "2026-01-14T12:02:52.177067+02:00",
       "AutoRefreshCatalog": true,
       "CatalogEntries": [
         {
@@ -172,18 +172,18 @@
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-06T12:05:03.5745798+02:00",
-          "ModifiedDate": "2026-01-13T13:53:13.0029491+02:00",
+          "ModifiedDate": "2026-01-14T11:57:38.9826813+02:00",
           "CatalogFileCount": 11,
-          "CatalogTotalSize": 200402,
+          "CatalogTotalSize": 206384,
           "CatalogEntries": [
             {
               "Title": "BackupDirectoryDialog.cs",
               "Url": "BackupDirectoryDialog.cs",
-              "Description": "Size: 20,29 KB",
+              "Description": "Size: 26,13 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-12T08:07:14.784817+02:00",
-              "ModifiedDate": "2026-01-13T13:53:12.9928126+02:00",
-              "FileSize": 20778
+              "ModifiedDate": "2026-01-14T11:57:38.9707772+02:00",
+              "FileSize": 26760
             },
             {
               "Title": "BackupFreshnessDialog.cs",
@@ -312,7 +312,7 @@
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-10T21:44:46.7894658+02:00",
-          "ModifiedDate": "2026-01-13T17:41:58.2685903+02:00",
+          "ModifiedDate": "2026-01-14T11:54:56.5773028+02:00",
           "CatalogFileCount": 9,
           "CatalogTotalSize": 51283,
           "CatalogEntries": [
@@ -331,7 +331,7 @@
               "Description": "Size: 5,15 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-10T21:45:12.8362262+02:00",
-              "ModifiedDate": "2026-01-12T23:19:36.389074+02:00",
+              "ModifiedDate": "2026-01-14T11:54:56.5763107+02:00",
               "FileSize": 5272
             },
             {
@@ -340,7 +340,7 @@
               "Description": "Size: 6,31 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-10T21:47:04.2429455+02:00",
-              "ModifiedDate": "2026-01-12T14:55:21.7996104+02:00",
+              "ModifiedDate": "2026-01-14T11:54:56.5777979+02:00",
               "FileSize": 6458
             },
             {
@@ -415,9 +415,9 @@
           "IsDirectory": true,
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-07T12:28:03.6681424+02:00",
-          "ModifiedDate": "2026-01-13T19:47:26.9346303+02:00",
+          "ModifiedDate": "2026-01-14T11:54:25.4915443+02:00",
           "CatalogFileCount": 33,
-          "CatalogTotalSize": 569391,
+          "CatalogTotalSize": 596022,
           "CatalogEntries": [
             {
               "Title": "ArchiveRefreshService.cs",
@@ -545,7 +545,7 @@
               ],
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-03T22:07:16.8193584+02:00",
-              "ModifiedDate": "2026-01-13T16:38:39.2023988+02:00",
+              "ModifiedDate": "2026-01-14T11:54:25.4955124+02:00",
               "FileSize": 60765
             },
             {
@@ -569,11 +569,11 @@
             {
               "Title": "DetailsViewService.cs",
               "Url": "DetailsViewService.cs",
-              "Description": "Size: 5,09 KB",
+              "Description": "Size: 23,35 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-03T22:07:37.6512954+02:00",
-              "ModifiedDate": "2026-01-11T20:15:20.3961652+02:00",
-              "FileSize": 5217
+              "ModifiedDate": "2026-01-14T11:25:27.2419138+02:00",
+              "FileSize": 23910
             },
             {
               "Title": "DoubleTapHandlerService.cs",
@@ -632,11 +632,11 @@
             {
               "Title": "LinkSelectionService.cs",
               "Url": "LinkSelectionService.cs",
-              "Description": "Size: 20,7 KB",
+              "Description": "Size: 23,14 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-07T12:28:11.9862224+02:00",
-              "ModifiedDate": "2026-01-12T14:03:52.6299207+02:00",
-              "FileSize": 21193
+              "ModifiedDate": "2026-01-14T10:42:57.497237+02:00",
+              "FileSize": 23696
             },
             {
               "Title": "PasswordDialogService.cs",
@@ -693,29 +693,29 @@
             {
               "Title": "TreeViewEventService.cs",
               "Url": "TreeViewEventService.cs",
-              "Description": "Size: 3,34 KB",
+              "Description": "Size: 3,67 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-07T12:28:03.6686588+02:00",
-              "ModifiedDate": "2026-01-11T19:31:32.0083914+02:00",
-              "FileSize": 3417
+              "ModifiedDate": "2026-01-13T23:14:20.2952617+02:00",
+              "FileSize": 3759
             },
             {
               "Title": "TreeViewService.cs",
               "Url": "TreeViewService.cs",
-              "Description": "Size: 7,52 KB",
+              "Description": "Size: 7,78 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-03T22:07:47.0172956+02:00",
-              "ModifiedDate": "2026-01-12T11:32:20.1877809+02:00",
-              "FileSize": 7701
+              "ModifiedDate": "2026-01-14T08:50:36.1107269+02:00",
+              "FileSize": 7971
             },
             {
               "Title": "UrlStateCheckerService.cs",
               "Url": "UrlStateCheckerService.cs",
-              "Description": "Size: 21,2 KB",
+              "Description": "Size: 23,55 KB",
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-08T17:48:50.4841022+02:00",
-              "ModifiedDate": "2026-01-11T19:39:26.5640524+02:00",
-              "FileSize": 21710
+              "ModifiedDate": "2026-01-14T10:19:18.4552452+02:00",
+              "FileSize": 24113
             },
             {
               "Title": "WebSummaryService.cs",
@@ -758,9 +758,9 @@
               "IsDirectory": true,
               "CategoryPath": "Project",
               "CreatedDate": "2026-01-10T22:51:44.5856386+02:00",
-              "ModifiedDate": "2026-01-13T14:02:28.6943594+02:00",
+              "ModifiedDate": "2026-01-13T22:48:49.8158867+02:00",
               "CatalogFileCount": 5,
-              "CatalogTotalSize": 76147
+              "CatalogTotalSize": 78567
             }
           ]
         },
@@ -951,11 +951,11 @@
         {
           "Title": "MainWindow.ContextMenu.Category.cs",
           "Url": "MainWindow.ContextMenu.Category.cs",
-          "Description": "Size: 28,56 KB",
+          "Description": "Size: 29,28 KB",
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-13T13:06:15.7812268+02:00",
-          "ModifiedDate": "2026-01-13T13:06:16.0897887+02:00",
-          "FileSize": 29245
+          "ModifiedDate": "2026-01-14T11:58:29.2595974+02:00",
+          "FileSize": 29983
         },
         {
           "Title": "MainWindow.ContextMenu.Configuration.cs",
@@ -1077,7 +1077,7 @@
         {
           "Title": "MainWindow.TreeView.cs",
           "Url": "MainWindow.TreeView.cs",
-          "Description": "Size: 31,76 KB",
+          "Description": "Size: 33,96 KB",
           "Ratings": [
             {
               "Rating": "Programming.Complexity",
@@ -1096,22 +1096,22 @@
           ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:08:50.6093322+02:00",
-          "ModifiedDate": "2026-01-12T17:43:45.6815318+02:00",
-          "FileSize": 32524
+          "ModifiedDate": "2026-01-14T11:32:41.4618111+02:00",
+          "FileSize": 34779
         },
         {
           "Title": "MainWindow.ViewManagement.cs",
           "Url": "MainWindow.ViewManagement.cs",
-          "Description": "Size: 19,46 KB",
+          "Description": "Size: 19,77 KB",
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-05T15:12:19.5096838+02:00",
-          "ModifiedDate": "2026-01-13T16:53:01.6228037+02:00",
-          "FileSize": 19931
+          "ModifiedDate": "2026-01-14T10:08:37.4501847+02:00",
+          "FileSize": 20247
         },
         {
           "Title": "MainWindow.xaml",
           "Url": "MainWindow.xaml",
-          "Description": "Size: 50,92 KB",
+          "Description": "Size: 56,86 KB",
           "Ratings": [
             {
               "Rating": "Programming.Complexity",
@@ -1130,13 +1130,13 @@
           ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-02T19:26:59.9038549+02:00",
-          "ModifiedDate": "2026-01-13T16:22:33.6816098+02:00",
-          "FileSize": 52144
+          "ModifiedDate": "2026-01-14T11:03:27.4634116+02:00",
+          "FileSize": 58221
         },
         {
           "Title": "MainWindow.xaml.cs",
           "Url": "MainWindow.xaml.cs",
-          "Description": "Size: 34,41 KB",
+          "Description": "Size: 35,88 KB",
           "Ratings": [
             {
               "Rating": "Programming.Complexity",
@@ -1155,8 +1155,8 @@
           ],
           "CategoryPath": "Project",
           "CreatedDate": "2026-01-02T19:26:59.9043511+02:00",
-          "ModifiedDate": "2026-01-13T13:11:04.2926851+02:00",
-          "FileSize": 35235
+          "ModifiedDate": "2026-01-14T10:10:09.7035211+02:00",
+          "FileSize": 36745
         },
         {
           "Title": "MainWindow.Zip.cs",

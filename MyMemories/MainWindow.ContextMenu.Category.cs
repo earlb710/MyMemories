@@ -157,8 +157,22 @@ public sealed partial class MainWindow
             return;
         }
 
-        // Show the backup directory dialog
+        // Show the backup directory dialog with category file path for manual backup
         var dialog = new Dialogs.BackupDirectoryDialog(Content.XamlRoot, _folderPickerService!);
+        
+        // Set the category file path for backup operations
+        var sanitizedName = Utilities.FileUtilities.SanitizeFileName(category.Name);
+        var dataFolder = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "MyMemories", "Data");
+        var categoryFilePath = System.IO.Path.Combine(dataFolder, sanitizedName + ".json");
+        if (!System.IO.File.Exists(categoryFilePath))
+        {
+            // Try encrypted version
+            categoryFilePath = System.IO.Path.Combine(dataFolder, sanitizedName + ".zip.json");
+        }
+        dialog.SetCategoryFilePath(categoryFilePath);
+        
         var result = await dialog.ShowAsync(category.Name, category.BackupDirectories);
 
         if (result != null)

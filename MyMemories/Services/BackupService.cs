@@ -15,6 +15,9 @@ public class BackupService
 {
     private static BackupService? _instance;
     
+    // Prefix used to mark manual backup directories in the stored list
+    private const string ManualPrefix = "[MANUAL]";
+    
     /// <summary>
     /// Singleton instance of the BackupService.
     /// </summary>
@@ -42,6 +45,50 @@ public class BackupService
         public int FailureCount => Results.Count(r => !r.Success);
         public bool AllSuccessful => Results.All(r => r.Success);
         public bool HasFailures => Results.Any(r => !r.Success);
+    }
+
+    /// <summary>
+    /// Filters a list of backup directory entries to return only automatic directories.
+    /// Strips the [MANUAL] prefix from entries.
+    /// </summary>
+    /// <param name="directoryEntries">Directory entries that may include [MANUAL] prefix.</param>
+    /// <returns>List of paths for automatic directories only.</returns>
+    public static IEnumerable<string> GetAutomaticDirectories(IEnumerable<string> directoryEntries)
+    {
+        foreach (var entry in directoryEntries)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+                continue;
+                
+            // Skip manual directories
+            if (entry.StartsWith(ManualPrefix, StringComparison.Ordinal))
+                continue;
+                
+            yield return entry;
+        }
+    }
+
+    /// <summary>
+    /// Parses a directory entry to extract the path (strips [MANUAL] prefix if present).
+    /// </summary>
+    public static string GetDirectoryPath(string entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry))
+            return entry;
+            
+        if (entry.StartsWith(ManualPrefix, StringComparison.Ordinal))
+            return entry.Substring(ManualPrefix.Length);
+            
+        return entry;
+    }
+
+    /// <summary>
+    /// Checks if a directory entry is marked as manual.
+    /// </summary>
+    public static bool IsManualDirectory(string entry)
+    {
+        return !string.IsNullOrWhiteSpace(entry) && 
+               entry.StartsWith(ManualPrefix, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -176,7 +223,7 @@ public class BackupService
     public async Task<BackupSummary> BackupFileWithTimestampAsync(
         string sourceFilePath,
         IEnumerable<string> backupDirectories,
-        string timestampFormat = "yyyyMMdd_HHmmss")
+        string timestampFormat = "yyyyMMdd_HHmms")
     {
         var summary = new BackupSummary();
 

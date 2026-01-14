@@ -303,16 +303,20 @@ public class CategoryService
     }
 
     /// <summary>
-    /// Backs up the category file to configured backup directories.
+    /// Backs up the category file to configured automatic backup directories only.
+    /// Directories prefixed with [MANUAL] are skipped during automatic backup.
     /// </summary>
     private async Task BackupCategoryFileAsync(string sourceFilePath, List<string> backupDirectories)
     {
-        if (backupDirectories.Count == 0 || !File.Exists(sourceFilePath))
+        // Filter to only automatic directories (those without [MANUAL] prefix)
+        var autoDirectories = BackupService.GetAutomaticDirectories(backupDirectories).ToList();
+        
+        if (autoDirectories.Count == 0 || !File.Exists(sourceFilePath))
             return;
 
         try
         {
-            var summary = await BackupService.Instance.BackupFileAsync(sourceFilePath, backupDirectories);
+            var summary = await BackupService.Instance.BackupFileAsync(sourceFilePath, autoDirectories);
 
             if (summary.HasFailures)
             {
@@ -326,7 +330,7 @@ public class CategoryService
             if (summary.SuccessCount > 0)
             {
                 LogUtilities.LogInfo("CategoryService.BackupCategoryFileAsync",
-                    $"Successfully backed up to {summary.SuccessCount} location(s)");
+                    $"Successfully backed up to {summary.SuccessCount} automatic location(s)");
             }
         }
         catch (Exception ex)

@@ -52,6 +52,26 @@ public class LinkDetailsBuilder
         Button? createButton = null;
         Button? refreshButton = null;
 
+        // Add description at the top if available
+        if (!string.IsNullOrWhiteSpace(linkItem.Description))
+        {
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Description",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = linkItem.Description,
+                FontSize = 14,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                Margin = new Thickness(0, 0, 0, 16)
+            });
+        }
+
         bool isZipEntryUrl = !string.IsNullOrEmpty(linkItem.Url) && linkItem.Url.Contains("::");
 
         if (isZipEntryUrl)
@@ -141,7 +161,13 @@ public class LinkDetailsBuilder
         // Add ratings display if ratings exist
         if (linkItem.Ratings.Count > 0)
         {
+            System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Link has {linkItem.Ratings.Count} ratings");
+            System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] RatingManagementService.Instance = {RatingManagementService.Instance != null}");
+            
             var ratingsPanel = RatingManagementService.Instance?.CreateRatingsDetailsPanel(linkItem.Ratings);
+            
+            System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] ratingsPanel = {ratingsPanel != null}, Children.Count = {ratingsPanel?.Children.Count ?? -1}");
+            
             if (ratingsPanel != null && ratingsPanel.Children.Count > 0)
             {
                 _detailsPanel.Children.Add(new TextBlock
@@ -152,6 +178,19 @@ public class LinkDetailsBuilder
                     Margin = new Thickness(0, 0, 0, 8)
                 });
                 _detailsPanel.Children.Add(ratingsPanel);
+                System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Added ratings panel to details");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Ratings panel was null or empty!");
+                
+                // Debug: Show raw ratings data
+                foreach (var r in linkItem.Ratings)
+                {
+                    System.Diagnostics.Debug.WriteLine($"  Rating: '{r.Rating}', Score: {r.Score}, Reason: '{r.Reason}'");
+                    var def = RatingManagementService.Instance?.GetDefinition(r.Rating);
+                    System.Diagnostics.Debug.WriteLine($"  Definition found: {def != null} (Name: {def?.Name ?? "N/A"})");
+                }
             }
         }
 

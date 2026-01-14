@@ -61,7 +61,7 @@ public class LinkSelectionService
         if (ZipUtilities.IsZipEntryUrl(linkItem.Url))
         {
             System.Diagnostics.Debug.WriteLine($"[HandleLinkSelectionAsync] IS zip entry URL - calling HandleZipEntryAsync");
-            await HandleZipEntryAsync(linkItem, linkNode, hideAllViewers, showViewer, setStatus);
+            await HandleZipEntryAsync(linkItem, linkNode, hideAllViewers, showDetailsViewers, setStatus);
             return;
         }
 
@@ -72,13 +72,14 @@ public class LinkSelectionService
     private async Task HandleEmptyUrlAsync(LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         hideAllViewers();
+        _detailsViewService.ClearTabbedViewContent();
         await ShowLinkDetailsWithCatalogActions(linkItem, linkNode, setStatus);
         showDetailsViewers();
         ShowLinkHeaderWithBadge(linkItem, setStatus);
         setStatus("No URL specified for this link");
     }
 
-    private async Task HandleZipEntryAsync(LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
+    private async Task HandleZipEntryAsync(LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         try
         {
@@ -86,44 +87,28 @@ public class LinkSelectionService
             System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] URL: {linkItem.Url}");
             System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] IsDirectory: {linkItem.IsDirectory}");
             
-            if (!linkItem.IsDirectory)
+            hideAllViewers();
+            _detailsViewService.ClearTabbedViewContent();
+            
+            // Show link details in Summary tab
+            await ShowLinkDetailsWithCatalogActions(linkItem, linkNode, setStatus);
+            
+            // Show header
+            ShowLinkHeaderWithBadge(linkItem, setStatus);
+            
+            // Show tabbed view
+            showDetailsViewers();
+            
+            if (linkItem.IsDirectory)
             {
-                // Get the password from the root category
-                string? password = null;
-                if (linkNode != null)
-                {
-                    var rootCategoryNode = GetRootCategoryNode(linkNode);
-                    var rootCategory = rootCategoryNode?.Content as CategoryItem;
-
-                    if (rootCategory?.PasswordProtection != PasswordProtectionType.None)
-                    {
-                        password = await GetCategoryPasswordAsync(rootCategory);
-                    }
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling hideAllViewers");
-                hideAllViewers();
-                
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling LoadZipEntryAsync");
-                // Load and show the actual content
-                var result = await _fileViewerService.LoadZipEntryAsync(linkItem.Url, password);
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] LoadZipEntryAsync completed, ViewerType: {result.ViewerType}");
-
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Calling showViewer");
-                // Show the appropriate viewer based on the file type
-                showViewer(result.ViewerType);
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] showViewer completed");
-
-                // Show compact link header (no full details panel for zip entries)
-                ShowLinkHeaderWithBadge(linkItem, setStatus);
-                
-                setStatus($"Viewing from zip: {linkItem.Title}");
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Completed successfully");
+                setStatus($"Viewing zip folder: {linkItem.Title}");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Skipping - IsDirectory is true");
+                setStatus($"Viewing from zip: {linkItem.Title}");
             }
+            
+            System.Diagnostics.Debug.WriteLine($"[HandleZipEntryAsync] Completed successfully");
         }
         catch (Exception ex)
         {
@@ -181,7 +166,7 @@ public class LinkSelectionService
             }
             else if (Uri.TryCreate(linkItem.Url, UriKind.Absolute, out Uri? uri))
             {
-                await HandleUriAsync(uri, linkItem, linkNode, hideAllViewers, showViewer, setStatus);
+                await HandleUriAsync(uri, linkItem, linkNode, hideAllViewers, showDetailsViewers, showViewer, setStatus);
             }
         }
         catch (Exception ex)
@@ -193,6 +178,7 @@ public class LinkSelectionService
     private async Task HandleDirectoryOrZipAsync(LinkItem linkItem, TreeViewNode? linkNode, bool isZipFile, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
     {
         hideAllViewers();
+        _detailsViewService.ClearTabbedViewContent();
 
         await ShowLinkDetailsWithCatalogActions(linkItem, linkNode, setStatus);
 
@@ -210,91 +196,156 @@ public class LinkSelectionService
             : $"Viewing directory: {linkItem.Title}");
     }
 
-    private async Task HandleUriAsync(Uri uri, LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
+    private async Task HandleUriAsync(Uri uri, LinkItem linkItem, TreeViewNode? linkNode, Action hideAllViewers, Action showDetailsViewers, Action<FileViewerType> showViewer, Action<string> setStatus)
     {
-        if (uri.IsFile)
+        System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] START - URI: {uri}, IsFile: {uri.IsFile}");
+        
+        hideAllViewers();
+        _detailsViewService.ClearTabbedViewContent();
+        
+        // Show link details in Summary tab (but don't load content - we'll handle that below)
+        await ShowLinkDetailsInSummaryOnly(linkItem, linkNode, setStatus);
+        
+        // Show URL status banner if not accessible or if redirect detected (from previous check)
+        if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
         {
-            hideAllViewers();
-            var file = await StorageFile.GetFileFromPathAsync(linkItem.Url);
-            var result = await _fileViewerService.LoadFileAsync(file);
-            
-            // Show the appropriate viewer based on the file type
-            showViewer(result.ViewerType);
-            
-            ShowLinkHeaderWithBadge(linkItem, setStatus);
-            setStatus($"Viewing file: {linkItem.Title}");
+            _detailsViewService.ShowUrlStatusBanner(linkItem);
         }
-        else
+        else if (linkItem.HasRedirect)
         {
-            // For web URLs, always check and update the URL status with redirect detection
-            if (_urlStateCheckerService != null)
+            _detailsViewService.ShowUrlStatusBanner(linkItem);
+        }
+        
+        // Show header
+        ShowLinkHeaderWithBadge(linkItem, setStatus);
+        
+        // For web URLs (not file:// URLs), load content and check for redirects
+        if (!uri.IsFile)
+        {
+            // Update URL text box
+            if (_urlTextBox != null)
             {
-                setStatus($"Checking URL accessibility...");
+                _urlTextBox.Text = uri.ToString();
+            }
+            
+            // Show tabbed details view (Summary + Content tabs) WITH URL bar FIRST
+            showDetailsViewers();
+            
+            // Also show the URL bar panel for web navigation
+            showViewer(FileViewerType.Web);
+            
+            // Now load URL in the Content tab's WebView
+            System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] Loading URL in ContentTabWeb: {uri}");
+            await _detailsViewService.ShowContentWebAsync(uri.ToString());
+            
+            setStatus($"Loaded: {uri}");
+            
+            // Check URL status synchronously for redirect detection
+            // This allows us to show the redirect button immediately
+            if (_urlStateCheckerService != null && linkNode != null)
+            {
+                bool shouldCheck = !linkItem.UrlLastChecked.HasValue ||
+                                   (DateTime.Now - linkItem.UrlLastChecked.Value).TotalMinutes > 5;
                 
-                try
+                if (shouldCheck)
                 {
-                    var previousStatus = linkItem.UrlStatus;
-                    var previousRedirectUrl = linkItem.RedirectUrl;
+                    System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] Checking URL for redirect detection...");
+                    setStatus($"Checking URL status...");
                     
-                    // Use the redirect-aware check
-                    var checkResult = await _urlStateCheckerService.CheckUrlWithRedirectAsync(linkItem.Url);
-                    
-                    // Update the link item
-                    linkItem.UrlStatus = checkResult.Status;
-                    linkItem.UrlStatusMessage = checkResult.Message;
-                    linkItem.UrlLastChecked = DateTime.Now;
-                    
-                    // Update redirect information
-                    if (checkResult.RedirectDetected && !string.IsNullOrEmpty(checkResult.RedirectUrl))
+                    try
                     {
-                        linkItem.RedirectUrl = checkResult.RedirectUrl;
-                    }
-                    else
-                    {
-                        linkItem.RedirectUrl = null;
-                    }
-                    
-                    // Save the updated status if status or redirect changed and we have a node
-                    bool statusChanged = previousStatus != checkResult.Status || previousRedirectUrl != linkItem.RedirectUrl;
-                    if (statusChanged && linkNode != null)
-                    {
-                        // Refresh the tree node visual
-                        _treeViewService.RefreshLinkNode(linkNode, linkItem);
+                        var result = await _urlStateCheckerService.CheckUrlWithRedirectAsync(uri.ToString());
                         
-                        // Save the category
+                        System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] Check result: Status={result.Status}, RedirectDetected={result.RedirectDetected}, RedirectUrl={result.RedirectUrl ?? "(null)"}");
+                        
+                        // Update link item with results
+                        linkItem.UrlStatus = result.Status;
+                        linkItem.UrlStatusMessage = result.Message;
+                        linkItem.UrlLastChecked = DateTime.Now;
+                        
+                        if (result.RedirectDetected && !string.IsNullOrEmpty(result.RedirectUrl))
+                        {
+                            linkItem.RedirectUrl = result.RedirectUrl;
+                            System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] REDIRECT DETECTED: {uri} -> {result.RedirectUrl}");
+                            
+                            // Refresh header to show redirect button
+                            ShowLinkHeaderWithBadge(linkItem, setStatus);
+                            
+                            // Show URL status banner for redirect
+                            _detailsViewService.ShowUrlStatusBanner(linkItem);
+                        }
+                        else
+                        {
+                            linkItem.RedirectUrl = null;
+                        }
+                        
+                        // Save the category to persist changes
                         var rootNode = GetRootCategoryNode(linkNode);
                         if (rootNode != null)
                         {
                             await _categoryService.SaveCategoryAsync(rootNode);
                         }
+                        
+                        setStatus($"Loaded: {uri}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] URL check failed: {ex.Message}");
+                        setStatus($"Loaded: {uri}");
                     }
                 }
-                catch (Exception)
+                else
                 {
-                    // Continue loading the URL even if the check fails
+                    System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] Skipping URL check - last checked {linkItem.UrlLastChecked}");
                 }
             }
-            
-            hideAllViewers();
-            
-            await _fileViewerService.LoadUrlAsync(uri, _urlTextBox);
-            
-            // Show web viewer for URLs
-            showViewer(FileViewerType.Web);
-            
-            // Show URL status banner if not accessible or if redirect detected
-            if (linkItem.UrlStatus != UrlStatus.Unknown && linkItem.UrlStatus != UrlStatus.Accessible)
-            {
-                _detailsViewService.ShowUrlStatusBanner(linkItem);
-            }
-            else if (linkItem.HasRedirect)
-            {
-                _detailsViewService.ShowUrlStatusBanner(linkItem);
-            }
-            
-            ShowLinkHeaderWithBadge(linkItem, setStatus);
-            setStatus($"Loaded: {uri}");
         }
+        else
+        {
+            // For file:// URLs, use tabbed details view without URL bar
+            // Load file content
+            await _detailsViewService.LoadContentForLinkAsync(linkItem);
+            showDetailsViewers();
+            setStatus($"Viewing file: {linkItem.Title}");
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[HandleUriAsync] END");
+    }
+    
+    /// <summary>
+    /// Shows link details in Summary tab WITHOUT loading content in the Content tab.
+    /// Used when we want to handle content loading separately (e.g., for web URLs).
+    /// </summary>
+    private async Task ShowLinkDetailsInSummaryOnly(LinkItem linkItem, TreeViewNode? linkNode, Action<string> setStatus)
+    {
+        if (linkNode != null)
+        {
+            // Only pass RefreshArchiveFromManifestAsync for zip files
+            bool isZipFile = IsZipFile(linkItem.Url);
+            
+            // Create save callback
+            Func<Task> saveCallback = async () =>
+            {
+                var rootNode = GetRootCategoryNode(linkNode);
+                if (rootNode != null)
+                {
+                    await _categoryService.SaveCategoryAsync(rootNode);
+                }
+            };
+            
+            await _detailsViewService.ShowLinkDetailsAsync(linkItem, linkNode,
+                async () => await _catalogService.CreateCatalogAsync(linkItem, linkNode),
+                async () => await _catalogService.RefreshCatalogAsync(linkItem, linkNode),
+                isZipFile ? async () => await _catalogService.RefreshArchiveFromManifestAsync(linkItem, linkNode) : null,
+                saveCallback);
+        }
+        else
+        {
+            await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, null, null);
+        }
+        
+        // NOTE: We intentionally do NOT call LoadContentForLinkAsync here
+        // The caller will handle content loading separately
     }
 
     private async Task HandleSelectionErrorAsync(LinkItem linkItem, TreeViewNode? linkNode, Exception ex, Action hideAllViewers, Action showDetailsViewers, Action<string> setStatus)
@@ -318,6 +369,7 @@ public class LinkSelectionService
         }
         
         hideAllViewers();
+        _detailsViewService.ClearTabbedViewContent();
 
         await ShowLinkDetailsWithCatalogActions(linkItem, linkNode, setStatus);
         
@@ -449,6 +501,9 @@ public class LinkSelectionService
         {
             await _detailsViewService.ShowLinkDetailsAsync(linkItem, null, async () => { }, async () => { }, null, null);
         }
+        
+        // Load content in the Content tab
+        await _detailsViewService.LoadContentForLinkAsync(linkItem);
     }
 
     private TreeViewNode? GetRootCategoryNode(TreeViewNode node)

@@ -13,15 +13,41 @@ namespace MyMemories;
 
 public sealed partial class MainWindow
 {
+    private static int _selectionChangeCounter = 0;
+    private static DateTime _lastSelectionTime = DateTime.MinValue;
+
+    // Guard to prevent re-entry during node refresh operations
+    private static bool _isRefreshingNode = false;
+
+    /// <summary>
+    /// Sets the node refreshing flag to prevent SelectionChanged from re-triggering during node refresh.
+    /// Called by TreeViewService when restoring selection after node refresh.
+    /// </summary>
+    public void SetNodeRefreshingFlag(bool value)
+    {
+        _isRefreshingNode = value;
+    }
+
     private async void LinksTreeView_SelectionChanged(object sender, TreeViewSelectionChangedEventArgs e)
     {
-        if (e.AddedItems.Count == 0 || e.AddedItems[0] is not TreeViewNode node)
+        // Skip if we're just refreshing a node (which triggers a selection change)
+        if (_isRefreshingNode)
+        {
             return;
+        }
+        
+        if (e.AddedItems.Count == 0 || e.AddedItems[0] is not TreeViewNode node)
+        {
+            return;
+        }
 
         // Handle category selection with bookmark refresh capability
         if (node.Content is CategoryItem category)
         {
             HideAllViewers();
+            
+            // Clear content from both tabs (including WebView)
+            _detailsViewService!.ClearTabbedViewContent();
 
             // Create refresh callback for bookmark import categories
             Func<Task>? refreshBookmarks = category.IsBookmarkImport
@@ -42,6 +68,9 @@ public sealed partial class MainWindow
 
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
+
+            // Show Content tab message for categories
+            _detailsViewService.ShowContentMessage("Categories do not have content. Select a link to view content.");
 
             ShowDetailsViewers();
             StatusText.Text = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";
@@ -383,6 +412,29 @@ public sealed partial class MainWindow
             });
             resultsPanel.Children.Add(notFoundPanel);
             
+            // Redirect count with blue icon (if any redirects detected)
+            if (stats.RedirectCount > 0)
+            {
+                var redirectPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8
+                };
+                redirectPanel.Children.Add(new FontIcon
+                {
+                    Glyph = "\uE72A", // Forward/Redirect icon
+                    FontSize = 16,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue)
+                });
+                redirectPanel.Children.Add(new TextBlock
+                {
+                    Text = $"Redirects Detected: {stats.RedirectCount}",
+                    FontSize = 14,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                resultsPanel.Children.Add(redirectPanel);
+            }
+            
             var resultsDialog = new ContentDialog
             {
                 Title = "URL Check Complete",
@@ -393,7 +445,12 @@ public sealed partial class MainWindow
 
             await resultsDialog.ShowAsync();
 
-            StatusText.Text = $"URL check complete: {stats.AccessibleCount} accessible, {stats.ErrorCount} errors, {stats.NotFoundCount} not found";
+            var statusMessage = $"URL check complete: {stats.AccessibleCount} accessible, {stats.ErrorCount} errors, {stats.NotFoundCount} not found";
+            if (stats.RedirectCount > 0)
+            {
+                statusMessage += $", {stats.RedirectCount} redirects";
+            }
+            StatusText.Text = statusMessage;
         }
     }
 
