@@ -1409,4 +1409,33 @@ public class CategoryService
             System.Diagnostics.Debug.WriteLine($"[CleanupCorruptRatings] Removed {corruptRatings.Count} corrupt rating(s) without names");
         }
     }
+
+    /// <summary>
+    /// Gets the file path for a category by name.
+    /// Returns the path to the .json or .zip.json file, whichever exists.
+    /// Returns null if neither file exists.
+    /// </summary>
+    public string? GetCategoryFilePath(string categoryName)
+    {
+        var fileName = SanitizeFileName(categoryName);
+        
+        var jsonPath = Path.Combine(_dataFolder, fileName + ".json");
+        if (File.Exists(jsonPath))
+        {
+            return jsonPath;
+        }
+        
+        var encryptedPath = Path.Combine(_dataFolder, fileName + ".zip.json");
+        if (File.Exists(encryptedPath))
+        {
+            return encryptedPath;
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the data folder path used by this CategoryService.
+    /// </summary>
+    public string DataFolder => _dataFolder;
 }

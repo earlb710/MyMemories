@@ -298,6 +298,7 @@ public class BackupFreshnessService
         int succeeded = 0;
         int failed = 0;
 
+
         foreach (var backup in backupsToUpdate.Where(b => b.ShouldUpdate))
         {
             try
@@ -321,4 +322,78 @@ public class BackupFreshnessService
 
         return (succeeded, failed);
     }
+
+    #region Remind Later Registry Storage
+
+    private const string RegistryKeyPath = @"SOFTWARE\MyMemories";
+    private const string RemindLaterValueName = "BackupRemindLaterDate";
+
+    /// <summary>
+    /// Checks if the backup reminder should be shown based on the "Remind Later" date.
+    /// Returns true if the dialog should be shown, false if user clicked "Remind Later" today.
+    /// </summary>
+    public static bool ShouldShowBackupReminder()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegistryKeyPath);
+            if (key == null)
+                return true; // No registry key, show dialog
+
+            var value = key.GetValue(RemindLaterValueName) as string;
+            if (string.IsNullOrEmpty(value))
+                return true; // No value stored, show dialog
+
+            if (DateTime.TryParse(value, out var remindAfterDate))
+            {
+                // Only show if current date is on or after the remind date
+                return DateTime.Today >= remindAfterDate.Date;
+            }
+
+            return true; // Invalid date, show dialog
+        }
+        catch
+        {
+            return true; // On any error, show dialog
+        }
+    }
+
+    /// <summary>
+    /// Sets the "Remind Later" date to tomorrow so the dialog won't show again today.
+    /// </summary>
+    public static void SetRemindLaterForTomorrow()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RegistryKeyPath);
+            if (key != null)
+            {
+                // Set remind date to tomorrow
+                var tomorrow = DateTime.Today.AddDays(1);
+                key.SetValue(RemindLaterValueName, tomorrow.ToString("yyyy-MM-dd"));
+            }
+        }
+        catch
+        {
+            // Silently fail - not critical functionality
+        }
+    }
+
+    /// <summary>
+    /// Clears the "Remind Later" date (used when backups are successfully updated).
+    /// </summary>
+    public static void ClearRemindLater()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegistryKeyPath, writable: true);
+            key?.DeleteValue(RemindLaterValueName, throwOnMissingValue: false);
+        }
+        catch
+        {
+            // Silently fail - not critical functionality
+        }
+    }
+
+    #endregion
 }

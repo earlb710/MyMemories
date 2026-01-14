@@ -191,8 +191,9 @@ public sealed partial class MainWindow
         {
             var tagItem = new MenuFlyoutItem
             {
-                Text = $"??? {tag.Name}",
-                Tag = tag.Name
+                Text = tag.Name,
+                Tag = tag.Name,
+                Icon = new FontIcon { Glyph = "\uE8EC" } // Tag icon
             };
 
             tagItem.Click += isCategory 
@@ -236,8 +237,9 @@ public sealed partial class MainWindow
         {
             var templateItem = new MenuFlyoutItem
             {
-                Text = $"? {displayName} ({count} types)",
-                Tag = name
+                Text = $"{displayName} ({count} types)",
+                Tag = name,
+                Icon = new FontIcon { Glyph = "\uE735" } // Star icon
             };
 
             templateItem.Click += isCategory 

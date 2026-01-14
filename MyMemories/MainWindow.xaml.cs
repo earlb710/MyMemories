@@ -296,6 +296,12 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
         try
         {
+            // Check if user clicked "Remind Later" today - if so, skip the check
+            if (!BackupFreshnessService.ShouldShowBackupReminder())
+            {
+                return;
+            }
+
             StatusText.Text = "Checking backup freshness...";
 
             var freshnessService = new BackupFreshnessService(_configService.WorkingDirectory);
@@ -313,8 +319,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
             if (backupsToUpdate == null)
             {
-                // User chose "Remind Later" - do nothing
-                StatusText.Text = "Backup check deferred";
+                // User chose "Remind Later" - set reminder for tomorrow
+                BackupFreshnessService.SetRemindLaterForTomorrow();
+                StatusText.Text = "Backup check deferred until tomorrow";
                 return;
             }
 
@@ -328,6 +335,12 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Update selected backups with progress dialog
             StatusText.Text = $"Updating {backupsToUpdate.Count} backup(s)...";
             var (succeeded, failed) = await dialog.UpdateBackupsWithProgressAsync(backupsToUpdate, freshnessService);
+
+            // Clear the remind later date since backups were updated
+            if (succeeded > 0)
+            {
+                BackupFreshnessService.ClearRemindLater();
+            }
 
             // Show summary
             await dialog.ShowUpdateSummaryAsync(succeeded, failed);

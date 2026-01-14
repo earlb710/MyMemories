@@ -160,17 +160,17 @@ public sealed partial class MainWindow
         // Show the backup directory dialog with category file path for manual backup
         var dialog = new Dialogs.BackupDirectoryDialog(Content.XamlRoot, _folderPickerService!);
         
-        // Set the category file path for backup operations
-        var sanitizedName = Utilities.FileUtilities.SanitizeFileName(category.Name);
-        var dataFolder = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "MyMemories", "Data");
-        var categoryFilePath = System.IO.Path.Combine(dataFolder, sanitizedName + ".json");
-        if (!System.IO.File.Exists(categoryFilePath))
+        // Get the category file path from CategoryService (uses the same path as load/save)
+        var categoryFilePath = _categoryService!.GetCategoryFilePath(category.Name);
+        
+        if (categoryFilePath == null)
         {
-            // Try encrypted version
-            categoryFilePath = System.IO.Path.Combine(dataFolder, sanitizedName + ".zip.json");
+            await ShowErrorDialogAsync(
+                "Category File Not Found",
+                $"Could not find the category file for '{category.Name}'.\n\nThe category may not have been saved yet.");
+            return;
         }
+        
         dialog.SetCategoryFilePath(categoryFilePath);
         
         var result = await dialog.ShowAsync(category.Name, category.BackupDirectories);

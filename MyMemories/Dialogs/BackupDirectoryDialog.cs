@@ -71,7 +71,7 @@ public class BackupDirectoryDialog
                 return new BackupDirectoryItem { Path = path, IsAutomatic = isAuto };
             }));
 
-        var mainPanel = new StackPanel { Spacing = 12, MinWidth = 750 };
+        var mainPanel = new StackPanel { Spacing = 12, MinWidth = 900 };
 
         // Header
         mainPanel.Children.Add(new TextBlock
@@ -192,9 +192,9 @@ public class BackupDirectoryDialog
                     new TextBlock { Text = "Backup All", VerticalAlignment = VerticalAlignment.Center }
                 }
             },
-            IsEnabled = directories.Any(d => d.IsAutomatic) && !string.IsNullOrEmpty(_categoryFilePath) && File.Exists(_categoryFilePath)
+            IsEnabled = true // Always enabled - check file existence when clicked
         };
-        ToolTipService.SetToolTip(backupAllButton, "Backup to all automatic directories now");
+        ToolTipService.SetToolTip(backupAllButton, "Backup to all directories now");
 
         buttonPanel.Children.Add(addButton);
         buttonPanel.Children.Add(editButton);
@@ -229,7 +229,6 @@ public class BackupDirectoryDialog
                 RefreshListView(listView, directories, statusText);
                 statusText.Text = GetStatusText(directories);
                 statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
-                backupAllButton.IsEnabled = directories.Any(d => d.IsAutomatic) && !string.IsNullOrEmpty(_categoryFilePath) && File.Exists(_categoryFilePath);
             }
         };
 
@@ -268,7 +267,6 @@ public class BackupDirectoryDialog
                 statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
                 removeButton.IsEnabled = false;
                 editButton.IsEnabled = false;
-                backupAllButton.IsEnabled = directories.Any(d => d.IsAutomatic) && !string.IsNullOrEmpty(_categoryFilePath) && File.Exists(_categoryFilePath);
             }
         };
 
@@ -305,37 +303,46 @@ public class BackupDirectoryDialog
 
         backupAllButton.Click += async (s, e) =>
         {
-            var autoDirectories = directories.Where(d => d.IsAutomatic).ToList();
-            if (autoDirectories.Count == 0 || string.IsNullOrEmpty(_categoryFilePath) || !File.Exists(_categoryFilePath))
+            if (directories.Count == 0)
             {
-                statusText.Text = "No automatic directories to backup.";
+                statusText.Text = "No directories configured.";
                 statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
                 return;
             }
 
             backupAllButton.IsEnabled = false;
-            statusText.Text = "Backing up to automatic directories...";
+            statusText.Text = "Backing up to all directories...";
             statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
 
             try
             {
+                // Get file size before backup
+                var fileInfo = new System.IO.FileInfo(_categoryFilePath!);
+                var fileSize = (ulong)fileInfo.Length;
+                var fileSizeFormatted = FormatFileSize(fileSize);
+                var totalSize = fileSize * (ulong)directories.Count;
+                var totalSizeFormatted = FormatFileSize(totalSize);
+                
                 var summary = await BackupService.Instance.BackupFileAsync(
-                    _categoryFilePath, 
-                    autoDirectories.Select(d => d.Path));
+                    _categoryFilePath!, 
+                    directories.Select(d => d.Path));
 
                 if (summary.AllSuccessful)
                 {
-                    statusText.Text = $"? Backed up to {summary.SuccessCount} automatic location(s)";
+                    statusText.Text = $"? Backed up to {summary.SuccessCount} location(s) ({totalSizeFormatted} total)";
                     statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen);
                 }
                 else if (summary.HasFailures && summary.SuccessCount > 0)
                 {
-                    statusText.Text = $"? {summary.SuccessCount} succeeded, {summary.FailureCount} failed";
+                    var successSize = FormatFileSize(fileSize * (ulong)summary.SuccessCount);
+                    statusText.Text = $"? {summary.SuccessCount} succeeded ({successSize}), {summary.FailureCount} failed";
                     statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange);
                 }
                 else
                 {
-                    statusText.Text = $"? All backups failed ({summary.FailureCount} errors)";
+                    // Get the first error message to show
+                    var firstError = summary.Results.FirstOrDefault(r => !r.Success);
+                    statusText.Text = $"? Backup failed: {firstError?.ErrorMessage ?? "Unknown error"}";
                     statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
                 }
             }
@@ -357,12 +364,17 @@ public class BackupDirectoryDialog
             {
                 Content = mainPanel,
                 MaxHeight = 550,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
             },
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = _xamlRoot
+            XamlRoot = _xamlRoot,
+            // Make the dialog wider
+            Resources =
+            {
+                ["ContentDialogMaxWidth"] = 1200.0
+            }
         };
 
         var result = await dialog.ShowAsync();
@@ -392,32 +404,25 @@ public class BackupDirectoryDialog
     /// </summary>
     private void RefreshListView(ListView listView, ObservableCollection<BackupDirectoryItem> directories, TextBlock statusText)
     {
-        // Check file existence once for all buttons
-        bool canBackup = !string.IsNullOrEmpty(_categoryFilePath) && File.Exists(_categoryFilePath);
-        
         listView.Items.Clear();
         
         foreach (var dir in directories)
         {
-            var grid = new Grid { Tag = dir, MinHeight = 40, Margin = new Thickness(0, 2, 0, 2) };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) }); // Mode toggle
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); // Path
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) }); // Disk space
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) }); // Backup button
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); // Validation
-
-            // Backup button (create first so toggle can reference it)
-            var backupButton = new Button
+            // Use Grid for better control over column widths
+            var rowGrid = new Grid
             {
-                Content = new FontIcon { Glyph = "\uE896", FontSize = 12 },
-                Padding = new Thickness(6, 4, 6, 4),
-                VerticalAlignment = VerticalAlignment.Center,
-                // Show for manual directories
-                Visibility = dir.IsAutomatic ? Visibility.Collapsed : Visibility.Visible,
-                // Always enable - we'll check file existence when clicked
-                IsEnabled = true
+                Tag = dir,
+                MinHeight = 40,
+                Margin = new Thickness(0, 2, 0, 2)
             };
-            ToolTipService.SetToolTip(backupButton, canBackup ? "Backup now" : "Save category first to enable backup");
+            
+            // Define columns with fixed widths to ensure backup button is visible
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(95) });   // Toggle
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });   // Folder icon
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(450) });  // Path
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });  // Disk space
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });   // Backup button
+            rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });      // Validation
 
             // Mode toggle (Auto/Manual)  
             var modeToggle = new ToggleSwitch
@@ -426,61 +431,41 @@ public class BackupDirectoryDialog
                 OnContent = "Auto",
                 OffContent = "Manual",
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 4, 0),
-                MinWidth = 0
+                Margin = new Thickness(0, 0, 4, 0)
             };
             
             var currentDir = dir; // Capture for closure
-            var capturedBackupButton = backupButton; // Capture for closure
             var capturedDirectories = directories; // Capture for closure
             var capturedStatusText = statusText; // Capture for closure
             
             modeToggle.Toggled += (s, e) =>
             {
-                // Update the data model
                 currentDir.IsAutomatic = modeToggle.IsOn;
-                
-                // Update backup button visibility and state
-                if (modeToggle.IsOn)
-                {
-                    // Automatic mode - hide button
-                    capturedBackupButton.Visibility = Visibility.Collapsed;
-                }
-                else
-                {
-                    // Manual mode - show and enable button
-                    capturedBackupButton.Visibility = Visibility.Visible;
-                    capturedBackupButton.IsEnabled = true;
-                }
-                
-                // Update status text
                 capturedStatusText.Text = GetStatusText(capturedDirectories);
             };
             Grid.SetColumn(modeToggle, 0);
-            grid.Children.Add(modeToggle);
+            rowGrid.Children.Add(modeToggle);
 
-            // Path text with folder icon
-            var pathPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            pathPanel.Children.Add(new FontIcon
+            // Folder icon
+            var folderIcon = new FontIcon
             {
                 Glyph = "\uE8B7",
                 FontSize = 14,
-                Margin = new Thickness(0, 0, 6, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            pathPanel.Children.Add(new TextBlock
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            Grid.SetColumn(folderIcon, 1);
+            rowGrid.Children.Add(folderIcon);
+
+            // Path text
+            var pathText = new TextBlock
             {
                 Text = dir.Path,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 300
-            });
-            Grid.SetColumn(pathPanel, 1);
-            grid.Children.Add(pathPanel);
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetColumn(pathText, 2);
+            rowGrid.Children.Add(pathText);
 
             // Disk space
             var availableSpace = GetAvailableDiskSpace(dir.Path);
@@ -491,123 +476,101 @@ public class BackupDirectoryDialog
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(4, 0, 4, 0)
+                Margin = new Thickness(0, 0, 8, 0)
             };
-            Grid.SetColumn(spaceText, 2);
-            grid.Children.Add(spaceText);
+            Grid.SetColumn(spaceText, 3);
+            rowGrid.Children.Add(spaceText);
 
-            // Wire up backup button click
+            // Backup button - always visible and enabled
+            var backupButton = new Button
+            {
+                Content = "Backup",
+                Padding = new Thickness(12, 4, 12, 4),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            ToolTipService.SetToolTip(backupButton, "Backup to this directory now");
+            
             backupButton.Click += async (s, e) =>
             {
-                await PerformSingleBackupAsync(currentDir, (Button)s!);
+                await PerformSingleBackupAsync(currentDir, (Button)s!, capturedStatusText);
             };
-            
-            Grid.SetColumn(backupButton, 3);
-            grid.Children.Add(backupButton);
+            Grid.SetColumn(backupButton, 4);
+            rowGrid.Children.Add(backupButton);
 
-            // Validation status
+            // Validation status icon
             if (!string.IsNullOrEmpty(dir.ValidationMessage))
             {
                 var statusIcon = new FontIcon
                 {
                     Glyph = dir.IsValid ? "\uE73E" : "\uE711",
                     FontSize = 14,
-                    Margin = new Thickness(4, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(8, 0, 0, 0),
                     Foreground = dir.IsValid
                         ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen)
                         : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red)
                 };
                 ToolTipService.SetToolTip(statusIcon, dir.ValidationMessage);
-                Grid.SetColumn(statusIcon, 4);
-                grid.Children.Add(statusIcon);
+                Grid.SetColumn(statusIcon, 5);
+                rowGrid.Children.Add(statusIcon);
             }
 
-            listView.Items.Add(grid);
+            listView.Items.Add(rowGrid);
         }
     }
 
     /// <summary>
     /// Performs a backup to a single directory.
     /// </summary>
-    private async Task PerformSingleBackupAsync(BackupDirectoryItem dir, Button backupButton)
+    private async Task PerformSingleBackupAsync(BackupDirectoryItem dir, Button backupButton, TextBlock statusText)
     {
-        // Check if file exists
-        if (string.IsNullOrEmpty(_categoryFilePath) || !File.Exists(_categoryFilePath))
-        {
-            // Show error feedback on button
-            var originalContent = backupButton.Content;
-            backupButton.Content = new FontIcon 
-            { 
-                Glyph = "\uE7BA", // Warning icon
-                FontSize = 12, 
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Orange) 
-            };
-            ToolTipService.SetToolTip(backupButton, "Category file not found. Save the category first.");
-            
-            await Task.Delay(3000);
-            backupButton.Content = originalContent;
-            ToolTipService.SetToolTip(backupButton, "Backup now");
-            return;
-        }
-
         backupButton.IsEnabled = false;
         var originalButtonContent = backupButton.Content;
         backupButton.Content = new ProgressRing { Width = 12, Height = 12, IsActive = true };
+        
+        statusText.Text = $"Backing up to {dir.Path}...";
+        statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
 
         try
         {
-            var summary = await BackupService.Instance.BackupFileAsync(_categoryFilePath, new[] { dir.Path });
+            // Get file size before backup
+            var fileInfo = new FileInfo(_categoryFilePath!);
+            var fileSize = (ulong)fileInfo.Length;
+            var fileSizeFormatted = FormatFileSize(fileSize);
+            
+            var summary = await BackupService.Instance.BackupFileAsync(_categoryFilePath!, new[] { dir.Path });
 
             if (summary.AllSuccessful)
             {
-                backupButton.Content = new FontIcon 
-                { 
-                    Glyph = "\uE73E", 
-                    FontSize = 12, 
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen) 
-                };
-                ToolTipService.SetToolTip(backupButton, "Backup successful!");
-                
-                await Task.Delay(2000);
                 backupButton.Content = originalButtonContent;
-                ToolTipService.SetToolTip(backupButton, "Backup now");
+                statusText.Text = $"? Backed up to '{dir.Path}' ({fileSizeFormatted})";
+                statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.LimeGreen);
             }
             else
             {
                 var error = summary.Results.FirstOrDefault(r => !r.Success);
-                backupButton.Content = new FontIcon 
-                { 
-                    Glyph = "\uE711", 
-                    FontSize = 12, 
-                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red) 
-                };
-                ToolTipService.SetToolTip(backupButton, $"Failed: {error?.ErrorMessage ?? "Unknown error"}");
-                
-                await Task.Delay(3000);
                 backupButton.Content = originalButtonContent;
-                ToolTipService.SetToolTip(backupButton, "Backup now");
+                statusText.Text = $"? Backup failed: {error?.ErrorMessage ?? "Unknown error"}";
+                statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
             }
         }
         catch (Exception ex)
         {
-            backupButton.Content = new FontIcon 
-            { 
-                Glyph = "\uE711", 
-                FontSize = 12, 
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red) 
-            };
-            ToolTipService.SetToolTip(backupButton, $"Error: {ex.Message}");
-            
-            await Task.Delay(3000);
             backupButton.Content = originalButtonContent;
-            ToolTipService.SetToolTip(backupButton, "Backup now");
+            statusText.Text = $"? Error: {ex.Message}";
+            statusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Red);
         }
         finally
         {
             backupButton.IsEnabled = true;
         }
     }
+
+
+
+
+
 
     /// <summary>
     /// Gets the available disk space for a directory path.
