@@ -9,7 +9,7 @@
     mc:Ignorable="d"
     Title="My Memories - File Viewer">
 
-    <Grid>
+    <Grid KeyDown="Window_KeyDown" Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -663,6 +663,8 @@
                     HorizontalAlignment="Left"/>
             </controls:SplitterBorder>
 
+
+
             <!-- Content Viewer Area -->
             <Grid Grid.Column="2" x:Name="ContentGrid">
                 <Grid.RowDefinitions>
@@ -759,21 +761,134 @@
                     x:Name="WebViewer"
                     Visibility="Collapsed"/>
 
-                <!-- Text Viewer -->
-                <ScrollViewer
-                    Grid.Row="2"
-                    x:Name="TextViewerScroll"
-                    Visibility="Collapsed">
-                    <TextBox 
-                        x:Name="TextViewer"
-                        IsReadOnly="True"
-                        AcceptsReturn="True"
-                        TextWrapping="Wrap"
-                        BorderThickness="0"
-                        Background="Transparent"
-                        FontFamily="Consolas"
-                        Padding="12"/>
-                </ScrollViewer>
+                <!-- Text Viewer with Search Panel -->
+                <Grid Grid.Row="2" x:Name="TextViewerGrid" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Search Panel -->
+                    <Border 
+                        Grid.Row="0"
+                        x:Name="TextSearchPanel"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="0,0,0,1"
+                        Padding="12,8"
+                        Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                <!-- Search TextBox -->
+                                <TextBox 
+                                    x:Name="SearchTextBox"
+                                    PlaceholderText="Find in document..."
+                                    MinWidth="250"
+                                    VerticalAlignment="Center"
+                                    KeyDown="SearchTextBox_KeyDown"/>
+
+                                <!-- Match Counter -->
+                                <TextBlock 
+                                    x:Name="SearchMatchCounter"
+                                    Text="0 of 0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    FontSize="12"
+                                    Margin="4,0,0,0"/>
+
+                                <!-- Previous Button -->
+                                <Button 
+                                    x:Name="SearchPreviousButton"
+                                    Click="SearchPrevious_Click"
+                                    ToolTipService.ToolTip="Previous match (Shift+Enter)"
+                                    Padding="8,4">
+                                    <FontIcon Glyph="&#xE70E;" FontSize="12"/>
+                                </Button>
+
+                                <!-- Next Button -->
+                                <Button 
+                                    x:Name="SearchNextButton"
+                                    Click="SearchNext_Click"
+                                    ToolTipService.ToolTip="Next match (Enter)"
+                                    Padding="8,4">
+                                    <FontIcon Glyph="&#xE70D;" FontSize="12"/>
+                                </Button>
+
+
+                                <!-- Case Sensitive Toggle -->
+                                <ToggleButton 
+                                    x:Name="SearchCaseSensitiveToggle"
+                                    Content="Aa"
+                                    ToolTipService.ToolTip="Match case"
+                                    Padding="8,4"
+                                    FontWeight="SemiBold"
+                                    Click="SearchCaseSensitive_Click"/>
+                            </StackPanel>
+
+                            <!-- Close Button -->
+                            <Button 
+                                Grid.Column="1"
+                                Click="CloseSearch_Click"
+                                ToolTipService.ToolTip="Close (Esc)"
+                                Padding="8,4">
+                                <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Text Viewer with Line Numbers -->
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Line Numbers Column -->
+                        <Border 
+                            Grid.Column="0"
+                            x:Name="LineNumbersBorder"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="0,0,1,0"
+                            Padding="8,12,8,12"
+                            Visibility="Collapsed">
+                            <ScrollViewer 
+                                x:Name="LineNumbersScroll"
+                                VerticalScrollBarVisibility="Hidden"
+                                HorizontalScrollBarVisibility="Disabled"
+                                >
+                                <TextBlock 
+                                    x:Name="LineNumbersText"
+                                    FontFamily="Consolas"
+                                    FontSize="14"
+                                    Foreground="#FF4682B4"
+                                    TextAlignment="Right"
+                                    IsTextSelectionEnabled="False"/>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Content ScrollViewer -->
+                        <ScrollViewer
+                            Grid.Column="1"
+                            x:Name="TextViewerScroll"
+                            >
+                            <TextBox 
+                                x:Name="TextViewer"
+                                IsReadOnly="True"
+                                AcceptsReturn="True"
+                                TextWrapping="Wrap"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                FontFamily="Consolas"
+                                Padding="12"/>
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
 
                 <!-- Node Details Viewer -->
                 <ScrollViewer
@@ -808,14 +923,20 @@
                     </TabView.Resources>
                     <TabView.TabItems>
                         <!-- Summary Tab -->
-                        <TabViewItem Header="📋 Summary" IsClosable="False">
+                        <TabViewItem Header="Summary" IsClosable="False">
+                            <TabViewItem.IconSource>
+                                <FontIconSource Glyph="&#xE7C3;"/>
+                            </TabViewItem.IconSource>
                             <ScrollViewer Padding="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <StackPanel x:Name="SummaryPanel" Spacing="12"/>
                             </ScrollViewer>
                         </TabViewItem>
                         
                         <!-- Content Tab -->
-                        <TabViewItem Header="📄 Content" IsClosable="False">
+                        <TabViewItem Header="Content" IsClosable="False">
+                            <TabViewItem.IconSource>
+                                <FontIconSource Glyph="&#xE8A5;"/>
+                            </TabViewItem.IconSource>
                             <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <Grid x:Name="ContentTabGrid">
                                     <Grid.RowDefinitions>
@@ -837,21 +958,130 @@
                                         Visibility="Collapsed"
                                         Stretch="Uniform"/>
                                     
-                                    <!-- Text viewer for content tab -->
-                                    <ScrollViewer
+                                    <!-- Text viewer for content tab with line numbers and search -->
+                                    <Grid
                                         Grid.Row="0"
-                                        x:Name="ContentTabTextScroll"
-                                        Visibility="Collapsed">
-                                        <TextBox 
-                                            x:Name="ContentTabText"
-                                            IsReadOnly="True"
-                                            AcceptsReturn="True"
-                                            TextWrapping="Wrap"
-                                            BorderThickness="0"
-                                            Background="Transparent"
-                                            FontFamily="Consolas"
-                                            Padding="12"/>
-                                    </ScrollViewer>
+                                        x:Name="ContentTabTextGrid"
+                                        Visibility="Collapsed"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Search Panel for Content Tab -->
+                                        <Border 
+                                            Grid.Row="0"
+                                            x:Name="ContentTabSearchPanel"
+                                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                            BorderThickness="0,0,0,1"
+                                            Padding="12,8"
+                                            Visibility="Collapsed">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                                    <TextBox 
+                                                        x:Name="ContentSearchTextBox"
+                                                        PlaceholderText="Find in document..."
+                                                        MinWidth="250"
+                                                        VerticalAlignment="Center"
+                                                        KeyDown="SearchTextBox_KeyDown"/>
+                                                    <TextBlock 
+                                                        x:Name="ContentSearchMatchCounter"
+                                                        Text="0 of 0"
+                                                        VerticalAlignment="Center"
+                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                        FontSize="12"
+                                                        Margin="4,0,0,0"/>
+                                                    <Button 
+                                                        x:Name="ContentSearchPreviousButton"
+                                                        Click="SearchPrevious_Click"
+                                                        ToolTipService.ToolTip="Previous match (Shift+Enter)"
+                                                        Padding="8,4">
+                                                        <FontIcon Glyph="&#xE70E;" FontSize="12"/>
+                                                    </Button>
+                                                    <Button 
+                                                        x:Name="ContentSearchNextButton"
+                                                        Click="SearchNext_Click"
+                                                        ToolTipService.ToolTip="Next match (Enter)"
+                                                        Padding="8,4">
+                                                        <FontIcon Glyph="&#xE70D;" FontSize="12"/>
+                                                    </Button>
+                                                    <ToggleButton 
+                                                        x:Name="ContentSearchCaseSensitiveToggle"
+                                                        Content="Aa"
+                                                        ToolTipService.ToolTip="Match case"
+                                                        Padding="8,4"
+                                                        FontWeight="SemiBold"
+                                                        Click="SearchCaseSensitive_Click"/>
+                                                </StackPanel>
+
+                                                <Button 
+                                                    Grid.Column="1"
+                                                    Click="CloseSearch_Click"
+                                                    ToolTipService.ToolTip="Close (Esc)"
+                                                    Padding="8,4">
+                                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Text content with line numbers -->
+                                        <Grid Grid.Row="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Line Numbers -->
+                                            <Border 
+                                                Grid.Column="0"
+                                                x:Name="ContentTabLineNumbersBorder"
+                                                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="8,12,8,12"
+                                                Visibility="Collapsed">
+                                                <ScrollViewer 
+                                                    x:Name="ContentTabLineNumbersScroll"
+                                                    VerticalScrollBarVisibility="Hidden"
+                                                    HorizontalScrollBarVisibility="Disabled"
+                                                    ViewChanged="ContentTabLineNumbersScroll_ViewChanged">
+                                                    <TextBlock 
+                                                        x:Name="ContentTabLineNumbersText"
+                                                        FontFamily="Consolas"
+                                                        FontSize="14"
+                                                        Foreground="#FF4682B4"
+                                                        TextAlignment="Right"
+                                                        IsTextSelectionEnabled="False"/>
+                                                </ScrollViewer>
+                                            </Border>
+
+                                            <!-- Text Content -->
+                                            <TextBox
+                                                Grid.Column="1"
+                                                x:Name="ContentTabText"
+                                                IsReadOnly="True"
+                                                AcceptsReturn="True"
+                                                TextWrapping="Wrap"
+                                                BorderThickness="0"
+                                                Background="{ThemeResource TextControlBackground}"
+                                                Foreground="{ThemeResource TextControlForeground}"
+                                                FontFamily="Consolas"
+                                                FontSize="14"
+                                                Padding="12"
+                                                SelectionHighlightColor="{ThemeResource SystemAccentColor}"
+                                                SelectionFlyout="{x:Null}"
+                                                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+                                        </Grid>
+                                    </Grid>
                                     
                                     <!-- WebView for content tab (HTML, PDF, URLs) - MUST fill available space -->
                                     <WebView2 

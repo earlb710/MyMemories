@@ -28,7 +28,7 @@ public sealed partial class MainWindow
     {
         ImageViewer.Visibility = Visibility.Collapsed;
         WebViewer.Visibility = Visibility.Collapsed;
-        TextViewerScroll.Visibility = Visibility.Collapsed;
+        TextViewerGrid.Visibility = Visibility.Collapsed;
         DetailsViewerScroll.Visibility = Visibility.Collapsed;
         DetailsTabView.Visibility = Visibility.Collapsed;
         WelcomePanel.Visibility = Visibility.Collapsed;
@@ -65,7 +65,7 @@ public sealed partial class MainWindow
                 UrlBarPanel.Visibility = Visibility.Collapsed;
                 break;
             case FileViewerType.Text:
-                TextViewerScroll.Visibility = Visibility.Visible;
+                TextViewerGrid.Visibility = Visibility.Visible;
                 HeaderViewerScroll.Visibility = Visibility.Visible;
                 DetailsViewerScroll.Visibility = Visibility.Collapsed;
                 UrlBarPanel.Visibility = Visibility.Collapsed;

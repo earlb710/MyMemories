@@ -296,7 +296,22 @@ public class FileViewerService
     private async Task LoadTextAsync(StorageFile file)
     {
         string content = await FileIO.ReadTextAsync(file);
-        _textViewer.Text = content;
+        
+        // Get the file extension (FileType includes the dot, e.g., ".cs")
+        var extension = file.FileType?.ToLowerInvariant() ?? string.Empty;
+        
+        // Debug: Log the extension and whether it should show line numbers
+        System.Diagnostics.Debug.WriteLine($"[LoadTextAsync] File: {file.Name}, Extension: '{extension}', ShowLineNumbers: {ShouldShowLineNumbers(extension)}");
+        
+        // Check if this is a source code file that should have line numbers
+        if (ShouldShowLineNumbers(extension))
+        {
+            DisplayTextWithLineNumbers(content);
+        }
+        else
+        {
+            _textViewer.Text = content;
+        }
     }
 
     private async Task LoadTextFromZipAsync(string zipPath, string entryPath, string? password = null)
@@ -311,8 +326,84 @@ public class FileViewerService
         using (var reader = new StreamReader(stream))
         {
             var content = await reader.ReadToEndAsync();
-            _textViewer.Text = content;
+            
+            // Check if this is a source code file that should have line numbers
+            var extension = Path.GetExtension(entryPath).ToLowerInvariant();
+            
+            // Debug: Log the extension and whether it should show line numbers
+            System.Diagnostics.Debug.WriteLine($"[LoadTextFromZipAsync] File: {Path.GetFileName(entryPath)}, Extension: '{extension}', ShowLineNumbers: {ShouldShowLineNumbers(extension)}");
+            
+            if (ShouldShowLineNumbers(extension))
+            {
+                DisplayTextWithLineNumbers(content);
+            }
+            else
+            {
+                _textViewer.Text = content;
+            }
         }
+    }
+
+    /// <summary>
+    /// Determines if a file type should display line numbers.
+    /// Only source code and structured data files, not plain text or logs.
+    /// </summary>
+    private static bool ShouldShowLineNumbers(string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return false;
+            
+        extension = extension.ToLowerInvariant();
+        
+        // Ensure extension starts with a dot
+        if (!extension.StartsWith("."))
+            extension = "." + extension;
+        
+        return extension switch
+        {
+            // Programming languages
+            ".cs" or ".java" or ".cpp" or ".c" or ".h" or ".hpp" or ".py" or ".js" or ".ts" or
+            ".jsx" or ".tsx" or ".php" or ".rb" or ".go" or ".rs" or ".swift" or ".kt" or 
+            ".scala" or ".m" or ".mm" or ".vb" or ".fs" or ".dart" or ".lua" or
+            
+            // Markup and structured data
+            ".json" or ".xml" or ".html" or ".htm" or ".css" or ".scss" or ".sass" or ".less" or
+            ".yaml" or ".yml" or ".toml" or ".config" or ".xaml" or
+            
+            // Scripts and configuration
+            ".sql" or ".sh" or ".bash" or ".bat" or ".cmd" or ".ps1" or ".psm1" or
+            ".ini" or ".properties" or ".conf" or
+            
+            // Markdown and documentation (with code)
+            ".md" or ".markdown" => true,
+            
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Displays text content with line numbers in the left margin.
+    /// Line numbers are right-aligned and separated with a vertical bar.
+    /// </summary>
+    private void DisplayTextWithLineNumbers(string content)
+    {
+        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var maxLineNumber = lines.Length;
+        var lineNumberWidth = maxLineNumber.ToString().Length;
+
+        var textWithLineNumbers = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var lineNumber = (i + 1).ToString().PadLeft(lineNumberWidth);
+            // Use ? as separator for clean visual separation
+            textWithLineNumbers.Append($"{lineNumber} ? {lines[i]}");
+            
+            // Don't add extra newline at the end of the last line
+            if (i < lines.Length - 1)
+                textWithLineNumbers.AppendLine();
+        }
+
+        _textViewer.Text = textWithLineNumbers.ToString();
     }
 
     private static bool IsImageFile(string extension)

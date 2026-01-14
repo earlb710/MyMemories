@@ -27,7 +27,7 @@ public class DetailsViewService
     private ScrollViewer? _contentTabScroll;
     private StackPanel? _contentPanel;
     private Image? _contentTabImage;
-    private ScrollViewer? _contentTabTextScroll;
+    private Grid? _contentTabTextGrid;  // New: wrapper grid for text content with line numbers
     private TextBox? _contentTabText;
     private WebView2? _contentTabWeb;
     private StackPanel? _contentTabNoContent;
@@ -35,6 +35,10 @@ public class DetailsViewService
     
     // TabView reference
     private TabView? _detailsTabView;
+    
+    // Line numbers support (for main content viewer)
+    private Action<string>? _showLineNumbersCallback;
+    private Action? _hideLineNumbersCallback;
     
     private HeaderPanelBuilder? _headerBuilder;
     private UrlStatusBannerBuilder? _urlStatusBuilder;
@@ -69,6 +73,17 @@ public class DetailsViewService
     }
 
     /// <summary>
+    /// Sets up callbacks for line number display in main content viewer.
+    /// </summary>
+    public void SetLineNumberCallbacks(Action<string> showLineNumbers, Action hideLineNumbers)
+    {
+        System.Diagnostics.Debug.WriteLine("[SetLineNumberCallbacks] Setting up line number callbacks");
+        _showLineNumbersCallback = showLineNumbers;
+        _hideLineNumbersCallback = hideLineNumbers;
+        System.Diagnostics.Debug.WriteLine($"[SetLineNumberCallbacks] Callbacks set - show: {_showLineNumbersCallback != null}, hide: {_hideLineNumbersCallback != null}");
+    }
+
+    /// <summary>
     /// Sets up the tabbed details view with Summary and Content tabs.
     /// </summary>
     public void SetupTabbedView(
@@ -78,7 +93,7 @@ public class DetailsViewService
         ScrollViewer contentTabScroll,
         StackPanel contentPanel,
         Image contentTabImage,
-        ScrollViewer contentTabTextScroll,
+        Grid contentTabTextGrid,
         TextBox contentTabText,
         WebView2 contentTabWeb,
         StackPanel contentTabNoContent,
@@ -90,7 +105,7 @@ public class DetailsViewService
         _contentTabScroll = contentTabScroll;
         _contentPanel = contentPanel;
         _contentTabImage = contentTabImage;
-        _contentTabTextScroll = contentTabTextScroll;
+        _contentTabTextGrid = contentTabTextGrid;
         _contentTabText = contentTabText;
         _contentTabWeb = contentTabWeb;
         _contentTabNoContent = contentTabNoContent;
@@ -127,8 +142,10 @@ public class DetailsViewService
         }
         
         // Clear text
-        if (_contentTabText != null) _contentTabText.Text = string.Empty;
-        if (_contentTabTextScroll != null) _contentTabTextScroll.Visibility = Visibility.Collapsed;
+        if (_contentTabText != null)
+        {
+            _contentTabText.Text = string.Empty;
+        }
         
         // Clear WebView - navigate to blank page to stop any loading content
         if (_contentTabWeb != null)
@@ -173,11 +190,62 @@ public class DetailsViewService
     {
         HideAllContentElements();
         
-        if (_contentTabText != null && _contentTabTextScroll != null)
+        if (_contentTabText != null && _contentTabTextGrid != null)
         {
             _contentTabText.Text = content;
-            _contentTabTextScroll.Visibility = Visibility.Visible;
+            _contentTabTextGrid.Visibility = Visibility.Visible;
         }
+        
+        _hideLineNumbersCallback?.Invoke();
+    }
+
+    /// <summary>
+    /// Shows text content with line numbers in the Content tab.
+    /// </summary>
+    public void ShowContentTextWithLineNumbers(string content)
+    {
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] === START ===");
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Called with content length: {content?.Length ?? 0}");
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] First 100 chars: {(content?.Length > 100 ? content.Substring(0, 100) : content)}");
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Callback is null: {_showLineNumbersCallback == null}");
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] _contentTabText is null: {_contentTabText == null}");
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] _contentTabTextGrid is null: {_contentTabTextGrid == null}");
+        
+        HideAllContentElements();
+        
+        if (_contentTabText != null && _contentTabTextGrid != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Setting text to {content.Length} characters");
+            
+            _contentTabText.Text = content;
+            _contentTabTextGrid.Visibility = Visibility.Visible;
+            
+            System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Text set, length: {_contentTabText.Text.Length}");
+            System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] ContentTabTextGrid.Visibility: {_contentTabTextGrid.Visibility}");
+            
+            // Switch to Content tab
+            if (_detailsTabView != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Switching to Content tab (index 1)");
+                _detailsTabView.SelectedIndex = 1;
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] ERROR: TextBox or Grid is null!");
+        }
+        
+        if (_showLineNumbersCallback != null)
+        {
+            System.Diagnostics.Debug.WriteLine("[ShowContentTextWithLineNumbers] Invoking line numbers callback");
+            _showLineNumbersCallback.Invoke(content);
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine("[ShowContentTextWithLineNumbers] WARNING: Line numbers callback is NULL!");
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] === END ===");
     }
 
     /// <summary>
@@ -313,7 +381,7 @@ public class DetailsViewService
     private void HideAllContentElements()
     {
         if (_contentTabImage != null) _contentTabImage.Visibility = Visibility.Collapsed;
-        if (_contentTabTextScroll != null) _contentTabTextScroll.Visibility = Visibility.Collapsed;
+        if (_contentTabTextGrid != null) _contentTabTextGrid.Visibility = Visibility.Collapsed;
         
         // Hide and clear WebView to prevent old content from showing
         if (_contentTabWeb != null)
@@ -396,14 +464,28 @@ public class DetailsViewService
             
             // Text-based files
             if (extension is ".txt" or ".xml" or ".json" or ".md" or ".log" or ".cs" or ".xaml" 
-                or ".config" or ".ini" or ".yaml" or ".yml" or ".csv"
+                or ".config" or ".ini" or ".yaml" or ".yml" or ".csv" or ".manifest"
                 or ".css" or ".js" or ".ts" or ".py" or ".java" or ".cpp" or ".c" or ".h"
                 or ".csproj" or ".sln" or ".props" or ".targets" or ".sql" or ".sh" or ".bat" or ".ps1")
             {
                 try
                 {
                     var content = await File.ReadAllTextAsync(url);
-                    ShowContentText(content);
+                    
+                    bool shouldShowLineNumbers = ShouldShowLineNumbers(extension);
+                    System.Diagnostics.Debug.WriteLine($"[LoadContentForLinkAsync] Extension: {extension}, ShouldShowLineNumbers: {shouldShowLineNumbers}");
+                    
+                    // Add line numbers for source code files
+                    if (shouldShowLineNumbers)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LoadContentForLinkAsync] Calling ShowContentTextWithLineNumbers");
+                        ShowContentTextWithLineNumbers(content);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("[LoadContentForLinkAsync] Calling ShowContentText (no line numbers)");
+                        ShowContentText(content);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -486,7 +568,7 @@ public class DetailsViewService
 
             // Text files from zip
             if (extension is ".txt" or ".xml" or ".json" or ".md" or ".log" or ".cs" or ".xaml" 
-                or ".config" or ".ini" or ".yaml" or ".yml" or ".csv"
+                or ".config" or ".ini" or ".yaml" or ".yml" or ".csv" or ".manifest"
                 or ".css" or ".js" or ".ts" or ".py" or ".java" or ".cpp" or ".c" or ".h"
                 or ".csproj" or ".sln" or ".props" or ".targets" or ".sql" or ".sh" or ".bat" or ".ps1")
             {
@@ -638,5 +720,42 @@ public class DetailsViewService
     public async Task<Button?> AddOpenInExplorerButtonAsync(String path)
     {
         return await _linkBuilder!.AddOpenInExplorerButtonAsync(path);
+    }
+
+    /// <summary>
+    /// Determines if a file type should display line numbers.
+    /// Only source code and structured data files, not plain text or logs.
+    /// </summary>
+    private static bool ShouldShowLineNumbers(string extension)
+    {
+        if (string.IsNullOrWhiteSpace(extension))
+            return false;
+            
+        extension = extension.ToLowerInvariant();
+        
+        // Ensure extension starts with a dot
+        if (!extension.StartsWith("."))
+            extension = "." + extension;
+        
+        return extension switch
+        {
+            // Programming languages
+            ".cs" or ".java" or ".cpp" or ".c" or ".h" or ".hpp" or ".py" or ".js" or ".ts" or
+            ".jsx" or ".tsx" or ".php" or ".rb" or ".go" or ".rs" or ".swift" or ".kt" or 
+            ".scala" or ".m" or ".mm" or ".vb" or ".fs" or ".dart" or ".lua" or
+            
+            // Markup and structured data
+            ".json" or ".xml" or ".html" or ".htm" or ".css" or ".scss" or ".sass" or ".less" or
+            ".yaml" or ".yml" or ".toml" or ".config" or ".xaml" or ".manifest" or
+            
+            // Scripts and configuration
+            ".sql" or ".sh" or ".bash" or ".bat" or ".cmd" or ".ps1" or ".psm1" or
+            ".ini" or ".properties" or ".conf" or
+            
+            // Markdown and documentation (with code)
+            ".md" or ".markdown" => true,
+            
+            _ => false
+        };
     }
 }

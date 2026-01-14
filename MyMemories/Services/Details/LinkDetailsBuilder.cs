@@ -92,7 +92,13 @@ public class LinkDetailsBuilder
                                !string.IsNullOrEmpty(linkItem.Url) &&
                                Directory.Exists(linkItem.Url);
 
-        if (node != null && !isLinkOnlyFolder && (directoryExists || isZipFile))
+        // Only show catalog controls (refresh button, auto-refresh) for the main linked folder, not subdirectory catalog entries
+        bool shouldShowCatalogControls = node != null && 
+                                          !isLinkOnlyFolder && 
+                                          (directoryExists || isZipFile) &&
+                                          !linkItem.IsCatalogEntry; // Exclude subdirectory catalog entries
+
+        if (shouldShowCatalogControls)
         {
             var buttonPanel = new StackPanel
             {
@@ -693,24 +699,214 @@ public class LinkDetailsBuilder
         _detailsPanel.Children.Add(infoPanel);
     }
 
-    private void AddFileInfo(string path)
+    private async void AddFileInfo(string path)
     {
         var fileInfo = new FileInfo(path);
+        var extension = fileInfo.Extension.ToLowerInvariant();
+        
+        // Check if this is an image file
+        bool isImage = extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".tif" or ".tiff" or ".ico" or ".webp";
 
+        if (isImage)
+        {
+            await AddImageFileInfoAsync(path, fileInfo);
+        }
+        else
+        {
+            // Show regular file info
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "File Information",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+
+            var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+            infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+            infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
+            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+
+            _detailsPanel.Children.Add(infoPanel);
+        }
+    }
+
+    /// <summary>
+    /// Adds detailed information panel for image files with EXIF metadata.
+    /// </summary>
+    private async Task AddImageFileInfoAsync(string path, FileInfo fileInfo)
+    {
         _detailsPanel.Children.Add(new TextBlock
         {
-            Text = "File Information",
+            Text = "Image Information",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
-        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        
+        // Basic file info
+        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"File Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Format: {fileInfo.Extension.ToUpperInvariant().TrimStart('.')}"));
+
+        // Try to extract image metadata
+        var metadata = await ImageMetadataService.ExtractMetadataAsync(path);
+        
+        if (metadata != null)
+        {
+            // Dimensions & Technical Info
+            if (metadata.PixelWidth > 0 && metadata.PixelHeight > 0)
+            {
+                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} × {metadata.PixelHeight} pixels"));
+                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Megapixels: {metadata.Megapixels}"));
+                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aspect Ratio: {metadata.AspectRatio}"));
+            }
+
+            if (metadata.DpiX > 0 && metadata.DpiY > 0)
+            {
+                var dpiText = metadata.DpiX == metadata.DpiY 
+                    ? $"Resolution: {metadata.DpiX:F0} DPI" 
+                    : $"Resolution: {metadata.DpiX:F0} × {metadata.DpiY:F0} DPI";
+                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", dpiText));
+            }
+
+            // Camera Information
+            if (!string.IsNullOrEmpty(metadata.CameraManufacturer) || !string.IsNullOrEmpty(metadata.CameraModel))
+            {
+                _detailsPanel.Children.Add(infoPanel);
+                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Camera Information",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (!string.IsNullOrEmpty(metadata.CameraManufacturer))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE7F4", $"Manufacturer: {metadata.CameraManufacturer}"));
+                
+                if (!string.IsNullOrEmpty(metadata.CameraModel))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE960", $"Model: {metadata.CameraModel}"));
+            }
+
+            // Camera Settings (EXIF)
+            if (metadata.IsoSpeed.HasValue || !string.IsNullOrEmpty(metadata.ExposureTime) || 
+                !string.IsNullOrEmpty(metadata.FNumber) || !string.IsNullOrEmpty(metadata.FocalLength))
+            {
+                if (infoPanel.Children.Count > 0)
+                {
+                    _detailsPanel.Children.Add(infoPanel);
+                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                }
+
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Camera Settings",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (metadata.IsoSpeed.HasValue)
+                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"ISO: {metadata.IsoSpeed.Value}"));
+                
+                if (!string.IsNullOrEmpty(metadata.ExposureTime))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE916", $"Shutter Speed: {metadata.ExposureTime}"));
+                
+                if (!string.IsNullOrEmpty(metadata.FNumber))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aperture: {metadata.FNumber}"));
+                
+                if (!string.IsNullOrEmpty(metadata.FocalLength))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE714", $"Focal Length: {metadata.FocalLength}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Flash))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE793", $"Flash: {metadata.Flash}"));
+            }
+
+            // GPS Location
+            if (!string.IsNullOrEmpty(metadata.GpsLocation))
+            {
+                if (infoPanel.Children.Count > 0)
+                {
+                    _detailsPanel.Children.Add(infoPanel);
+                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                }
+
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Location",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                infoPanel.Children.Add(CreateIconStatLine("\uE707", $"GPS: {metadata.GpsLocation}"));
+            }
+
+            // Author & Copyright
+            if (!string.IsNullOrEmpty(metadata.Artist) || !string.IsNullOrEmpty(metadata.Copyright) || 
+                !string.IsNullOrEmpty(metadata.Software) || !string.IsNullOrEmpty(metadata.ImageDescription))
+            {
+                if (infoPanel.Children.Count > 0)
+                {
+                    _detailsPanel.Children.Add(infoPanel);
+                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                }
+
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Author & Details",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (!string.IsNullOrEmpty(metadata.Artist))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE77B", $"Artist: {metadata.Artist}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Copyright))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE72E", $"Copyright: {metadata.Copyright}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Software))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Software: {metadata.Software}"));
+                
+                if (!string.IsNullOrEmpty(metadata.ImageDescription))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Description: {metadata.ImageDescription}"));
+            }
+
+            // Dates
+            if (infoPanel.Children.Count > 0)
+            {
+                _detailsPanel.Children.Add(infoPanel);
+                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+            }
+
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Timestamps",
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 8)
+            });
+
+            if (metadata.DateTaken.HasValue)
+                infoPanel.Children.Add(CreateIconStatLine("\uE787", $"Photo Taken: {metadata.DateTaken.Value:yyyy-MM-dd HH:mm:ss}"));
+            
+            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"File Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"File Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        }
+        else
+        {
+            // Fallback if metadata extraction fails - show basic file info
+            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        }
 
         _detailsPanel.Children.Add(infoPanel);
     }

@@ -50,7 +50,7 @@ public static class FileUtilities
     {
         return extension.ToLowerInvariant() is ".txt" or ".xml" or ".json" or ".md" or ".log"
             or ".cs" or ".xaml" or ".config" or ".ini" or ".yaml"
-            or ".yml" or ".csv";
+            or ".yml" or ".csv" or ".manifest";
     }
 
     /// <summary>

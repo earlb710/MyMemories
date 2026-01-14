@@ -170,11 +170,14 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 ContentTabScroll,
                 ContentPanel,
                 ContentTabImage,
-                ContentTabTextScroll,
+                ContentTabTextGrid,
                 ContentTabText,
                 ContentTabWeb,
                 ContentTabNoContent,
                 ContentTabNoContentText);
+            
+            // Setup line number callbacks for text viewer
+            _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers);
             
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
@@ -533,6 +536,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     
     /// <summary>
     /// Removes any nodes with null or invalid content from the TreeView.
+    /// Also removes LinkItems from root level (only CategoryItems allowed at root).
     /// </summary>
     private void RemoveInvalidNodes()
     {
@@ -565,20 +569,21 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 shouldRemove = true;
                 reason = "Content is null";
             }
+            else if (node.Content is LinkItem link)
+            {
+                // LinkItems should NEVER be at root level
+                shouldRemove = true;
+                reason = $"LinkItem at root level: '{link.Title}' - only CategoryItems allowed at root";
+            }
             else if (node.Content is CategoryItem cat && string.IsNullOrEmpty(cat.Name))
             {
                 shouldRemove = true;
                 reason = "CategoryItem with empty name";
             }
-            else if (node.Content is LinkItem link && string.IsNullOrEmpty(link.Title))
+            else if (node.Content is not CategoryItem)
             {
                 shouldRemove = true;
-                reason = "LinkItem with empty title";
-            }
-            else if (node.Content is not CategoryItem && node.Content is not LinkItem)
-            {
-                shouldRemove = true;
-                reason = $"Unknown content type: {node.Content.GetType().Name}";
+                reason = $"Unknown content type at root: {node.Content.GetType().Name} - only CategoryItems allowed";
             }
             
             if (shouldRemove)
@@ -590,7 +595,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
         
         foreach (var node in nodesToRemove)
         {
-            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removing node");
+            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removing invalid root node");
             LinksTreeView.RootNodes.Remove(node);
         }
         
@@ -815,17 +820,45 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
 
     private TreeViewNode GetRootCategoryNode(TreeViewNode node)
     {
+        // Safety check: if node is null, can't proceed
+        if (node == null)
+        {
+            throw new ArgumentNullException(nameof(node), "Node cannot be null");
+        }
+
         // First, check if this node itself is already a root category
         if (LinksTreeView.RootNodes.Contains(node))
         {
-            return node;
+            // Verify it's actually a CategoryItem
+            if (node.Content is CategoryItem)
+            {
+                return node;
+            }
+            else
+            {
+                // This is a root node but not a category - this is an error state
+                var contentType = node.Content?.GetType().Name ?? "null";
+                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] ERROR: Root node is not a CategoryItem: {contentType}");
+                
+                // Try to find ANY valid category root node
+                foreach (var rootNode in LinksTreeView.RootNodes)
+                {
+                    if (rootNode.Content is CategoryItem)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Using alternative root category");
+                        return rootNode;
+                    }
+                }
+                
+                throw new InvalidOperationException($"Root node is not a CategoryItem: {contentType}. No valid category roots found.");
+            }
         }
 
         var current = node;
         int safetyCounter = 0;
         const int maxDepth = 100; // Prevent infinite loops
         
-        // Navigate up until we find a root category node
+        // Navigate up until we find a root node or hit max depth
         while (current?.Parent != null && safetyCounter < maxDepth)
         {
             current = current.Parent;
@@ -851,18 +884,31 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             return current;
         }
         
-        // If the root is a LinkItem, search all root nodes to find its category
+        // If the root is not a CategoryItem, search all root nodes to find the category that contains this node
+        System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Root node is not CategoryItem, searching for containing category...");
         foreach (var rootNode in LinksTreeView.RootNodes)
         {
             if (rootNode.Content is CategoryItem && NodeContainsDescendant(rootNode, node))
             {
+                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] Found containing category: {((CategoryItem)rootNode.Content).Name}");
                 return rootNode;
             }
         }
         
-        // If we somehow ended up with a non-category root, throw an error
-        var contentType = current.Content?.GetType().Name ?? "null";
-        throw new InvalidOperationException($"Could not find root category node. Found: {contentType}");
+        // Last resort: if we can't find a proper category, return the first valid category root
+        foreach (var rootNode in LinksTreeView.RootNodes)
+        {
+            if (rootNode.Content is CategoryItem cat)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GetRootCategoryNode] WARNING: Using fallback category: {cat.Name}");
+                return rootNode;
+            }
+        }
+        
+        // If we somehow ended up with no valid category roots at all, throw a detailed error
+        var nodeContentType = current.Content?.GetType().Name ?? "null";
+        var rootNodeTypes = string.Join(", ", LinksTreeView.RootNodes.Select(n => n.Content?.GetType().Name ?? "null"));
+        throw new InvalidOperationException($"Could not find root category node. Found: {nodeContentType}. Root nodes: [{rootNodeTypes}]");
     }
 
     private bool NodeContainsDescendant(TreeViewNode ancestor, TreeViewNode target)
