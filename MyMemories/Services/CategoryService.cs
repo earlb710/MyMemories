@@ -75,6 +75,7 @@ public class CategoryService : ICategoryService
 
     /// <summary>
     /// Loads all categories from JSON files (both encrypted and unencrypted).
+    /// Skips Archive.json which is loaded separately by MainWindow.
     /// </summary>
     public async Task<List<TreeViewNode>> LoadAllCategoriesAsync()
     {
@@ -85,9 +86,11 @@ public class CategoryService : ICategoryService
             return categories;
         }
 
-        // Get all .json and .zip.json files
+        // Get all .json and .zip.json files, excluding Archive.json
         var jsonFiles = Directory.GetFiles(_dataFolder, "*.json")
             .Where(f => !f.EndsWith(".zip.json", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !Path.GetFileName(f).Equals("Archive.json", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !Path.GetFileNameWithoutExtension(f).StartsWith("Archived", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var encryptedFiles = Directory.GetFiles(_dataFolder, "*.zip.json");
@@ -102,6 +105,13 @@ public class CategoryService : ICategoryService
 
                 if (categoryData != null)
                 {
+                    // Skip Archive nodes - they're loaded separately
+                    if (categoryData.Name?.StartsWith("Archived") == true)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CategoryService] Skipping Archive category from JSON: {categoryData.Name}");
+                        continue;
+                    }
+                    
                     var categoryNode = CreateCategoryNode(categoryData);
                     categories.Add(categoryNode);
                     
@@ -248,6 +258,7 @@ public class CategoryService : ICategoryService
 
     /// <summary>
     /// Saves a category to a JSON file (encrypted if password is set).
+    /// Skips Archive nodes which are saved separately.
     /// </summary>
     public async Task SaveCategoryAsync(TreeViewNode categoryNode)
     {
@@ -257,6 +268,15 @@ public class CategoryService : ICategoryService
         }
 
         var category = (CategoryItem)categoryNode.Content;
+        
+        // IMPORTANT: Don't save Archive node as a regular category
+        // Archive is managed by Archive.json separately
+        if (category.IsArchiveNode || category.Name.StartsWith("Archived"))
+        {
+            System.Diagnostics.Debug.WriteLine($"[CategoryService] Skipping save for Archive node: {category.Name}");
+            return;
+        }
+        
         var categoryData = ConvertNodeToCategoryData(categoryNode);
         var json = JsonSerializer.Serialize(categoryData, _jsonOptions);
 

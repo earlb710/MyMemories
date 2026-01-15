@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using MyMemories.Utilities;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -613,10 +614,11 @@ public sealed partial class MainWindow
 
     private async void CategoryMenu_Remove_Click(object sender, RoutedEventArgs e)
     {
-        if (_contextMenuNode?.Content is CategoryItem category)
-        {
-            await DeleteCategoryAsync(category, _contextMenuNode);
-        }
+        if (_contextMenuNode?.Content is not CategoryItem category)
+            return;
+        
+        // Archive the category instead of permanently deleting
+        await ArchiveCategoryAsync(_contextMenuNode);
     }
 
     private async void CategoryMenu_RemoveTag_Click(object sender, RoutedEventArgs e)
@@ -716,6 +718,9 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Store old ratings for archiving
+        var oldRatings = new List<RatingValue>(category.Ratings);
+
         var originalTemplate = _ratingService.CurrentTemplateName;
         _ratingService.SwitchTemplate(templateName);
 
@@ -726,6 +731,9 @@ public sealed partial class MainWindow
 
         if (result != null)
         {
+            // Archive changed ratings
+            await ArchiveChangedRatingsAsync(category.Name, oldRatings, result);
+            
             category.Ratings = result;
             category.ModifiedDate = DateTime.Now;
 
@@ -750,11 +758,17 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Store old ratings for archiving
+        var oldRatings = new List<RatingValue>(category.Ratings);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
         var result = await dialog.ShowAsync(category.Name, category.Ratings);
 
         if (result != null)
         {
+            // Archive changed ratings
+            await ArchiveChangedRatingsAsync(category.Name, oldRatings, result);
+            
             category.Ratings = result;
             category.ModifiedDate = DateTime.Now;
 
@@ -767,3 +781,4 @@ public sealed partial class MainWindow
         }
     }
 }
+

@@ -110,6 +110,38 @@ public class RatingValue
 }
 
 /// <summary>
+/// Represents an archived rating snapshot with timestamp.
+/// Used to track rating history when ratings change.
+/// </summary>
+public class ArchivedRating
+{
+    /// <summary>
+    /// The parent item name (category or link title).
+    /// </summary>
+    public string ParentName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The rating name being archived.
+    /// </summary>
+    public string RatingName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The previous rating value before the change.
+    /// </summary>
+    public RatingValue PreviousRating { get; set; } = new();
+    
+    /// <summary>
+    /// When this rating was archived.
+    /// </summary>
+    public DateTime ArchivedDate { get; set; } = DateTime.Now;
+    
+    /// <summary>
+    /// Reason for the rating change (optional).
+    /// </summary>
+    public string? ChangeReason { get; set; }
+}
+
+/// <summary>
 /// Represents a named template containing a collection of rating definitions.
 /// </summary>
 public class RatingTemplate

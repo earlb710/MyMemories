@@ -99,6 +99,28 @@ public class CategoryItem
     // Audit logging - enables per-category audit logging
     public bool IsAuditLoggingEnabled { get; set; } = false;
     
+    // Archive metadata
+    /// <summary>
+    /// Date when this category was archived (soft deleted).
+    /// </summary>
+    public DateTime? ArchivedDate { get; set; }
+    
+    /// <summary>
+    /// Original parent path before archiving (for restoration).
+    /// </summary>
+    public string? OriginalParentPath { get; set; }
+    
+    /// <summary>
+    /// Special flag indicating this is the Archive system node.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsArchiveNode { get; set; }
+    
+    /// <summary>
+    /// Links within this category (used for archive serialization).
+    /// </summary>
+    public List<LinkItem>? Links { get; set; }
+    
     // Export/Sync metadata
     /// <summary>
     /// Last date this category was exported to a browser.

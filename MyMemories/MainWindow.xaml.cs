@@ -514,6 +514,38 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 }
             }
             
+            // Add divider (using a special category with separator text)
+            var dividerCategory = new CategoryItem
+            {
+                Name = "———————————————————",
+                Description = null,
+                Icon = "" // Empty icon for divider
+            };
+            var dividerNode = new TreeViewNode
+            {
+                Content = dividerCategory,
+                IsExpanded = false
+            };
+            LinksTreeView.RootNodes.Add(dividerNode);
+            
+            // Add "Archived" node below the divider
+            var archivedCategory = new CategoryItem
+            {
+                Name = "Archived",
+                Description = "Archived categories and links",
+                Icon = "A", // Simple "A" for Archive
+                IsArchiveNode = true // Special flag for archive node
+            };
+            _archiveNode = new TreeViewNode
+            {
+                Content = archivedCategory,
+                IsExpanded = false
+            };
+            LinksTreeView.RootNodes.Add(_archiveNode);
+            
+            // Load archived items from JSON
+            await LoadArchiveFromJsonAsync();
+            
             System.Diagnostics.Debug.WriteLine($"[LoadAllCategoriesAsync] After adding categories - RootNodes.Count: {LinksTreeView.RootNodes.Count}");
             
             // Safety check: Remove any nodes with null or invalid content that may have been added
@@ -537,6 +569,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             StatusText.Text = $"Error loading categories: {ex.Message}";
         }
     }
+    
     
     /// <summary>
     /// Removes any nodes with null or invalid content from the TreeView.

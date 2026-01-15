@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -234,18 +235,19 @@ public sealed partial class MainWindow
 
     private async void LinkMenu_Remove_Click(object sender, RoutedEventArgs e)
     {
-        if (_contextMenuNode?.Content is LinkItem link)
+        if (_contextMenuNode?.Content is not LinkItem link)
+            return;
+            
+        if (link.IsCatalogEntry)
         {
-            if (link.IsCatalogEntry)
-            {
-                await ShowErrorDialogAsync(
-                    "Cannot Remove Catalog Entry",
-                    "Catalog entries cannot be removed individually. Use 'Refresh Catalog' to update them.");
-                return;
-            }
-
-            await DeleteLinkAsync(link, _contextMenuNode);
+            await ShowErrorDialogAsync(
+                "Cannot Remove Catalog Entry",
+                "Catalog entries cannot be removed individually. Use 'Refresh Catalog' to update them.");
+            return;
         }
+
+        // Archive the link instead of permanently deleting
+        await ArchiveLinkAsync(_contextMenuNode);
     }
 
     private async void LinkMenu_AddSubLink_Click(object sender, RoutedEventArgs e)
@@ -442,6 +444,9 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Store old ratings for archiving
+        var oldRatings = new List<RatingValue>(link.Ratings);
+
         var originalTemplate = _ratingService.CurrentTemplateName;
         _ratingService.SwitchTemplate(templateName);
 
@@ -452,6 +457,9 @@ public sealed partial class MainWindow
 
         if (result != null)
         {
+            // Archive changed ratings
+            await ArchiveChangedRatingsAsync(link.Title, oldRatings, result);
+            
             link.Ratings = result;
             link.ModifiedDate = DateTime.Now;
 
@@ -477,11 +485,17 @@ public sealed partial class MainWindow
             return;
         }
 
+        // Store old ratings for archiving
+        var oldRatings = new List<RatingValue>(link.Ratings);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
         var result = await dialog.ShowAsync(link.Title, link.Ratings);
 
         if (result != null)
         {
+            // Archive changed ratings
+            await ArchiveChangedRatingsAsync(link.Title, oldRatings, result);
+            
             link.Ratings = result;
             link.ModifiedDate = DateTime.Now;
 
@@ -492,6 +506,24 @@ public sealed partial class MainWindow
             StatusText.Text = result.Count > 0 
                 ? $"Saved {result.Count} rating(s) for {itemType} '{link.Title}'"
                 : $"Removed all ratings from {itemType} '{link.Title}'";
+        }
+    }
+    
+    /// <summary>
+    /// Archives ratings that have changed.
+    /// </summary>
+    private async Task ArchiveChangedRatingsAsync(string parentName, List<RatingValue> oldRatings, List<RatingValue> newRatings)
+    {
+        foreach (var oldRating in oldRatings)
+        {
+            // Check if this rating was changed or removed
+            var newRating = newRatings.FirstOrDefault(r => r.Rating == oldRating.Rating);
+            
+            if (newRating == null || newRating.Score != oldRating.Score || newRating.Reason != oldRating.Reason)
+            {
+                // Rating was changed or removed - archive the old value
+                await ArchiveRatingChangeAsync(parentName, oldRating.RatingName, oldRating);
+            }
         }
     }
 }

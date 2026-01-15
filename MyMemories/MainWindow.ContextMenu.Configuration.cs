@@ -27,10 +27,25 @@ public sealed partial class MainWindow
 
         _contextMenuNode = node;
 
+        // Check if this node is inside the Archive
+        bool isInArchive = IsNodeInArchive(node);
+
         MenuFlyout? menu = null;
         
-        if (node.Content is CategoryItem category)
+        if (isInArchive)
         {
+            // Show Archive context menu for archived items (categories or links)
+            menu = LinksTreeView.Resources["ArchiveContextMenu"] as MenuFlyout;
+        }
+        else if (node.Content is CategoryItem category)
+        {
+            // Check if this is the Archive node itself (don't show context menu for it)
+            if (category.IsArchiveNode)
+            {
+                e.Handled = true;
+                return;
+            }
+
             menu = LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout;
             if (menu != null)
             {
@@ -48,6 +63,30 @@ public sealed partial class MainWindow
 
         menu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Checks if a node is inside the Archive node.
+    /// </summary>
+    private bool IsNodeInArchive(TreeViewNode node)
+    {
+        if (node == null)
+            return false;
+
+        // Check if node is the archive itself
+        if (node.Content is CategoryItem cat && cat.IsArchiveNode)
+            return false; // Archive node itself is not "in archive"
+
+        // Walk up the tree to find if any parent is the Archive node
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current.Content is CategoryItem category && category.IsArchiveNode)
+                return true;
+            current = current.Parent;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -112,6 +112,18 @@ public class LinkItem : INotifyPropertyChanged
     public bool IsCatalogEntry { get; set; }
     public SortOption CatalogSortOrder { get; set; } = SortOption.NameAscending;
     
+    // Archive metadata
+    /// <summary>
+    /// Date when this link was archived (soft deleted).
+    /// </summary>
+    public DateTime? ArchivedDate { get; set; }
+    
+    /// <summary>
+    /// Original category path before archiving (for restoration).
+    /// </summary>
+    public string? OriginalCategoryPath { get; set; }
+    
+    
     /// <summary>
     /// URL accessibility status (for bookmark categories).
     /// </summary>
