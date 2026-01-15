@@ -39,6 +39,7 @@ public class DetailsViewService
     // Line numbers support (for main content viewer)
     private Action<string>? _showLineNumbersCallback;
     private Action? _hideLineNumbersCallback;
+    private Action? _setupScrollSyncCallback;
     
     private HeaderPanelBuilder? _headerBuilder;
     private UrlStatusBannerBuilder? _urlStatusBuilder;
@@ -75,12 +76,13 @@ public class DetailsViewService
     /// <summary>
     /// Sets up callbacks for line number display in main content viewer.
     /// </summary>
-    public void SetLineNumberCallbacks(Action<string> showLineNumbers, Action hideLineNumbers)
+    public void SetLineNumberCallbacks(Action<string> showLineNumbers, Action hideLineNumbers, Action? setupScrollSync = null)
     {
         System.Diagnostics.Debug.WriteLine("[SetLineNumberCallbacks] Setting up line number callbacks");
         _showLineNumbersCallback = showLineNumbers;
         _hideLineNumbersCallback = hideLineNumbers;
-        System.Diagnostics.Debug.WriteLine($"[SetLineNumberCallbacks] Callbacks set - show: {_showLineNumbersCallback != null}, hide: {_hideLineNumbersCallback != null}");
+        _setupScrollSyncCallback = setupScrollSync;
+        System.Diagnostics.Debug.WriteLine($"[SetLineNumberCallbacks] Callbacks set - show: {_showLineNumbersCallback != null}, hide: {_hideLineNumbersCallback != null}, scrollSync: {_setupScrollSyncCallback != null}");
     }
 
     /// <summary>
@@ -228,6 +230,13 @@ public class DetailsViewService
             {
                 System.Diagnostics.Debug.WriteLine($"[ShowContentTextWithLineNumbers] Switching to Content tab (index 1)");
                 _detailsTabView.SelectedIndex = 1;
+            }
+            
+            // Set up scroll synchronization
+            if (_setupScrollSyncCallback != null)
+            {
+                System.Diagnostics.Debug.WriteLine("[ShowContentTextWithLineNumbers] Invoking scroll sync setup callback");
+                _setupScrollSyncCallback.Invoke();
             }
         }
         else

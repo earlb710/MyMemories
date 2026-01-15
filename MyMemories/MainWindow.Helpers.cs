@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using MyMemories.Services;
+using MyMemories.Utilities;
 
 namespace MyMemories;
 
@@ -667,17 +668,13 @@ public sealed partial class MainWindow
         {
             StatusText.Text = $"Warning: Created zip but cataloging failed - {error.Message}";
 
-            var warningDialog = new ContentDialog
-            {
-                Title = "Zip Created with Warning",
-                Content = $"The zip archive was successfully created, but automatic cataloging failed.\n\n" +
-                         $"Error: {error.Message}\n\n" +
-                         $"The zip file is valid and can be opened externally. " +
-                         $"Try cataloging it manually later using the 'Create Catalog' button.",
-                CloseButtonText = "OK",
-                XamlRoot = Content.XamlRoot
-            };
-            await warningDialog.ShowAsync();
+            await DialogFactory.ShowWarningAsync(
+                "Zip Created with Warning",
+                $"The zip archive was successfully created, but automatic cataloging failed.\n\n" +
+                $"Error: {error.Message}\n\n" +
+                $"The zip file is valid and can be opened externally. " +
+                $"Try cataloging it manually later using the 'Create Catalog' button.",
+                Content.XamlRoot);
         }
         else
         {
@@ -701,16 +698,12 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowArchiveRefreshSuccessAsync(string categoryName, LinkItem zipLinkItem)
     {
-        var successDialog = new ContentDialog
-        {
-            Title = "Archive Refreshed",
-            Content = $"The zip archive has been successfully refreshed from the current state of category '{categoryName}'.\n\n" +
-                     $"Location: {zipLinkItem.Url}\n" +
-                     $"Size: {FileViewerService.FormatFileSize(zipLinkItem.FileSize ?? 0)}",
-            CloseButtonText = "OK",
-            XamlRoot = Content.XamlRoot
-        };
-        await successDialog.ShowAsync();
+        await DialogFactory.ShowSuccessAsync(
+            "Archive Refreshed",
+            $"The zip archive has been successfully refreshed from the current state of category '{categoryName}'.\n\n" +
+            $"Location: {zipLinkItem.Url}\n" +
+            $"Size: {FileViewerService.FormatFileSize(zipLinkItem.FileSize ?? 0)}",
+            Content.XamlRoot);
     }
 
     /// <summary>
@@ -718,14 +711,10 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowArchiveRefreshErrorAsync(Exception ex)
     {
-        var errorDialog = new ContentDialog
-        {
-            Title = "Error Refreshing Archive",
-            Content = $"An error occurred while refreshing the zip archive:\n\n{ex.Message}\n\nStack trace:\n{ex.StackTrace}",
-            CloseButtonText = "OK",
-            XamlRoot = Content.XamlRoot
-        };
-        await errorDialog.ShowAsync();
+        await DialogFactory.ShowErrorAsync(
+            "Error Refreshing Archive",
+            $"An error occurred while refreshing the zip archive:\n\n{ex.Message}\n\nStack trace:\n{ex.StackTrace}",
+            Content.XamlRoot);
     }
 
     /// <summary>

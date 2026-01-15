@@ -471,6 +471,28 @@ public class RatingManagementDialog
             }
         };
         rowPanel.Children.Add(rangeBadge);
+        
+        // Timestamp badge
+        var timestampBadge = new Border
+        {
+            Background = new SolidColorBrush(Microsoft.UI.Colors.WhiteSmoke),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 2, 6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 0, 0),
+            Child = new TextBlock
+            {
+                Text = definition.ModifiedDate > definition.CreatedDate.AddSeconds(5) 
+                    ? $"Modified: {definition.ModifiedDate:g}" 
+                    : $"Created: {definition.CreatedDate:g}",
+                FontSize = 9,
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray)
+            }
+        };
+        ToolTipService.SetToolTip(timestampBadge, 
+            $"Created: {definition.CreatedDate:g}\nLast Modified: {definition.ModifiedDate:g}");
+        rowPanel.Children.Add(timestampBadge);
 
         // Spacer to push buttons to the right
         var spacer = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Stretch };

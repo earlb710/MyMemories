@@ -287,9 +287,7 @@
                                             </ToolTipService.ToolTip>
                                         </FontIcon>
                                         
-                                        <TextBlock Text="{Binding Content.Name}" VerticalAlignment="Center"/>
-                                        
-                                        <!-- Tag indicator badges with colored backgrounds -->
+                                        <!-- Tag indicator badges with colored backgrounds (MOVED BEFORE name) -->
                                         <ContentPresenter
                                             VerticalAlignment="Center"
                                             Visibility="{Binding Content.HasTags, Mode=OneWay}">
@@ -301,6 +299,8 @@
                                                 </Binding>
                                             </ContentPresenter.Content>
                                         </ContentPresenter>
+                                        
+                                        <TextBlock Text="{Binding Content.Name}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.CategoryTemplate>
@@ -479,12 +479,7 @@
                                             </ToolTipService.ToolTip>
                                         </FontIcon>
 
-                                        <!-- Text Label -->
-                                        <TextBlock 
-                                            Text="{Binding Content.DisplayText}" 
-                                            VerticalAlignment="Center"/>
-                                        
-                                        <!-- Tag indicator badges with colored backgrounds -->
+                                        <!-- Tag indicator badges with colored backgrounds (MOVED BEFORE name) -->
                                         <ContentPresenter
                                             VerticalAlignment="Center"
                                             Visibility="{Binding Content.HasTags, Mode=OneWay}">
@@ -496,6 +491,11 @@
                                                 </Binding>
                                             </ContentPresenter.Content>
                                         </ContentPresenter>
+
+                                        <!-- Text Label -->
+                                        <TextBlock 
+                                            Text="{Binding Content.DisplayText}" 
+                                            VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </local:TreeNodeTemplateSelector.LinkTemplate>
@@ -992,6 +992,15 @@
                                                         MinWidth="250"
                                                         VerticalAlignment="Center"
                                                         KeyDown="SearchTextBox_KeyDown"/>
+                                                    
+                                                    <!-- Search Button -->
+                                                    <Button 
+                                                        Click="SearchNext_Click"
+                                                        ToolTipService.ToolTip="Search (Enter)"
+                                                        Padding="8,4">
+                                                        <FontIcon Glyph="&#xE721;" FontSize="14"/>
+                                                    </Button>
+                                                    
                                                     <TextBlock 
                                                         x:Name="ContentSearchMatchCounter"
                                                         Text="0 of 0"

@@ -318,6 +318,29 @@ public class RatingAssignmentDialog
             MaxHeight = 60
         };
         sliderPanel.Children.Add(reasonTextBox);
+        
+        // Timestamp display (if rating exists)
+        if (existingRating != null)
+        {
+            var timestampText = new TextBlock
+            {
+                FontSize = 9,
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, 4, 0, 0)
+            };
+            
+            if (existingRating.ModifiedDate > existingRating.CreatedDate.AddSeconds(5))
+            {
+                timestampText.Text = $"Last modified: {existingRating.ModifiedDate:g}";
+            }
+            else
+            {
+                timestampText.Text = $"Created: {existingRating.CreatedDate:g}";
+            }
+            
+            sliderPanel.Children.Add(timestampText);
+        }
 
         mainStack.Children.Add(sliderPanel);
 

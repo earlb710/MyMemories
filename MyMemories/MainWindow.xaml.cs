@@ -137,6 +137,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Initialize configuration service FIRST
             _configService = new ConfigurationService();
             await _configService.LoadConfigurationAsync();
+            
+            // Initialize global exception handler with error logger and XamlRoot
+            GlobalExceptionHandler.Instance.Initialize(_configService.ErrorLogService, Content.XamlRoot);
+            System.Diagnostics.Debug.WriteLine("[MainWindow] Global exception handler initialized");
 
             // Validate configuration directories BEFORE initializing services
             var validationPassed = await ValidateConfigurationDirectoriesAsync();
@@ -177,7 +181,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 ContentTabNoContentText);
             
             // Setup line number callbacks for text viewer
-            _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers);
+            _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers, SetupScrollSynchronization);
             
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
@@ -276,11 +280,11 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
         {
             StatusText.Text = $"Initialization error: {ex.Message}";
             
-            // Log the error if logging is enabled
-            if (_configService?.IsLoggingEnabled() ?? false)
-            {
-                await _configService.LogErrorAsync("Initialization failed", ex);
-            }
+            // Use global exception handler for consistent error handling
+            await GlobalExceptionHandler.Instance.HandleKnownExceptionAsync(
+                ex, 
+                "Failed to initialize the application. Some features may not work correctly.", 
+                "MainWindow.InitializeAsync");
         }
     }
 

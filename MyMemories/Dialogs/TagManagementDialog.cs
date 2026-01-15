@@ -244,6 +244,27 @@ public class TagManagementDialog
                 MaxWidth = 300
             });
         }
+        
+        // Add timestamp information
+        var timestampText = new TextBlock
+        {
+            FontSize = 10,
+            FontStyle = Windows.UI.Text.FontStyle.Italic,
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        
+        if (tag.ModifiedDate > tag.CreatedDate.AddSeconds(5))
+        {
+            timestampText.Text = $"Modified: {tag.ModifiedDate:g}";
+        }
+        else
+        {
+            timestampText.Text = $"Created: {tag.CreatedDate:g}";
+        }
+        
+        textPanel.Children.Add(timestampText);
+        
         Grid.SetColumn(textPanel, 1);
         grid.Children.Add(textPanel);
 
