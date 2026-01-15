@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Services.Interfaces;
 using MyMemories.Utilities;
 
 namespace MyMemories.Services;
@@ -14,7 +15,7 @@ namespace MyMemories.Services;
 /// <summary>
 /// Service for managing category data persistence and operations with password protection support.
 /// </summary>
-public class CategoryService
+public class CategoryService : ICategoryService
 {
     private readonly string _dataFolder;
     private readonly JsonSerializerOptions _jsonOptions;

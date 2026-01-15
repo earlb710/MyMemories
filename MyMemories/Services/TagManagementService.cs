@@ -322,6 +322,7 @@ public class TagManagementService
         {
             Glyph = TagIconGlyph,
             FontSize = fontSize,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
             Foreground = new SolidColorBrush(Colors.White)
         });
 
@@ -420,6 +421,7 @@ public class TagManagementService
         {
             Glyph = TagIconGlyph,
             FontSize = iconSize,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
             Foreground = new SolidColorBrush(Colors.White)
         };
 

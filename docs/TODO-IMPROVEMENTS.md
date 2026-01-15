@@ -78,17 +78,19 @@ Last Updated: 2026-01-14 (Post-MVVM Architecture Update)
 **Note:** MVVM infrastructure is now in place, making this migration easier when needed.
 
 ### ?? Implement Service Interfaces
-**Current State:** Services are concrete classes with no abstraction layer
+**Current State:** Core service interfaces created, DI container not yet implemented
 
 **Tasks:**
-- [ ] Create `IDetailsViewService` interface
-- [ ] Create `ICategoryService` interface
-- [ ] Create `ITreeViewService` interface
+- [x] Create `IDetailsViewService` interface
+- [x] Create `ICategoryService` interface
+- [x] Create `ITreeViewService` interface
 - [ ] Create interfaces for all major services
 - [ ] Implement dependency injection container
 - [ ] Update MainWindow to use DI
 
-**Estimated Effort:** 1 week  
+**Completed:** 2026-01-14 (Initial interfaces created in `MyMemories/Services/Interfaces/`)
+
+**Estimated Effort:** 1 week (remaining: DI container setup)  
 **Benefits:** Better testability, easier mocking, cleaner dependencies
 
 ### ?? Split Large Services
@@ -107,22 +109,42 @@ Last Updated: 2026-01-14 (Post-MVVM Architecture Update)
 
 ## ?? Testing & Quality
 
-### ?? Add Unit Testing Infrastructure
-**Current State:** No unit tests exist
+### ?? Add Unit Testing Infrastructure (IN PROGRESS)
+**Current State:** Initial test infrastructure created, core tests implemented
 
-**Tasks:**
-- [ ] Add xUnit test project to solution
-- [ ] Install Moq or NSubstitute for mocking
-- [ ] Create test fixtures for core services
-- [ ] Add tests for `PasswordUtilities`
-- [ ] Add tests for `FileUtilities`
-- [ ] Add tests for `PathValidationUtilities`
-- [ ] Add tests for `CategoryService` core logic
+**Completed:**
+- [x] Add xUnit test project to solution
+- [x] Install Moq and FluentAssertions for mocking/assertions
+- [x] Create test fixtures for core services
+- [x] Add tests for `PasswordUtilities` (12 tests)
+- [x] Add tests for `FileUtilities` (15 tests)
+- [x] Add tests for `PathValidationUtilities` (11 tests)
+- [x] Add tests for `CategoryService` core logic (10 tests)
+- [x] Add tests for `TreeViewService` (13 tests)
+- [x] Create comprehensive test documentation
+
+**Remaining:**
+- [ ] Add tests for `DetailsViewService`
+- [ ] Add tests for `TagManagementService`
+- [ ] Add tests for `RatingManagementService`
 - [ ] Add tests for import/export functionality
+- [ ] Add tests for `BookmarkImporterService`
+- [ ] Add tests for `BookmarkExporterService`
+- [ ] Add tests for `UrlStateCheckerService`
+- [ ] Add tests for `CatalogService`
+- [ ] Add tests for `BackupService`
 - [ ] Target 70%+ code coverage for business logic
 
-**Estimated Effort:** 2 weeks initial setup + ongoing  
-**Benefits:** Prevent regressions, enable confident refactoring
+**Completed:** 2026-01-14 (Initial setup and 61 tests)
+
+**Location:** `tests/MyMemories.Tests/`
+
+**Documentation:**
+- `tests/README.md` - Complete test suite documentation
+- `tests/TEST-MAINTENANCE.md` - Guide for keeping tests up to date
+
+**Estimated Effort:** Initial setup complete (1 day) ? Remaining tests (1 week)  
+**Benefits:** Prevent regressions, enable confident refactoring, safety net for changes
 
 ### ? COMPLETED: Improve Error Handling
 **Completed:** 2026-01-14

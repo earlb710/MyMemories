@@ -2,13 +2,14 @@
 using System.Diagnostics;
 using System.Linq;
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Services.Interfaces;
 
 namespace MyMemories.Services;
 
 /// <summary>
 /// Service for managing TreeView operations.
 /// </summary>
-public class TreeViewService
+public class TreeViewService : ITreeViewService
 {
     private readonly TreeView _treeView;
     private readonly MainWindow _mainWindow;

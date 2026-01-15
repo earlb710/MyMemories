@@ -390,7 +390,7 @@ public sealed partial class MainWindow
         {
             var clearItem = new MenuFlyoutItem
             {
-                Text = "? Clear Filter",
+                Text = "Clear Filter",
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             };
             clearItem.Click += TagFilterClear_Click;
@@ -417,48 +417,15 @@ public sealed partial class MainWindow
                 Tag = tag.Id
             };
 
-            // Mark the active tag with a checkmark and bold
+            // Mark the active tag with bold font
             if (tag.Id == _activeTagFilterId)
             {
-                // For active tag: checkmark + colored icon + name (bold)
-                var activePanel = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8
-                };
-                
-                activePanel.Children.Add(new TextBlock
-                {
-                    Text = "?",
-                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                
-                activePanel.Children.Add(new FontIcon
-                {
-                    Glyph = "\uE8EC", // Tag glyph
-                    FontSize = 14,
-                    Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
-                });
-                
-                activePanel.Children.Add(new TextBlock
-                {
-                    Text = tag.Name,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    VerticalAlignment = VerticalAlignment.Center
-                });
-                
-                // Set the custom content as Icon
-                tagItem.Icon = new IconSourceElement
-                {
-                    IconSource = new BitmapIconSource() // Dummy, we'll use the panel
-                };
-                
-                // Actually, just use Text and Icon separately
-                tagItem.Text = $"? {tag.Name}";
+                // For active tag: colored icon + name (bold)
+                tagItem.Text = $"? {tag.Name}";  // Simple bullet point
                 tagItem.Icon = new FontIcon
                 {
                     Glyph = "\uE8EC",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
                     Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
                 };
                 tagItem.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
@@ -470,6 +437,7 @@ public sealed partial class MainWindow
                 tagItem.Icon = new FontIcon
                 {
                     Glyph = "\uE8EC",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
                     Foreground = new SolidColorBrush(ParseTagColor(tag.Color))
                 };
             }

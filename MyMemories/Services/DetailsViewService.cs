@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using MyMemories.Services.Details;
+using MyMemories.Services.Interfaces;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ namespace MyMemories.Services;
 /// Delegates to specialized builder classes for different content types.
 /// Supports both Summary tab (metadata, ratings, timestamps) and Content tab (file contents).
 /// </summary>
-public class DetailsViewService
+public class DetailsViewService : IDetailsViewService
 {
     private readonly StackPanel _detailsPanel;
     private StackPanel? _headerPanel;

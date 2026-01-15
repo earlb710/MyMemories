@@ -4,6 +4,8 @@ VisualStudioVersion = 18.1.11312.151
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyMemories", "MyMemories\MyMemories.csproj", "{8B7E5B71-4A5C-4D3E-8F2A-1B3C4D5E6F7A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MyMemories.Tests", "tests\MyMemories.Tests\MyMemories.Tests.csproj", "{85C514E3-C06C-8742-9CB2-0501E3A41F6D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -14,6 +16,10 @@ Global
 		{8B7E5B71-4A5C-4D3E-8F2A-1B3C4D5E6F7A}.Debug|x64.Build.0 = Debug|x64
 		{8B7E5B71-4A5C-4D3E-8F2A-1B3C4D5E6F7A}.Release|x64.ActiveCfg = Release|x64
 		{8B7E5B71-4A5C-4D3E-8F2A-1B3C4D5E6F7A}.Release|x64.Build.0 = Release|x64
+		{85C514E3-C06C-8742-9CB2-0501E3A41F6D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{85C514E3-C06C-8742-9CB2-0501E3A41F6D}.Debug|x64.Build.0 = Debug|Any CPU
+		{85C514E3-C06C-8742-9CB2-0501E3A41F6D}.Release|x64.ActiveCfg = Release|Any CPU
+		{85C514E3-C06C-8742-9CB2-0501E3A41F6D}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
