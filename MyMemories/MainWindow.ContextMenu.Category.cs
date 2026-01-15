@@ -744,6 +744,19 @@ public sealed partial class MainWindow
             StatusText.Text = result.Count > 0 
                 ? $"Saved {result.Count} rating(s) for '{category.Name}' using template '{displayName}'"
                 : $"Removed all ratings from '{category.Name}'";
+            
+            // Refresh the details view if this node is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                await _detailsViewService!.ShowCategoryDetailsAsync(category, _contextMenuNode);
+                
+                // Also refresh the header to show updated ratings
+                _detailsViewService.ShowCategoryHeader(
+                    category.Name,
+                    category.Description,
+                    category.Icon,
+                    category);
+            }
         }
     }
 
@@ -778,6 +791,19 @@ public sealed partial class MainWindow
             StatusText.Text = result.Count > 0 
                 ? $"Saved {result.Count} rating(s) for '{category.Name}'"
                 : $"Removed all ratings from '{category.Name}'";
+            
+            // Refresh the details view if this node is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                await _detailsViewService!.ShowCategoryDetailsAsync(category, _contextMenuNode);
+                
+                // Also refresh the header to show updated ratings
+                _detailsViewService.ShowCategoryHeader(
+                    category.Name,
+                    category.Description,
+                    category.Icon,
+                    category);
+            }
         }
     }
 }

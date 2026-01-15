@@ -471,6 +471,28 @@ public sealed partial class MainWindow
             StatusText.Text = result.Count > 0 
                 ? $"Saved {result.Count} rating(s) for {itemType} '{link.Title}' using template '{displayName}'"
                 : $"Removed all ratings from {itemType} '{link.Title}'";
+            
+            // Refresh the details view if this node is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    link,
+                    _contextMenuNode,
+                    async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode),
+                    async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode)
+                );
+                
+                // Also refresh the header to show updated ratings
+                _detailsViewService.ShowLinkHeader(
+                    link.Title,
+                    link.Description,
+                    link.GetIcon(),
+                    showLinkBadge: false,
+                    fileSize: null,
+                    createdDate: link.CreatedDate,
+                    modifiedDate: link.ModifiedDate,
+                    linkItem: link);
+            }
         }
     }
 
@@ -506,6 +528,28 @@ public sealed partial class MainWindow
             StatusText.Text = result.Count > 0 
                 ? $"Saved {result.Count} rating(s) for {itemType} '{link.Title}'"
                 : $"Removed all ratings from {itemType} '{link.Title}'";
+            
+            // Refresh the details view if this node is currently selected
+            if (LinksTreeView.SelectedNode == _contextMenuNode)
+            {
+                await _detailsViewService!.ShowLinkDetailsAsync(
+                    link,
+                    _contextMenuNode,
+                    async () => await _catalogService!.CreateCatalogAsync(link, _contextMenuNode),
+                    async () => await _catalogService!.RefreshCatalogAsync(link, _contextMenuNode)
+                );
+                
+                // Also refresh the header to show updated ratings
+                _detailsViewService.ShowLinkHeader(
+                    link.Title,
+                    link.Description,
+                    link.GetIcon(),
+                    showLinkBadge: false,
+                    fileSize: null,
+                    createdDate: link.CreatedDate,
+                    modifiedDate: link.ModifiedDate,
+                    linkItem: link);
+            }
         }
     }
     
