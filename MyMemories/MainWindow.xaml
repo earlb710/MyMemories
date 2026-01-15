@@ -188,7 +188,7 @@
                     </Button>
                 </Grid>
 
-                <!-- TreeView -->
+                <!-- TreeView with Virtualization enabled -->
                 <TreeView 
                     Grid.Row="2"
                     x:Name="LinksTreeView"

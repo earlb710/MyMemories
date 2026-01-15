@@ -541,33 +541,23 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
     /// <summary>
     /// Removes any nodes with null or invalid content from the TreeView.
     /// Also removes LinkItems from root level (only CategoryItems allowed at root).
+    /// Optimized with single-pass reverse iteration.
     /// </summary>
     private void RemoveInvalidNodes()
     {
-        // Log all nodes for debugging
         System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] RootNodes.Count before cleanup: {LinksTreeView.RootNodes.Count}");
         
-        for (int i = 0; i < LinksTreeView.RootNodes.Count; i++)
+        // Single-pass cleanup using reverse iteration (safe for removal during iteration)
+        // Iterate backwards so removing items doesn't affect the indices of items we haven't checked yet
+        int removedCount = 0;
+        
+        for (int i = LinksTreeView.RootNodes.Count - 1; i >= 0; i--)
         {
             var node = LinksTreeView.RootNodes[i];
-            var contentType = node.Content?.GetType().Name ?? "null";
-            var contentName = node.Content switch
-            {
-                CategoryItem cat => cat.Name ?? "(null name)",
-                LinkItem link => link.Title ?? "(null title)",
-                _ => "(unknown)"
-            };
-            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Node[{i}]: Content type={contentType}, Name/Title={contentName}");
-        }
-        
-        // Collect nodes to remove (can't modify collection while iterating)
-        var nodesToRemove = new List<TreeViewNode>();
-        
-        foreach (var node in LinksTreeView.RootNodes)
-        {
             bool shouldRemove = false;
             string reason = "";
             
+            // Check for invalid nodes in a single pass
             if (node.Content == null)
             {
                 shouldRemove = true;
@@ -592,18 +582,13 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             
             if (shouldRemove)
             {
-                System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Marking node for removal: {reason}");
-                nodesToRemove.Add(node);
+                System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removing node at index {i}: {reason}");
+                LinksTreeView.RootNodes.RemoveAt(i);
+                removedCount++;
             }
         }
         
-        foreach (var node in nodesToRemove)
-        {
-            System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removing invalid root node");
-            LinksTreeView.RootNodes.Remove(node);
-        }
-        
-        System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] RootNodes.Count after cleanup: {LinksTreeView.RootNodes.Count}");
+        System.Diagnostics.Debug.WriteLine($"[RemoveInvalidNodes] Removed {removedCount} invalid node(s). Final count: {LinksTreeView.RootNodes.Count}");
     }
     
     /// <summary>

@@ -521,14 +521,28 @@ public class CategoryService
         var links = new List<LinkData>();
         var subCategories = new List<CategoryData>();
 
-        // Process all children
+        // Process all children - validate before processing
         foreach (var child in categoryNode.Children)
         {
+            // Skip nodes with null or invalid content (data validation)
+            if (child.Content == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ConvertNodeToCategoryData] Skipping child with null content");
+                continue;
+            }
+            
             if (child.Content is LinkItem link)
             {
                 // Skip catalog entries that are direct children of categories
                 if (link.IsCatalogEntry)
                 {
+                    continue;
+                }
+                
+                // Validate LinkItem has required data
+                if (string.IsNullOrWhiteSpace(link.Title))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ConvertNodeToCategoryData] Skipping link with empty title");
                     continue;
                 }
 
@@ -690,10 +704,23 @@ public class CategoryService
 
                 links.Add(linkData);
             }
-            else if (child.Content is CategoryItem)
+            else if (child.Content is CategoryItem subCategory)
             {
+                // Validate subcategory has required data before saving
+                if (string.IsNullOrWhiteSpace(subCategory.Name))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ConvertNodeToCategoryData] Skipping subcategory with empty name");
+                    continue;
+                }
+                
                 var subCategoryData = ConvertNodeToCategoryData(child);
                 subCategories.Add(subCategoryData);
+            }
+            else
+            {
+                // Log unexpected content type
+                var contentType = child.Content?.GetType().Name ?? "null";
+                System.Diagnostics.Debug.WriteLine($"[ConvertNodeToCategoryData] Skipping child with unexpected content type: {contentType}");
             }
         }
 
