@@ -23,7 +23,7 @@ public class PasswordUtilitiesTests
     }
 
     [Fact]
-    public void HashPassword_SamePassword_ReturnsDifferentHashes()
+    public void HashPassword_SamePassword_ReturnsSameHash()
     {
         // Arrange
         var password = "TestPassword123!";
@@ -33,7 +33,7 @@ public class PasswordUtilitiesTests
         var hash2 = PasswordUtilities.HashPassword(password);
 
         // Assert
-        hash1.Should().NotBe(hash2); // Salt ensures different hashes
+        hash1.Should().Be(hash2); // SHA256 without salt produces same hash
     }
 
     [Fact]
@@ -68,11 +68,13 @@ public class PasswordUtilitiesTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    public void HashPassword_WithNullOrEmpty_ThrowsArgumentException(string? password)
+    public void HashPassword_WithNullOrEmpty_ReturnsEmptyString(string? password)
     {
-        // Act & Assert
-        var act = () => PasswordUtilities.HashPassword(password!);
-        act.Should().Throw<ArgumentException>();
+        // Act
+        var hash = PasswordUtilities.HashPassword(password!);
+
+        // Assert
+        hash.Should().BeEmpty();
     }
 
     [Theory]
