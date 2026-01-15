@@ -166,7 +166,6 @@ public sealed partial class MainWindow
             {
                 _contentTextScrollViewer.ChangeView(null, 0, null, false);
                 ContentTabLineNumbersScroll.ChangeView(null, 0, null, false);
-                System.Diagnostics.Debug.WriteLine($"[OnContentTextScrollChanged] Near top ({verticalOffset:F2}), forced both to 0");
             }
             else
             {
