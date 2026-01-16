@@ -545,6 +545,68 @@ public sealed partial class MainWindow
     }
     
     /// <summary>
+    /// Gets archived ratings for a specific item for display in the rating dialog.
+    /// Returns a dictionary of rating name to archived info.
+    /// </summary>
+    public Dictionary<string, Dialogs.ArchivedRatingInfo> GetArchivedRatingsForItem(string itemName)
+    {
+        var result = new Dictionary<string, Dialogs.ArchivedRatingInfo>(StringComparer.OrdinalIgnoreCase);
+        
+        try
+        {
+            var archiveNode = GetOrCreateArchiveNode();
+            
+            // Look for a grouping node for this item
+            foreach (var groupNode in archiveNode.Children)
+            {
+                if (groupNode.Content is CategoryItem groupCat)
+                {
+                    // Check if this grouping node matches the item name
+                    // The Keywords contains the full grouping key (path/itemTitle)
+                    var keyParts = groupCat.Keywords?.Split('/');
+                    var groupItemName = keyParts != null && keyParts.Length > 0 ? keyParts[^1] : "";
+                    
+                    if (!string.Equals(groupItemName, itemName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    
+                    // Found the grouping node - extract archived ratings
+                    foreach (var ratingNode in groupNode.Children)
+                    {
+                        if (ratingNode.Content is LinkItem link && link.CategoryPath == "ArchivedRating")
+                        {
+                            try
+                            {
+                                var ratingData = System.Text.Json.JsonSerializer.Deserialize<ArchivedRatingData>(link.Url);
+                                if (ratingData != null)
+                                {
+                                    result[ratingData.RatingName] = new Dialogs.ArchivedRatingInfo
+                                    {
+                                        Score = ratingData.Score,
+                                        Reason = ratingData.Reason,
+                                        ArchivedDate = link.ArchivedDate ?? DateTime.Now
+                                    };
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore parse errors
+                            }
+                        }
+                    }
+                    
+                    break; // Found the grouping, no need to continue
+                }
+            }
+        }
+        catch
+        {
+            // Return empty dictionary on error
+        }
+        
+        return result;
+    }
+    
+    /// <summary>
     /// Archives old rating values when ratings change.
     /// Creates a node with the format: "ItemName - RatingName (Score)"
     /// Stores full path and rating data for restoration.
@@ -618,14 +680,27 @@ public sealed partial class MainWindow
             // Convert path from " > " to "/" format for storage
             var storagePath = categoryPath.Replace(" > ", "/");
             
-            // Create descriptive display name: "ItemName - RatingName (Score)"
-            var displayName = $"{itemTitle} - {ratingName} ({oldRating.Score})";
+            
+            // Create descriptive display name for the rating: "RatingName (Score)"
+            var ratingDisplayName = $"{ratingName} ({oldRating.Score})";
+            
+            // Create unique grouping key for this target item (path + title)
+            var groupingKey = string.IsNullOrEmpty(storagePath) 
+                ? itemTitle 
+                : $"{storagePath}/{itemTitle}";
             
             System.Diagnostics.Debug.WriteLine($"[Archive] Creating rating archive:");
-            System.Diagnostics.Debug.WriteLine($"[Archive]   Display name: {displayName}");
-            System.Diagnostics.Debug.WriteLine($"[Archive]   Parent path (storage): '{storagePath}'");
+            System.Diagnostics.Debug.WriteLine($"[Archive]   Grouping key: '{groupingKey}'");
             System.Diagnostics.Debug.WriteLine($"[Archive]   Item title: '{itemTitle}'");
+            System.Diagnostics.Debug.WriteLine($"[Archive]   Rating display: '{ratingDisplayName}'");
+            System.Diagnostics.Debug.WriteLine($"[Archive]   Parent path (storage): '{storagePath}'");
             System.Diagnostics.Debug.WriteLine($"[Archive]   Rating: {oldRating.Rating} = {oldRating.Score}");
+            
+            // Find or create grouping node for this target item
+            var groupingNode = FindOrCreateRatingGroupingNode(archiveNode, itemTitle, groupingKey, storagePath);
+            
+            // Remove any existing archive entry for the same rating type (keep only the latest)
+            RemovePreviousRatingArchive(groupingNode, oldRating.Rating);
             
             // Build description
             var descriptionParts = new List<string>
@@ -644,34 +719,10 @@ public sealed partial class MainWindow
             
             var description = string.Join("\n", descriptionParts);
             
-            // Create archived rating category node
-            // Use red "A" icon like Archive node, and add a rating so yellow star appears
-            var archivedRatingCategory = new CategoryItem
-            {
-                Name = displayName,
-                Description = description,
-                Icon = "A", // Red A icon (same as Archive node)
-                ArchivedDate = DateTime.Now,
-                CreatedDate = DateTime.Now,
-                ModifiedDate = DateTime.Now
-            };
-            
-            // Add the original rating to this category so the yellow star shows in the tree
-            // (The tree template shows a yellow star when HasRatings is true)
-            archivedRatingCategory.Ratings.Add(new RatingValue
-            {
-                Rating = oldRating.Rating,
-                Score = oldRating.Score,
-                Reason = oldRating.Reason ?? "",
-                CreatedDate = oldRating.CreatedDate,
-                ModifiedDate = oldRating.ModifiedDate
-            });
-            
-            // Store the rating data in a structured format (like import JSON)
-            // CategoryPath/Title identifies the node, Ratings contains the old value
+            // Create archived rating link node (simpler, just the rating details)
             var ratingDataLink = new LinkItem
             {
-                Title = $"{ratingName}: {oldRating.Score}",
+                Title = ratingDisplayName,
                 Description = description,
                 // Store data in URL field as structured data
                 Url = System.Text.Json.JsonSerializer.Serialize(new ArchivedRatingData
@@ -689,12 +740,22 @@ public sealed partial class MainWindow
                 ArchivedDate = DateTime.Now
             };
             
-            archivedRatingCategory.Links = new List<LinkItem> { ratingDataLink };
+            // Add a rating to the link so the yellow star shows
+            ratingDataLink.Ratings.Add(new RatingValue
+            {
+                Rating = oldRating.Rating,
+                Score = oldRating.Score,
+                Reason = oldRating.Reason ?? "",
+                CreatedDate = oldRating.CreatedDate,
+                ModifiedDate = oldRating.ModifiedDate
+            });
             
-            var ratingCategoryNode = new TreeViewNode { Content = archivedRatingCategory };
-            ratingCategoryNode.Children.Add(new TreeViewNode { Content = ratingDataLink });
+            var ratingNode = new TreeViewNode { Content = ratingDataLink };
+            groupingNode.Children.Add(ratingNode);
+            groupingNode.IsExpanded = true;
             
-            archiveNode.Children.Add(ratingCategoryNode);
+            // Update grouping node name to show count
+            UpdateRatingGroupingNodeName(groupingNode);
             
             // Update archive count display
             UpdateArchiveNodeName();
@@ -702,7 +763,7 @@ public sealed partial class MainWindow
             // Save archive to JSON
             await SaveArchiveToJsonAsync();
             
-            System.Diagnostics.Debug.WriteLine($"[Archive] Rating archived successfully");
+            System.Diagnostics.Debug.WriteLine($"[Archive] Rating archived successfully under '{itemTitle}'");
         }
         catch (Exception ex)
         {
@@ -711,32 +772,166 @@ public sealed partial class MainWindow
     }
     
     /// <summary>
+    /// Finds or creates a grouping node for rating archives of a specific target item.
+    /// </summary>
+    private TreeViewNode FindOrCreateRatingGroupingNode(TreeViewNode archiveNode, string itemTitle, string groupingKey, string storagePath)
+    {
+        // Look for existing grouping node with matching key
+        foreach (var child in archiveNode.Children)
+        {
+            if (child.Content is CategoryItem cat && cat.Keywords == groupingKey)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Archive] Found existing grouping node for '{itemTitle}'");
+                return child;
+            }
+        }
+        
+        // Create new grouping node
+        System.Diagnostics.Debug.WriteLine($"[Archive] Creating new grouping node for '{itemTitle}'");
+        
+        var groupingCategory = new CategoryItem
+        {
+            Name = itemTitle,
+            Description = $"Archived rating changes for '{itemTitle}'",
+            Keywords = groupingKey, // Store the full path key for matching
+            Icon = "A", // Red A icon
+            ArchivedDate = DateTime.Now,
+            CreatedDate = DateTime.Now,
+            ModifiedDate = DateTime.Now
+        };
+        
+        // Store path in OriginalParentPath for reference
+        groupingCategory.OriginalParentPath = storagePath;
+        
+        var groupingNode = new TreeViewNode { Content = groupingCategory };
+        archiveNode.Children.Add(groupingNode);
+        
+        return groupingNode;
+    }
+    
+    /// <summary>
+    /// Updates the name of a rating grouping node to show the count of archived ratings.
+    /// </summary>
+    private void UpdateRatingGroupingNodeName(TreeViewNode groupingNode)
+    {
+        if (groupingNode.Content is CategoryItem cat)
+        {
+            // Extract the original item name from the Keywords (it's stored there)
+            var keyParts = cat.Keywords?.Split('/');
+            var originalName = keyParts != null && keyParts.Length > 0 ? keyParts[^1] : cat.Name;
+            
+            
+            // Remove any existing count suffix
+            if (originalName.Contains(" (") && originalName.EndsWith(")"))
+            {
+                originalName = originalName.Substring(0, originalName.LastIndexOf(" ("));
+            }
+            
+            cat.Name = $"{originalName} ({groupingNode.Children.Count} rating changes)";
+        }
+    }
+    
+    /// <summary>
+    /// Removes any previous archive entry for the same rating type (keeps only the latest).
+    /// This ensures only one archive entry exists per rating type per target item.
+    /// </summary>
+    private void RemovePreviousRatingArchive(TreeViewNode groupingNode, string ratingName)
+    {
+        // Find and remove any existing archive entry with the same rating name
+        TreeViewNode? existingNode = null;
+        
+        foreach (var child in groupingNode.Children)
+        {
+            if (child.Content is LinkItem link && link.CategoryPath == "ArchivedRating")
+            {
+                try
+                {
+                    var ratingData = System.Text.Json.JsonSerializer.Deserialize<ArchivedRatingData>(link.Url);
+                    if (ratingData != null && ratingData.RatingName == ratingName)
+                    {
+                        existingNode = child;
+                        System.Diagnostics.Debug.WriteLine($"[Archive] Found existing archive for '{ratingName}', will replace");
+                        break;
+                    }
+                }
+                catch
+                {
+                    // Ignore parse errors, continue searching
+                }
+            }
+            else if (child.Content is CategoryItem cat && IsRatingArchive(cat))
+            {
+                // Old structure - check child link
+                if (cat.Links != null && cat.Links.Count > 0)
+                {
+                    try
+                    {
+                        var ratingData = System.Text.Json.JsonSerializer.Deserialize<ArchivedRatingData>(cat.Links[0].Url);
+                        if (ratingData != null && ratingData.RatingName == ratingName)
+                        {
+                            existingNode = child;
+                            System.Diagnostics.Debug.WriteLine($"[Archive] Found existing archive (old structure) for '{ratingName}', will replace");
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore parse errors
+                    }
+                }
+            }
+        }
+        
+        if (existingNode != null)
+        {
+            groupingNode.Children.Remove(existingNode);
+            System.Diagnostics.Debug.WriteLine($"[Archive] Removed previous archive entry for '{ratingName}'");
+        }
+    }
+    
+    /// <summary>
     /// Restores an archived rating value.
+    /// Handles both new structure (LinkItem under grouping node) and old structure (CategoryItem).
     /// </summary>
     private async Task RestoreRatingAsync(TreeViewNode archivedNode)
     {
-        if (archivedNode.Content is not CategoryItem archivedCategory)
+        // Handle both LinkItem (new structure) and CategoryItem (old structure)
+        LinkItem? dataLink = null;
+        string displayName = "";
+        
+        if (archivedNode.Content is LinkItem link && link.CategoryPath == "ArchivedRating")
+        {
+            // New structure: rating is a LinkItem
+            dataLink = link;
+            displayName = link.Title;
+        }
+        else if (archivedNode.Content is CategoryItem archivedCategory)
+        {
+            // Old structure: rating is a CategoryItem with a child link
+            displayName = archivedCategory.Name;
+            
+            if (archivedCategory.Links != null && archivedCategory.Links.Count > 0)
+            {
+                dataLink = archivedCategory.Links[0];
+            }
+        }
+        
+        if (dataLink == null)
+        {
+            await ShowErrorDialogAsync("Cannot Restore Rating", "Rating data not found in archive.");
             return;
+        }
+        
+        // Check if this is a rating archive
+        if (dataLink.CategoryPath != "ArchivedRating")
+        {
+            await ShowErrorDialogAsync("Cannot Restore Rating", "This is not a rating archive.");
+            return;
+        }
         
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[Archive] Restoring rating from: {archivedCategory.Name}");
-            
-            // Get the stored rating data from the link
-            if (archivedCategory.Links == null || archivedCategory.Links.Count == 0)
-            {
-                await ShowErrorDialogAsync("Cannot Restore Rating", "Rating data not found in archive.");
-                return;
-            }
-            
-            var dataLink = archivedCategory.Links[0];
-            
-            // Check if this is a rating archive
-            if (dataLink.CategoryPath != "ArchivedRating")
-            {
-                await ShowErrorDialogAsync("Cannot Restore Rating", "This is not a rating archive.");
-                return;
-            }
+            System.Diagnostics.Debug.WriteLine($"[Archive] Restoring rating from: {displayName}");
             
             // Parse the stored rating data
             ArchivedRatingData? ratingData;
@@ -784,10 +979,10 @@ public sealed partial class MainWindow
                     System.Diagnostics.Debug.WriteLine($"[Archive] Available root nodes:");
                     foreach (var root in LinksTreeView.RootNodes)
                     {
-                        if (root.Content is CategoryItem cat)
-                            System.Diagnostics.Debug.WriteLine($"[Archive]   - Category: '{cat.Name}'");
-                        else if (root.Content is LinkItem link)
-                            System.Diagnostics.Debug.WriteLine($"[Archive]   - Link: '{link.Title}'");
+                        if (root.Content is CategoryItem rootCat)
+                            System.Diagnostics.Debug.WriteLine($"[Archive]   - Category: '{rootCat.Name}'");
+                        else if (root.Content is LinkItem rootLink)
+                            System.Diagnostics.Debug.WriteLine($"[Archive]   - Link: '{rootLink.Title}'");
                     }
                 }
             }
@@ -825,13 +1020,13 @@ public sealed partial class MainWindow
                         
                         foreach (var child in currentNode.Children)
                         {
-                            if (child.Content is CategoryItem cat && cat.Name == partName)
+                            if (child.Content is CategoryItem childCat && childCat.Name == partName)
                             {
                                 foundChild = child;
                                 System.Diagnostics.Debug.WriteLine($"[Archive] Found category in path: '{partName}'");
                                 break;
                             }
-                            else if (child.Content is LinkItem link && link.Title == partName)
+                            else if (child.Content is LinkItem childLink && childLink.Title == partName)
                             {
                                 foundChild = child;
                                 System.Diagnostics.Debug.WriteLine($"[Archive] Found link in path: '{partName}'");
@@ -859,16 +1054,16 @@ public sealed partial class MainWindow
                     // Now search for the target item in the current node's children
                     foreach (var child in currentNode.Children)
                     {
-                        if (child.Content is CategoryItem cat && cat.Name == ratingData.Title)
+                        if (child.Content is CategoryItem targetCat && targetCat.Name == ratingData.Title)
                         {
                             targetNode = child;
-                            System.Diagnostics.Debug.WriteLine($"[Archive] Found target category: '{cat.Name}'");
+                            System.Diagnostics.Debug.WriteLine($"[Archive] Found target category: '{targetCat.Name}'");
                             break;
                         }
-                        else if (child.Content is LinkItem link && link.Title == ratingData.Title)
+                        else if (child.Content is LinkItem targetLink && targetLink.Title == ratingData.Title)
                         {
                             targetNode = child;
-                            System.Diagnostics.Debug.WriteLine($"[Archive] Found target link: '{link.Title}'");
+                            System.Diagnostics.Debug.WriteLine($"[Archive] Found target link: '{targetLink.Title}'");
                             break;
                         }
                     }
@@ -956,25 +1151,42 @@ public sealed partial class MainWindow
                 var rootNode = GetRootCategoryNode(targetNode);
                 await _categoryService!.SaveCategoryAsync(rootNode);
             }
-            else if (targetNode.Content is LinkItem link)
+            else if (targetNode.Content is LinkItem targetLinkItem)
             {
-                var currentRating = link.Ratings.FirstOrDefault(r => r.Rating == ratingData.RatingName);
+                var currentRating = targetLinkItem.Ratings.FirstOrDefault(r => r.Rating == ratingData.RatingName);
                 if (currentRating != null)
                 {
-                    link.Ratings.Remove(currentRating);
+                    targetLinkItem.Ratings.Remove(currentRating);
                     await ArchiveRatingChangeAsync(ratingData.Title, simpleRatingName, currentRating);
                     System.Diagnostics.Debug.WriteLine($"[Archive] Current rating archived for swap");
                 }
                 
-                link.Ratings.Add(restoredRating);
-                link.ModifiedDate = DateTime.Now;
+                targetLinkItem.Ratings.Add(restoredRating);
+                targetLinkItem.ModifiedDate = DateTime.Now;
                 
                 var rootNode = GetRootCategoryNode(targetNode);
                 await _categoryService!.SaveCategoryAsync(rootNode);
             }
             
             // Remove this archive node
-            archivedNode.Parent?.Children.Remove(archivedNode);
+            var parentNode = archivedNode.Parent;
+            parentNode?.Children.Remove(archivedNode);
+            
+            // If the parent is a grouping node (not the Archive root), update its name or remove if empty
+            if (parentNode != null && parentNode.Content is CategoryItem parentCat && !parentCat.IsArchiveNode)
+            {
+                if (parentNode.Children.Count == 0)
+                {
+                    // Grouping node is now empty, remove it
+                    System.Diagnostics.Debug.WriteLine($"[Archive] Removing empty grouping node: '{parentCat.Name}'");
+                    parentNode.Parent?.Children.Remove(parentNode);
+                }
+                else
+                {
+                    // Update the grouping node name with new count
+                    UpdateRatingGroupingNodeName(parentNode);
+                }
+            }
             
             // Update archive count display
             UpdateArchiveNodeName();
@@ -993,13 +1205,43 @@ public sealed partial class MainWindow
     }
     
     /// <summary>
-    /// Checks if a category is a rating archive based on its stored data.
+    /// Checks if a category is a rating archive based on its stored data (old structure).
     /// </summary>
     private bool IsRatingArchive(CategoryItem category)
     {
         return category.Links != null && 
                category.Links.Count > 0 && 
                category.Links[0].CategoryPath == "ArchivedRating";
+    }
+    
+    /// <summary>
+    /// Checks if a node is a rating archive (new or old structure).
+    /// </summary>
+    private bool IsRatingArchiveNode(TreeViewNode node)
+    {
+        // New structure: LinkItem with ArchivedRating marker
+        if (node.Content is LinkItem link && link.CategoryPath == "ArchivedRating")
+            return true;
+        
+        // Old structure: CategoryItem with child link marked as ArchivedRating
+        if (node.Content is CategoryItem cat)
+            return IsRatingArchive(cat);
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if a node is a rating grouping node (parent container for rating archives).
+    /// </summary>
+    private bool IsRatingGroupingNode(TreeViewNode node)
+    {
+        if (node.Content is not CategoryItem cat)
+            return false;
+        
+        // A grouping node has Keywords set (the grouping key) and ArchivedDate but is not a rating archive itself
+        return cat.ArchivedDate.HasValue && 
+               !string.IsNullOrEmpty(cat.Keywords) && 
+               !IsRatingArchive(cat);
     }
     
     /// <summary>
@@ -1045,19 +1287,29 @@ public sealed partial class MainWindow
     /// </summary>
     private async void ArchiveMenu_Restore_Click(object sender, RoutedEventArgs e)
     {
-        if (_contextMenuNode?.Content is CategoryItem category)
+        if (_contextMenuNode == null)
+            return;
+        
+        // Check if this is a rating archive (new LinkItem or old CategoryItem structure)
+        if (IsRatingArchiveNode(_contextMenuNode))
         {
-            // Check if this is a rating archive
-            if (IsRatingArchive(category))
-            {
-                await RestoreRatingAsync(_contextMenuNode);
-            }
-            else
-            {
-                await RestoreCategoryAsync(_contextMenuNode);
-            }
+            await RestoreRatingAsync(_contextMenuNode);
         }
-        else if (_contextMenuNode?.Content is LinkItem)
+        else if (_contextMenuNode.Content is CategoryItem category)
+        {
+            // Check if this is a rating grouping node - cannot restore directly
+            if (IsRatingGroupingNode(_contextMenuNode))
+            {
+                await ShowErrorDialogAsync(
+                    "Cannot Restore Grouping Node",
+                    $"'{category.Name}' is a grouping node containing multiple rating archives.\n\n" +
+                    "Expand this node and restore individual ratings, or delete the entire grouping.");
+                return;
+            }
+            
+            await RestoreCategoryAsync(_contextMenuNode);
+        }
+        else if (_contextMenuNode.Content is LinkItem)
         {
             await RestoreLinkAsync(_contextMenuNode);
         }
@@ -1068,12 +1320,20 @@ public sealed partial class MainWindow
     /// </summary>
     private async void ArchiveMenu_DeletePermanently_Click(object sender, RoutedEventArgs e)
     {
-        if (_contextMenuNode?.Content is CategoryItem category)
+        if (_contextMenuNode == null)
+            return;
+        
+        // Check if this is a rating archive (new LinkItem or old CategoryItem structure)
+        if (IsRatingArchiveNode(_contextMenuNode))
         {
-            // Check if this is a rating archive
-            if (IsRatingArchive(category))
+            await PermanentlyDeleteRatingArchiveAsync(_contextMenuNode);
+        }
+        else if (_contextMenuNode.Content is CategoryItem category)
+        {
+            // Check if this is a rating grouping node
+            if (IsRatingGroupingNode(_contextMenuNode))
             {
-                await PermanentlyDeleteRatingArchiveAsync(_contextMenuNode);
+                await PermanentlyDeleteRatingGroupingAsync(_contextMenuNode);
             }
             else
             {
@@ -1087,24 +1347,49 @@ public sealed partial class MainWindow
     }
     
     /// <summary>
-    /// Permanently deletes an archived rating.
+    /// Permanently deletes an archived rating (handles both new LinkItem and old CategoryItem structures).
     /// </summary>
     private async Task PermanentlyDeleteRatingArchiveAsync(TreeViewNode archivedNode)
     {
-        if (archivedNode.Content is not CategoryItem category)
+        // Get display name for confirmation
+        string displayName;
+        if (archivedNode.Content is LinkItem link)
+            displayName = link.Title;
+        else if (archivedNode.Content is CategoryItem cat)
+            displayName = cat.Name;
+        else
             return;
         
         bool confirmed = await ShowConfirmAsync(
             "Permanently Delete Rating Archive",
-            $"Are you sure you want to permanently delete the archived rating '{category.Name}'? This action cannot be undone.",
+            $"Are you sure you want to permanently delete the archived rating '{displayName}'? This action cannot be undone.",
             "Delete Permanently",
             "Cancel");
         
         if (!confirmed)
             return;
         
+        // Get parent before removal
+        var parentNode = archivedNode.Parent;
+        
         // Remove from archive
-        archivedNode.Parent?.Children.Remove(archivedNode);
+        parentNode?.Children.Remove(archivedNode);
+        
+        // If the parent is a grouping node (not the Archive root), update its name or remove if empty
+        if (parentNode != null && parentNode.Content is CategoryItem parentCat && !parentCat.IsArchiveNode)
+        {
+            if (parentNode.Children.Count == 0)
+            {
+                // Grouping node is now empty, remove it
+                System.Diagnostics.Debug.WriteLine($"[Archive] Removing empty grouping node: '{parentCat.Name}'");
+                parentNode.Parent?.Children.Remove(parentNode);
+            }
+            else
+            {
+                // Update the grouping node name with new count
+                UpdateRatingGroupingNodeName(parentNode);
+            }
+        }
         
         // Update archive count display
         UpdateArchiveNodeName();
@@ -1112,11 +1397,136 @@ public sealed partial class MainWindow
         // Save archive to JSON
         await SaveArchiveToJsonAsync();
         
-        StatusText.Text = $"Permanently deleted archived rating '{category.Name}'";
+        StatusText.Text = $"Permanently deleted archived rating '{displayName}'";
         
         if (LinksTreeView.SelectedNode == archivedNode)
         {
             ShowWelcome();
+        }
+    }
+    
+    /// <summary>
+    /// Permanently deletes a rating grouping node and all its children.
+    /// </summary>
+    private async Task PermanentlyDeleteRatingGroupingAsync(TreeViewNode groupingNode)
+    {
+        if (groupingNode.Content is not CategoryItem category)
+            return;
+        
+        var childCount = groupingNode.Children.Count;
+        
+        bool confirmed = await ShowConfirmAsync(
+            "Permanently Delete Rating Grouping",
+            $"Are you sure you want to permanently delete '{category.Name}' and all {childCount} archived rating(s) it contains?\n\nThis action cannot be undone.",
+            "Delete All",
+            "Cancel");
+        
+        if (!confirmed)
+            return;
+        
+        // Remove from archive
+        groupingNode.Parent?.Children.Remove(groupingNode);
+        
+        // Update archive count display
+        UpdateArchiveNodeName();
+        
+        // Save archive to JSON
+        await SaveArchiveToJsonAsync();
+        
+        StatusText.Text = $"Permanently deleted '{category.Name}' with {childCount} archived rating(s)";
+        
+        if (LinksTreeView.SelectedNode == groupingNode)
+        {
+            ShowWelcome();
+        }
+    }
+    
+    /// <summary>
+    /// Clears archive items based on age filter.
+    /// </summary>
+    /// <param name="filter">Filter option: "all", "day", "week", "month"</param>
+    public async Task ClearArchiveAsync(string filter)
+    {
+        var archiveNode = GetOrCreateArchiveNode();
+        if (archiveNode.Children.Count == 0)
+        {
+            StatusText.Text = "Archive is already empty.";
+            return;
+        }
+        
+        // Calculate cutoff date based on filter
+        DateTime? cutoffDate = filter switch
+        {
+            "day" => DateTime.Now.AddDays(-1),
+            "week" => DateTime.Now.AddDays(-7),
+            "month" => DateTime.Now.AddDays(-30),
+            _ => null // "all" - no cutoff
+        };
+        
+        var filterDescription = filter switch
+        {
+            "day" => "older than 1 day",
+            "week" => "older than 1 week",
+            "month" => "older than 1 month",
+            _ => "all items"
+        };
+        
+        // Count items to delete
+        var nodesToRemove = new List<TreeViewNode>();
+        
+        foreach (var child in archiveNode.Children.ToList())
+        {
+            DateTime? archivedDate = null;
+            
+            if (child.Content is CategoryItem cat)
+                archivedDate = cat.ArchivedDate;
+            else if (child.Content is LinkItem link)
+                archivedDate = link.ArchivedDate;
+            
+            // If no cutoff (all) or item is older than cutoff
+            if (cutoffDate == null || (archivedDate.HasValue && archivedDate.Value < cutoffDate.Value))
+            {
+                nodesToRemove.Add(child);
+            }
+        }
+        
+        if (nodesToRemove.Count == 0)
+        {
+            StatusText.Text = $"No items {filterDescription} to clear.";
+            return;
+        }
+        
+        // Confirm deletion
+        bool confirmed = await ShowConfirmAsync(
+            "Clear Archive",
+            $"Are you sure you want to permanently delete {nodesToRemove.Count} archived item(s) ({filterDescription})?\n\nThis action cannot be undone.",
+            "Delete Permanently",
+            "Cancel");
+        
+        if (!confirmed)
+            return;
+        
+        // Remove items
+        foreach (var node in nodesToRemove)
+        {
+            archiveNode.Children.Remove(node);
+        }
+        
+        // Update archive count display
+        UpdateArchiveNodeName();
+        
+        // Save archive to JSON
+        await SaveArchiveToJsonAsync();
+        
+        StatusText.Text = $"Cleared {nodesToRemove.Count} archived item(s) ({filterDescription}).";
+        
+        // Refresh the archive details view
+        if (LinksTreeView.SelectedNode == archiveNode && archiveNode.Content is CategoryItem archiveCategory)
+        {
+            await _detailsViewService!.ShowCategoryDetailsAsync(
+                archiveCategory, 
+                archiveNode, 
+                onClearArchive: ClearArchiveAsync);
         }
     }
 }

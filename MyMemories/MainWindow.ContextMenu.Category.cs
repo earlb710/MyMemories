@@ -718,14 +718,18 @@ public sealed partial class MainWindow
             return;
         }
 
+
         // Store old ratings for archiving
         var oldRatings = new List<RatingValue>(category.Ratings);
 
         var originalTemplate = _ratingService.CurrentTemplateName;
         _ratingService.SwitchTemplate(templateName);
 
+        // Get archived ratings for this item
+        var archivedRatings = GetArchivedRatingsForItem(category.Name);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
-        var result = await dialog.ShowAsync(category.Name, category.Ratings);
+        var result = await dialog.ShowAsync(category.Name, category.Ratings, archivedRatings);
 
         _ratingService.SwitchTemplate(originalTemplate);
 
@@ -774,8 +778,11 @@ public sealed partial class MainWindow
         // Store old ratings for archiving
         var oldRatings = new List<RatingValue>(category.Ratings);
 
+        // Get archived ratings for this item
+        var archivedRatings = GetArchivedRatingsForItem(category.Name);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
-        var result = await dialog.ShowAsync(category.Name, category.Ratings);
+        var result = await dialog.ShowAsync(category.Name, category.Ratings, archivedRatings);
 
         if (result != null)
         {

@@ -706,10 +706,17 @@ public class LinkDetailsBuilder
         
         // Check if this is an image file
         bool isImage = extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".tif" or ".tiff" or ".ico" or ".webp";
+        
+        // Check if this is a PDF file
+        bool isPdf = extension is ".pdf";
 
         if (isImage)
         {
             await AddImageFileInfoAsync(path, fileInfo);
+        }
+        else if (isPdf)
+        {
+            await AddPdfFileInfoAsync(path, fileInfo);
         }
         else
         {
@@ -903,6 +910,143 @@ public class LinkDetailsBuilder
         else
         {
             // Fallback if metadata extraction fails - show basic file info
+            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+        }
+
+        _detailsPanel.Children.Add(infoPanel);
+    }
+
+    /// <summary>
+    /// Adds detailed information panel for PDF files with document metadata.
+    /// </summary>
+    private async Task AddPdfFileInfoAsync(string path, FileInfo fileInfo)
+    {
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "PDF Document Information",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+
+        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        
+        // Basic file info
+        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"File Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+
+        // Try to extract PDF metadata
+        var metadata = await PdfMetadataService.ExtractMetadataAsync(path);
+        
+        if (metadata != null)
+        {
+            // Page Count & Version
+            infoPanel.Children.Add(CreateIconStatLine("\uE8A4", $"Pages: {metadata.PageCount}"));
+            
+            if (!string.IsNullOrEmpty(metadata.PdfVersion))
+                infoPanel.Children.Add(CreateIconStatLine("\uE8E5", $"PDF Version: {metadata.PdfVersion}"));
+            
+            if (metadata.IsPasswordProtected)
+                infoPanel.Children.Add(CreateIconStatLine(LockGlyph, "Password Protected: Yes"));
+            
+            // Page Dimensions
+            if (metadata.PageWidth > 0 && metadata.PageHeight > 0)
+            {
+                _detailsPanel.Children.Add(infoPanel);
+                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Page Layout",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (!string.IsNullOrEmpty(metadata.PageSizeDescription))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8A1", $"Page Size: {metadata.PageSizeDescription}"));
+                else
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8A1", $"Page Size: {metadata.PageDimensions}"));
+                
+                if (!string.IsNullOrEmpty(metadata.PageOrientation))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Orientation: {metadata.PageOrientation}"));
+            }
+
+            // Document Title & Subject
+            if (!string.IsNullOrEmpty(metadata.Title) || !string.IsNullOrEmpty(metadata.Subject))
+            {
+                _detailsPanel.Children.Add(infoPanel);
+                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Document Details",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (!string.IsNullOrEmpty(metadata.Title))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Title: {metadata.Title}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Subject))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Subject: {metadata.Subject}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Keywords))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE8EC", $"Keywords: {metadata.Keywords}"));
+            }
+
+            // Author Information
+            if (!string.IsNullOrEmpty(metadata.Author) || !string.IsNullOrEmpty(metadata.Creator) || 
+                !string.IsNullOrEmpty(metadata.Producer))
+            {
+                _detailsPanel.Children.Add(infoPanel);
+                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+                
+                _detailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Author & Creation",
+                    FontSize = 16,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Margin = new Thickness(0, 8, 0, 8)
+                });
+
+                if (!string.IsNullOrEmpty(metadata.Author))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE77B", $"Author: {metadata.Author}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Creator))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Creator: {metadata.Creator}"));
+                
+                if (!string.IsNullOrEmpty(metadata.Producer))
+                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Producer: {metadata.Producer}"));
+            }
+
+            // PDF Timestamps
+            _detailsPanel.Children.Add(infoPanel);
+            infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
+            
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Timestamps",
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 8, 0, 8)
+            });
+
+            if (metadata.PdfCreationDate.HasValue)
+                infoPanel.Children.Add(CreateIconStatLine("\uE787", $"PDF Created: {metadata.PdfCreationDate.Value:yyyy-MM-dd HH:mm:ss}"));
+            
+            if (metadata.PdfModificationDate.HasValue)
+                infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"PDF Modified: {metadata.PdfModificationDate.Value:yyyy-MM-dd HH:mm:ss}"));
+            
+            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"File Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"File Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        }
+        else
+        {
+            // Fallback if metadata extraction fails - show basic file info
+            infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Format: PDF"));
             infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
             infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
             infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));

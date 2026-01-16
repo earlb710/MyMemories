@@ -705,9 +705,10 @@ public class DetailsViewService : IDetailsViewService
     /// Shows category details in the Summary tab.
     /// </summary>
     public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, 
-        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null)
+        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null,
+        Func<string, Task>? onClearArchive = null)
     {
-        return await _categoryBuilder!.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks, onRefreshUrlState, onSyncBookmarks);
+        return await _categoryBuilder!.ShowCategoryDetailsAsync(category, node, onRefreshBookmarks, onRefreshUrlState, onSyncBookmarks, onClearArchive);
     }
 
     /// <summary>

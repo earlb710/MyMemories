@@ -450,8 +450,11 @@ public sealed partial class MainWindow
         var originalTemplate = _ratingService.CurrentTemplateName;
         _ratingService.SwitchTemplate(templateName);
 
+        // Get archived ratings for this item
+        var archivedRatings = GetArchivedRatingsForItem(link.Title);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
-        var result = await dialog.ShowAsync(link.Title, link.Ratings);
+        var result = await dialog.ShowAsync(link.Title, link.Ratings, archivedRatings);
 
         _ratingService.SwitchTemplate(originalTemplate);
 
@@ -510,8 +513,11 @@ public sealed partial class MainWindow
         // Store old ratings for archiving
         var oldRatings = new List<RatingValue>(link.Ratings);
 
+        // Get archived ratings for this item
+        var archivedRatings = GetArchivedRatingsForItem(link.Title);
+
         var dialog = new Dialogs.RatingAssignmentDialog(Content.XamlRoot, _ratingService);
-        var result = await dialog.ShowAsync(link.Title, link.Ratings);
+        var result = await dialog.ShowAsync(link.Title, link.Ratings, archivedRatings);
 
         if (result != null)
         {

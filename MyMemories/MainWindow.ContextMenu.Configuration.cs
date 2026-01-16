@@ -2,6 +2,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using MyMemories.Services;
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -36,6 +38,10 @@ public sealed partial class MainWindow
         {
             // Show Archive context menu for archived items (categories or links)
             menu = LinksTreeView.Resources["ArchiveContextMenu"] as MenuFlyout;
+            if (menu != null)
+            {
+                ConfigureArchiveContextMenu(node);
+            }
         }
         else if (node.Content is CategoryItem category)
         {
@@ -118,6 +124,7 @@ public sealed partial class MainWindow
         if (zipCategoryItem != null)
             zipCategoryItem.IsEnabled = HasDirectoryLinksRecursive(node);
 
+
         // Configure Add Tag submenu
         if (addTagSubItem != null)
             PopulateAddTagSubmenu(addTagSubItem, category.TagIds, isCategory: true);
@@ -128,7 +135,7 @@ public sealed partial class MainWindow
 
         // Configure Ratings submenu with templates (uses cache)
         if (ratingsSubItem != null)
-            PopulateRatingsSubmenu(ratingsSubItem, category.Ratings.Count, isCategory: true);
+            PopulateRatingsSubmenu(ratingsSubItem, category.Ratings, isCategory: true);
     }
 
     /// <summary>
@@ -200,7 +207,35 @@ public sealed partial class MainWindow
             removeTagItem.IsEnabled = link.TagIds.Count > 0;
 
         if (ratingsSubItem != null)
-            PopulateRatingsSubmenu(ratingsSubItem, link.Ratings.Count, isCategory: false);
+            PopulateRatingsSubmenu(ratingsSubItem, link.Ratings, isCategory: false);
+    }
+    
+    /// <summary>
+    /// Configures the archive context menu based on the type of archived item.
+    /// Disables Restore for rating grouping nodes.
+    /// </summary>
+    private void ConfigureArchiveContextMenu(TreeViewNode node)
+    {
+        // Disable Restore for rating grouping nodes (they can only be deleted)
+        if (ArchiveMenu_Restore != null)
+        {
+            bool canRestore = !IsRatingGroupingNode(node);
+            ArchiveMenu_Restore.IsEnabled = canRestore;
+            
+            // Update the tooltip to explain why
+            if (!canRestore)
+            {
+                Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(
+                    ArchiveMenu_Restore, 
+                    "Expand this grouping to restore individual ratings");
+            }
+            else
+            {
+                Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(
+                    ArchiveMenu_Restore, 
+                    "Restore this item to its original location");
+            }
+        }
     }
 
     /// <summary>
@@ -243,11 +278,12 @@ public sealed partial class MainWindow
         }
     }
 
+
     /// <summary>
     /// Populates the Ratings submenu with rating templates that have definitions.
-    /// OPTIMIZED: Uses cached template list to avoid expensive template switching.
+    /// Shows the count of ratings assigned to the node per template.
     /// </summary>
-    private void PopulateRatingsSubmenu(MenuFlyoutSubItem subMenu, int currentRatingCount, bool isCategory)
+    private void PopulateRatingsSubmenu(MenuFlyoutSubItem subMenu, List<RatingValue> nodeRatings, bool isCategory)
     {
         subMenu.Items.Clear();
 
@@ -257,6 +293,8 @@ public sealed partial class MainWindow
             return;
         }
 
+        var currentRatingCount = nodeRatings?.Count ?? 0;
+        
         // Update the submenu text to show rating count
         subMenu.Text = currentRatingCount > 0 ? $"Ratings ({currentRatingCount})" : "Ratings";
 
@@ -271,14 +309,41 @@ public sealed partial class MainWindow
             return;
         }
 
-        // Add template options
-        foreach (var (name, displayName, count) in templatesWithRatings)
+        // Count ratings per template on this node
+        var ratingsPerTemplate = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (nodeRatings != null)
         {
+            foreach (var rating in nodeRatings)
+            {
+                // Extract template name from rating (format: "TemplateName.RatingName" or just "RatingName")
+                var templateName = "";
+                if (rating.Rating.Contains('.'))
+                {
+                    templateName = rating.Rating.Substring(0, rating.Rating.LastIndexOf('.'));
+                }
+                
+                if (!ratingsPerTemplate.ContainsKey(templateName))
+                    ratingsPerTemplate[templateName] = 0;
+                ratingsPerTemplate[templateName]++;
+            }
+        }
+
+        // Add template options with node-specific counts
+        foreach (var (name, displayName, definitionCount) in templatesWithRatings)
+        {
+            // Get count of ratings from this template on the current node
+            var nodeCount = ratingsPerTemplate.TryGetValue(name, out var count) ? count : 0;
+            
+            // Show: "TemplateName (X of Y)" where X = assigned, Y = available types
+            var menuText = nodeCount > 0 
+                ? $"{displayName} ({nodeCount} of {definitionCount})"
+                : $"{displayName} (0 of {definitionCount})";
+            
             var templateItem = new MenuFlyoutItem
             {
-                Text = $"{displayName} ({count} types)",
+                Text = menuText,
                 Tag = name,
-                Icon = new FontIcon { Glyph = "\uE735" } // Star icon
+                Icon = new FontIcon { Glyph = nodeCount > 0 ? "\uE735" : "\uE734" } // Filled star if has ratings, empty star otherwise
             };
 
             templateItem.Click += isCategory 
@@ -292,6 +357,7 @@ public sealed partial class MainWindow
         subMenu.Items.Add(new MenuFlyoutSeparator());
         AddManageRatingsOption(subMenu);
     }
+
 
     /// <summary>
     /// Adds the "Manage Templates" option to a ratings submenu.

@@ -28,12 +28,13 @@ public class TreeViewEventService
         Action<string> setStatus, 
         Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null,
         Func<CategoryItem, TreeViewNode, Task>? refreshUrlStateCallback = null,
-        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null)
+        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null,
+        Func<string, Task>? clearArchiveCallback = null)
     {
         if (node.Content is CategoryItem category)
         {
             await HandleCategorySelectionAsync(category, node, hideAllViewers, showDetailsViewers, setStatus, 
-                refreshBookmarksCallback, refreshUrlStateCallback, syncBookmarksCallback);
+                refreshBookmarksCallback, refreshUrlStateCallback, syncBookmarksCallback, clearArchiveCallback);
         }
         else if (node.Content is LinkItem linkItem)
         {
@@ -49,7 +50,8 @@ public class TreeViewEventService
         Action<string> setStatus, 
         Func<CategoryItem, TreeViewNode, Task>? refreshBookmarksCallback = null,
         Func<CategoryItem, TreeViewNode, Task>? refreshUrlStateCallback = null,
-        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null)
+        Func<CategoryItem, TreeViewNode, Task>? syncBookmarksCallback = null,
+        Func<string, Task>? clearArchiveCallback = null)
     {
         hideAllViewers();
         
@@ -71,8 +73,13 @@ public class TreeViewEventService
             ? async () => await syncBookmarksCallback(category, node)
             : null;
         
+        // Create clear archive callback for Archive node
+        Func<string, Task>? clearArchive = category.IsArchiveNode && clearArchiveCallback != null
+            ? clearArchiveCallback
+            : null;
+        
         // Populate Summary tab with category details
-        await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks);
+        await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks, clearArchive);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
         _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);

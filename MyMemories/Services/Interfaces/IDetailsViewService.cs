@@ -113,7 +113,8 @@ public interface IDetailsViewService
     /// Shows category details in the Summary tab.
     /// </summary>
     Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node,
-        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null);
+        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null,
+        Func<string, Task>? onClearArchive = null);
 
     /// <summary>
     /// Shows link details in the Summary tab with file information and catalog buttons for directories.

@@ -250,7 +250,7 @@ Title="My Memories - File Viewer">
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center">
                                                 <TextBlock.Foreground>
-                                                    <Binding Path="Content.Name">
+                                                    <Binding Path="Content">
                                                         <Binding.Converter>
                                                             <converters:ArchiveNodeColorConverter/>
                                                         </Binding.Converter>

@@ -63,8 +63,13 @@ public sealed partial class MainWindow
             Func<Task>? syncBookmarks = category.IsBookmarkImport
                 ? async () => await SyncBookmarksAsync(category, node)
                 : null;
+            
+            // Create clear archive callback for Archive node
+            Func<string, Task>? clearArchive = category.IsArchiveNode
+                ? ClearArchiveAsync
+                : null;
 
-            await _detailsViewService!.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks);
+            await _detailsViewService!.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks, clearArchive);
 
             var categoryPath = _treeViewService!.GetCategoryPath(node);
             _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
@@ -86,7 +91,8 @@ public sealed partial class MainWindow
                 status => StatusText.Text = status,
                 RefreshBookmarksAsync,
                 RefreshUrlStateAsync,
-                SyncBookmarksAsync);
+                SyncBookmarksAsync,
+                ClearArchiveAsync);
         }
         
         // Attach pointer events to show URL status in status bar

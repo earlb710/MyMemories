@@ -11,6 +11,16 @@ using System.Threading.Tasks;
 namespace MyMemories.Dialogs;
 
 /// <summary>
+/// Information about an archived rating for display in the rating dialog.
+/// </summary>
+public class ArchivedRatingInfo
+{
+    public int Score { get; set; }
+    public string? Reason { get; set; }
+    public DateTime ArchivedDate { get; set; }
+}
+
+/// <summary>
 /// Dialog for assigning, viewing, and editing ratings on categories and links.
 /// Shows all rating types from the template with checkboxes to include/exclude.
 /// </summary>
@@ -30,8 +40,10 @@ public class RatingAssignmentDialog
     /// </summary>
     /// <param name="itemName">Name of the item being rated.</param>
     /// <param name="currentRatings">Current list of ratings on the item.</param>
+    /// <param name="archivedRatings">Optional dictionary of archived ratings by rating name.</param>
     /// <returns>Updated list of ratings, or null if cancelled.</returns>
-    public async Task<List<RatingValue>?> ShowAsync(string itemName, List<RatingValue> currentRatings)
+    public async Task<List<RatingValue>?> ShowAsync(string itemName, List<RatingValue> currentRatings, 
+        Dictionary<string, ArchivedRatingInfo>? archivedRatings = null)
     {
         if (_ratingService.DefinitionCount == 0)
         {
@@ -92,7 +104,12 @@ public class RatingAssignmentDialog
         {
             var qualifiedName = _ratingService.GetQualifiedName(definition);
             var existingRating = ratingsByQualifiedName.GetValueOrDefault(qualifiedName);
-            var row = CreateRatingRow(definition, existingRating);
+            
+            // Check for archived rating
+            ArchivedRatingInfo? archivedRating = null;
+            archivedRatings?.TryGetValue(qualifiedName, out archivedRating);
+            
+            var row = CreateRatingRow(definition, existingRating, archivedRating);
             ratingRows.Add(row);
             mainPanel.Children.Add(row.Container);
         }
@@ -167,7 +184,7 @@ public class RatingAssignmentDialog
             : "No ratings selected";
     }
 
-    private RatingRowControl CreateRatingRow(RatingDefinition definition, RatingValue? existingRating)
+    private RatingRowControl CreateRatingRow(RatingDefinition definition, RatingValue? existingRating, ArchivedRatingInfo? archivedRating = null)
     {
         var isChecked = existingRating != null;
         var currentScore = existingRating?.Score ?? Math.Max(0, definition.MinScore);
@@ -308,16 +325,31 @@ public class RatingAssignmentDialog
 
         sliderPanel.Children.Add(sliderRow);
 
-        // Optional reason text box
+        // Optional reason text box - multiline with auto-expansion up to 5 lines
         var reasonTextBox = new TextBox
         {
             Text = existingRating?.Reason ?? string.Empty,
-            PlaceholderText = "Reason (optional)",
+            PlaceholderText = "Reason (optional) - supports multiple lines",
             FontSize = 11,
             Margin = new Thickness(0, 8, 0, 0),
-            MaxHeight = 60
+            AcceptsReturn = true, // Enable multiline
+            TextWrapping = TextWrapping.Wrap, // Wrap long lines
+            MinHeight = 32, // Minimum height for single line
+            MaxHeight = 120 // Maximum height for ~5 lines (approx 24px per line)
         };
+        // Set attached properties for scrolling behavior
+        ScrollViewer.SetVerticalScrollBarVisibility(reasonTextBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(reasonTextBox, ScrollBarVisibility.Disabled);
+        
         sliderPanel.Children.Add(reasonTextBox);
+        
+        // Timestamp and Previous badge row
+        var timestampRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
         
         // Timestamp display (if rating exists)
         if (existingRating != null)
@@ -327,7 +359,7 @@ public class RatingAssignmentDialog
                 FontSize = 9,
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
                 Foreground = new SolidColorBrush(Microsoft.UI.Colors.Gray),
-                Margin = new Thickness(0, 4, 0, 0)
+                VerticalAlignment = VerticalAlignment.Center
             };
             
             if (existingRating.ModifiedDate > existingRating.CreatedDate.AddSeconds(5))
@@ -339,7 +371,43 @@ public class RatingAssignmentDialog
                 timestampText.Text = $"Created: {existingRating.CreatedDate:g}";
             }
             
-            sliderPanel.Children.Add(timestampText);
+            timestampRow.Children.Add(timestampText);
+        }
+        
+        // Previous badge (if archived rating exists)
+        if (archivedRating != null)
+        {
+            var previousBadge = new Border
+            {
+                Background = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 2, 6, 2),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = $"Previous: {archivedRating.Score}",
+                    FontSize = 9,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White)
+                }
+            };
+            
+            // Build tooltip content
+            var tooltipText = $"Previous value: {archivedRating.Score}";
+            if (!string.IsNullOrEmpty(archivedRating.Reason))
+            {
+                tooltipText += $"\nReason: {archivedRating.Reason}";
+            }
+            tooltipText += $"\nArchived: {archivedRating.ArchivedDate:g}";
+            
+            ToolTipService.SetToolTip(previousBadge, tooltipText);
+            
+            timestampRow.Children.Add(previousBadge);
+        }
+        
+        if (timestampRow.Children.Count > 0)
+        {
+            sliderPanel.Children.Add(timestampRow);
         }
 
         mainStack.Children.Add(sliderPanel);

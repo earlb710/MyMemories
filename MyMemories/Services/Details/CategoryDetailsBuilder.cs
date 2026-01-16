@@ -35,11 +35,19 @@ public class CategoryDetailsBuilder
     /// Shows category details.
     /// </summary>
     public async Task<Button?> ShowCategoryDetailsAsync(CategoryItem category, TreeViewNode node, 
-        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null)
+        Func<Task>? onRefreshBookmarks = null, Func<Task>? onRefreshUrlState = null, Func<Task>? onSyncBookmarks = null,
+        Func<string, Task>? onClearArchive = null)
     {
         _detailsPanel.Children.Clear();
 
         Button? refreshButton = null;
+
+        // Special handling for Archive node
+        if (category.IsArchiveNode)
+        {
+            AddArchiveNodeDetails(category, node, onClearArchive);
+            return null;
+        }
 
         if (category.IsBookmarkImport)
         {
@@ -528,5 +536,219 @@ public class CategoryDetailsBuilder
 
         linkCard.Child = linkInfo;
         return linkCard;
+    }
+    
+    /// <summary>
+    /// Adds special details view for the Archive node with Clear Archive button.
+    /// </summary>
+    private void AddArchiveNodeDetails(CategoryItem category, TreeViewNode node, Func<string, Task>? onClearArchive)
+    {
+        // Header
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Archive",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Colors.Red),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        
+        // Description
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "Archived items are soft-deleted and can be restored or permanently deleted.",
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+        
+        // Statistics
+        var itemCount = node.Children.Count;
+        var statsPanel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
+        
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"Archived Items: {itemCount}",
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        
+        // Count items by age
+        var now = DateTime.Now;
+        int olderThanDay = 0, olderThanWeek = 0, olderThanMonth = 0;
+        
+        foreach (var child in node.Children)
+        {
+            DateTime? archivedDate = null;
+            
+            if (child.Content is CategoryItem cat)
+                archivedDate = cat.ArchivedDate;
+            else if (child.Content is LinkItem link)
+                archivedDate = link.ArchivedDate;
+            
+            if (archivedDate.HasValue)
+            {
+                var age = now - archivedDate.Value;
+                if (age.TotalDays > 30) olderThanMonth++;
+                else if (age.TotalDays > 7) olderThanWeek++;
+                else if (age.TotalDays > 1) olderThanDay++;
+            }
+        }
+        
+        if (itemCount > 0)
+        {
+            var ageInfo = new TextBlock
+            {
+                Text = $"• Older than 1 day: {olderThanDay + olderThanWeek + olderThanMonth}\n" +
+                       $"• Older than 1 week: {olderThanWeek + olderThanMonth}\n" +
+                       $"• Older than 1 month: {olderThanMonth}",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+            statsPanel.Children.Add(ageInfo);
+        }
+        
+        _detailsPanel.Children.Add(statsPanel);
+        
+        // Clear Archive button with dropdown
+        if (onClearArchive != null && itemCount > 0)
+        {
+            var clearButton = new DropDownButton
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new FontIcon { Glyph = "\uE74D", Foreground = new SolidColorBrush(Colors.Red) }, // Delete icon
+                        new TextBlock { Text = "Clear Archive", VerticalAlignment = VerticalAlignment.Center }
+                    }
+                }
+            };
+            
+            var flyout = new MenuFlyout();
+            
+            // Everything
+            var clearAllItem = new MenuFlyoutItem
+            {
+                Text = "Everything",
+                Icon = new FontIcon { Glyph = "\uE74D" }
+            };
+            clearAllItem.Click += async (s, e) => await onClearArchive("all");
+            flyout.Items.Add(clearAllItem);
+            
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            
+            // Older than a day
+            var clearDayItem = new MenuFlyoutItem
+            {
+                Text = $"Older than 1 day ({olderThanDay + olderThanWeek + olderThanMonth} items)",
+                Icon = new FontIcon { Glyph = "\uE787" } // Calendar
+            };
+            clearDayItem.Click += async (s, e) => await onClearArchive("day");
+            flyout.Items.Add(clearDayItem);
+            
+            // Older than a week
+            var clearWeekItem = new MenuFlyoutItem
+            {
+                Text = $"Older than 1 week ({olderThanWeek + olderThanMonth} items)",
+                Icon = new FontIcon { Glyph = "\uE787" }
+            };
+            clearWeekItem.Click += async (s, e) => await onClearArchive("week");
+            flyout.Items.Add(clearWeekItem);
+            
+            // Older than a month
+            var clearMonthItem = new MenuFlyoutItem
+            {
+                Text = $"Older than 1 month ({olderThanMonth} items)",
+                Icon = new FontIcon { Glyph = "\uE787" }
+            };
+            clearMonthItem.Click += async (s, e) => await onClearArchive("month");
+            flyout.Items.Add(clearMonthItem);
+            
+            clearButton.Flyout = flyout;
+            _detailsPanel.Children.Add(clearButton);
+        }
+        else if (itemCount == 0)
+        {
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Archive is empty.",
+                FontSize = 13,
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+        }
+        
+        // Show list of archived items with dates
+        if (itemCount > 0)
+        {
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Archived Items",
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 16, 0, 8)
+            });
+            
+            foreach (var child in node.Children)
+            {
+                string? name = null;
+                DateTime? archivedDate = null;
+                string icon = "??";
+                
+                if (child.Content is CategoryItem cat)
+                {
+                    name = cat.Name;
+                    archivedDate = cat.ArchivedDate;
+                    icon = cat.Icon;
+                }
+                else if (child.Content is LinkItem link)
+                {
+                    name = link.Title;
+                    archivedDate = link.ArchivedDate;
+                    icon = link.GetIcon();
+                }
+                
+                if (!string.IsNullOrEmpty(name))
+                {
+                    var itemPanel = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        Margin = new Thickness(0, 2, 0, 2)
+                    };
+                    
+                    itemPanel.Children.Add(new TextBlock
+                    {
+                        Text = icon,
+                        FontSize = 14,
+                        Foreground = new SolidColorBrush(Colors.Red)
+                    });
+                    
+                    itemPanel.Children.Add(new TextBlock
+                    {
+                        Text = name,
+                        FontSize = 13
+                    });
+                    
+                    if (archivedDate.HasValue)
+                    {
+                        itemPanel.Children.Add(new TextBlock
+                        {
+                            Text = $"({archivedDate.Value:yyyy-MM-dd HH:mm})",
+                            FontSize = 11,
+                            Foreground = new SolidColorBrush(Colors.Gray),
+                            VerticalAlignment = VerticalAlignment.Center
+                        });
+                    }
+                    
+                    _detailsPanel.Children.Add(itemPanel);
+                }
+            }
+        }
     }
 }
