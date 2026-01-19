@@ -49,6 +49,20 @@ public sealed partial class MainWindow
             // Clear content from both tabs (including WebView)
             _detailsViewService!.ClearTabbedViewContent();
 
+            // Special handling for Searches node
+            if (category.IsSearchesNode)
+            {
+                _detailsViewService.ShowSearchesNodeDetails(
+                    _savedSearchService?.Searches.Count ?? 0,
+                    AddSavedSearchAsync);
+                
+                _detailsViewService.ShowCategoryHeader("Searches", category.Description, category.Icon, category);
+                _detailsViewService.ShowContentMessage("Saved searches. Double-click a search to execute it.");
+                ShowDetailsViewers();
+                StatusText.Text = $"Saved Searches ({_savedSearchService?.Searches.Count ?? 0})";
+                return;
+            }
+
             // Create refresh callback for bookmark import categories
             Func<Task>? refreshBookmarks = category.IsBookmarkImport
                 ? async () => await RefreshBookmarksAsync(category, node)
@@ -79,6 +93,20 @@ public sealed partial class MainWindow
 
             ShowDetailsViewers();
             StatusText.Text = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";
+        }
+        else if (node.Content is LinkItem linkItem && linkItem.IsSavedSearch && !string.IsNullOrEmpty(linkItem.SavedSearchId))
+        {
+            // Handle saved search item selection
+            HideAllViewers();
+            _detailsViewService!.ClearTabbedViewContent();
+            
+            var search = _savedSearchService?.GetSearch(linkItem.SavedSearchId);
+            if (search != null)
+            {
+                await ShowSavedSearchDetailsAsync(search, node);
+            }
+            
+            ShowDetailsViewers();
         }
         else
         {
@@ -228,11 +256,33 @@ public sealed partial class MainWindow
 
         if (node.Content is CategoryItem category)
         {
+            // Don't edit special system nodes
+            if (category.IsArchiveNode || category.IsSearchesNode || category.Name.StartsWith("———"))
+            {
+                e.Handled = true;
+                return;
+            }
+            
             await EditCategoryAsync(category, node);
             e.Handled = true;
         }
         else if (node.Content is LinkItem linkItem)
         {
+            // Check if this is a search result node - navigate to original
+            if (TryNavigateToOriginalFromSearchResult(node))
+            {
+                e.Handled = true;
+                return;
+            }
+            
+            // Handle saved search execution on double-click
+            if (linkItem.IsSavedSearch && !string.IsNullOrEmpty(linkItem.SavedSearchId))
+            {
+                await ExecuteSavedSearchAsync(linkItem.SavedSearchId);
+                e.Handled = true;
+                return;
+            }
+            
             // Pass the actual node that was double-tapped, not LinksTreeView.SelectedNode
             // as they might be different (double-tap can occur before selection updates)
             await _doubleTapHandlerService!.HandleDoubleTapAsync(

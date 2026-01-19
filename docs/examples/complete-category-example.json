@@ -1,0 +1,178 @@
+{
+  "Name": "Development Resources",
+  "Description": "A comprehensive collection of development tools with ratings",
+  "Icon": "??",
+  "Keywords": "programming coding development software engineering",
+  "TagIds": [
+    "tag-work",
+    "tag-important",
+    "tag-programming"
+  ],
+  "Ratings": [
+    {
+      "Rating": "Quality",
+      "Score": 5,
+      "Reason": "Excellent collection of curated resources",
+      "CreatedDate": "2024-12-20T10:00:00",
+      "ModifiedDate": "2024-12-20T10:00:00"
+    },
+    {
+      "Rating": "Organization",
+      "Score": 4,
+      "Reason": "Well organized with clear subcategories",
+      "CreatedDate": "2024-12-20T10:00:00",
+      "ModifiedDate": "2024-12-20T10:00:00"
+    }
+  ],
+  "CreatedDate": "2024-01-15T09:00:00",
+  "ModifiedDate": "2024-12-20T14:35:22",
+  "PasswordProtection": "None",
+  "SortOrder": "NameAscending",
+  "IsBookmarkCategory": true,
+  "IsBookmarkLookup": true,
+  "IsAuditLoggingEnabled": true,
+  "BackupDirectories": [
+    "[MANUAL]D:\\Backups\\Categories",
+    "[AUTO]\\\\NetworkShare\\Backups"
+  ],
+  "SubCategories": [
+    {
+      "Name": "Documentation",
+      "Description": "Official documentation and API references",
+      "Icon": "??",
+      "Keywords": "docs api reference manual",
+      "TagIds": ["tag-reference"],
+      "Ratings": [
+        {
+          "Rating": "Usefulness",
+          "Score": 5,
+          "Reason": "Essential documentation links",
+          "CreatedDate": "2024-12-20T10:05:00",
+          "ModifiedDate": "2024-12-20T10:05:00"
+        }
+      ],
+      "CreatedDate": "2024-01-15T09:05:00",
+      "ModifiedDate": "2024-12-15T10:20:00",
+      "SortOrder": "NameAscending",
+      "Links": [
+        {
+          "Title": "Microsoft .NET Documentation",
+          "Url": "https://learn.microsoft.com/en-us/dotnet/",
+          "Description": "Official .NET documentation including C#, F#, and VB.NET",
+          "Keywords": "dotnet csharp microsoft",
+          "TagIds": ["tag-microsoft", "tag-dotnet"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Comprehensive and well-maintained",
+              "CreatedDate": "2024-12-20T10:10:00",
+              "ModifiedDate": "2024-12-20T10:10:00"
+            },
+            {
+              "Rating": "Relevance",
+              "Score": 5,
+              "Reason": "Core development resource",
+              "CreatedDate": "2024-12-20T10:10:00",
+              "ModifiedDate": "2024-12-20T10:10:00"
+            }
+          ],
+          "CategoryPath": "Development Resources/Documentation",
+          "CreatedDate": "2024-01-16T08:00:00",
+          "ModifiedDate": "2024-12-10T09:15:00",
+          "UrlStatus": "Accessible",
+          "UrlLastChecked": "2024-12-20T14:00:00",
+          "UrlStatusMessage": "200 OK",
+          "SubLinks": [
+            {
+              "Title": "C# Programming Guide",
+              "Url": "https://learn.microsoft.com/en-us/dotnet/csharp/",
+              "Description": "C# language reference and tutorials",
+              "TagIds": ["tag-csharp"],
+              "Ratings": [
+                {
+                  "Rating": "Quality",
+                  "Score": 5,
+                  "Reason": "Best C# resource available",
+                  "CreatedDate": "2024-12-20T10:15:00",
+                  "ModifiedDate": "2024-12-20T10:15:00"
+                }
+              ],
+              "CategoryPath": "Development Resources/Documentation",
+              "CreatedDate": "2024-02-01T10:00:00",
+              "ModifiedDate": "2024-02-01T10:00:00",
+              "UrlStatus": "Accessible",
+              "UrlLastChecked": "2024-12-20T14:00:00"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "Links": [
+    {
+      "Title": "Visual Studio Code",
+      "Url": "https://code.visualstudio.com/",
+      "Description": "Free code editor with excellent extensions",
+      "Keywords": "editor ide vscode",
+      "TagIds": ["tag-tool", "tag-editor"],
+      "Ratings": [
+        {
+          "Rating": "Quality",
+          "Score": 5,
+          "Reason": "Best code editor for modern development",
+          "CreatedDate": "2024-12-20T10:20:00",
+          "ModifiedDate": "2024-12-20T10:20:00"
+        },
+        {
+          "Rating": "Performance",
+          "Score": 4,
+          "Reason": "Fast and responsive with most extensions",
+          "CreatedDate": "2024-12-20T10:20:00",
+          "ModifiedDate": "2024-12-20T10:20:00"
+        }
+      ],
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-01-15T09:30:00",
+      "ModifiedDate": "2024-12-01T11:00:00",
+      "UrlStatus": "Accessible",
+      "UrlLastChecked": "2024-12-20T14:00:00",
+      "UrlStatusMessage": "200 OK"
+    },
+    {
+      "Title": "Project Files",
+      "Url": "C:\\Projects\\MyMemories",
+      "Description": "Local project directory with cataloged files",
+      "Keywords": "project local files",
+      "IsDirectory": true,
+      "CategoryPath": "Development Resources",
+      "CreatedDate": "2024-03-15T14:00:00",
+      "ModifiedDate": "2024-12-20T12:30:00",
+      "FolderType": "CatalogueFiles",
+      "LastCatalogUpdate": "2024-12-20T12:30:00",
+      "AutoRefreshCatalog": true,
+      "FileFilters": "*.cs;*.xaml;*.json",
+      "CatalogSortOrder": "NameAscending",
+      "CatalogEntries": [
+        {
+          "Title": "MainWindow.xaml.cs",
+          "Url": "MainWindow.xaml.cs",
+          "Description": "Size: 45.2 KB",
+          "Ratings": [
+            {
+              "Rating": "Code Quality",
+              "Score": 4,
+              "Reason": "Well-structured but could use more comments",
+              "CreatedDate": "2024-12-20T12:35:00",
+              "ModifiedDate": "2024-12-20T12:35:00"
+            }
+          ],
+          "CategoryPath": "Development Resources",
+          "CreatedDate": "2024-12-20T12:30:00",
+          "ModifiedDate": "2024-12-20T12:30:00",
+          "FileSize": 46285
+        }
+      ]
+    }
+  ]
+}

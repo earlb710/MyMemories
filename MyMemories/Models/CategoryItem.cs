@@ -117,9 +117,23 @@ public class CategoryItem
     public bool IsArchiveNode { get; set; }
     
     /// <summary>
+    /// Special flag indicating this is the Searches system node.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSearchesNode { get; set; }
+    
+    /// <summary>
+    /// The original source filename when loaded via Open Category.
+    /// Used to properly delete the file when the category is removed.
+    /// </summary>
+    [JsonIgnore]
+    public string? SourceFileName { get; set; }
+    
+    /// <summary>
     /// Links within this category (used for archive serialization).
     /// </summary>
     public List<LinkItem>? Links { get; set; }
+    
     
     // Export/Sync metadata
     /// <summary>

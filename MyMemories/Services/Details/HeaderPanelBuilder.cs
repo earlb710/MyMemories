@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -69,7 +70,7 @@ public class HeaderPanelBuilder
     /// <summary>
     /// Shows category header in the header panel with icon on the left.
     /// </summary>
-    public void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null)
+    public void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null, bool isRootCategory = false)
     {
         _headerPanel.Children.Clear();
 
@@ -93,14 +94,31 @@ public class HeaderPanelBuilder
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        // Title
-        textPanel.Children.Add(new TextBlock
+        // Title with tooltip showing file location (only for root categories)
+        var titleBlock = new TextBlock
         {
             Text = categoryName,
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
-        });
+        };
+        
+        // Add tooltip with file location for root categories only
+        if (category != null && isRootCategory)
+        {
+            var appDataFolder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyMemories",
+                "Categories");
+            
+            var fileName = FileUtilities.SanitizeFileName(category.Name) + ".json";
+            var filePath = System.IO.Path.Combine(appDataFolder, fileName);
+            
+            var tooltipText = $"File: {fileName}\nPath: {filePath}";
+            ToolTipService.SetToolTip(titleBlock, tooltipText);
+        }
+        
+        textPanel.Children.Add(titleBlock);
 
         // Tag badges row
         if (category != null && category.TagIds.Count > 0)
@@ -131,6 +149,82 @@ public class HeaderPanelBuilder
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Colors.Gray)
             });
+        }
+        
+        // Add file location at the bottom for root categories only
+        if (category != null && isRootCategory)
+        {
+            var appDataFolder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyMemories",
+                "Categories");
+            
+            var fileName = FileUtilities.SanitizeFileName(category.Name) + ".json";
+            var filePath = System.IO.Path.Combine(appDataFolder, fileName);
+            
+            var fileInfoPanel = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Spacing = 2,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            
+            // Filename with icon
+            var fileNamePanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4
+            };
+            
+            fileNamePanel.Children.Add(new FontIcon
+            {
+                Glyph = "\uE8A5", // Document icon (Segoe MDL2 Assets)
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Colors.DarkGray)
+            });
+            
+            fileNamePanel.Children.Add(new TextBlock
+            {
+                Text = fileName,
+                FontSize = 11,
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Foreground = new SolidColorBrush(Colors.DarkGray),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            
+            fileInfoPanel.Children.Add(fileNamePanel);
+            
+            // File path with icon
+            var pathPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4
+            };
+            
+            pathPanel.Children.Add(new FontIcon
+            {
+                Glyph = "\uE8B7", // Folder icon (Segoe MDL2 Assets)
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            });
+            
+            var pathBlock = new TextBlock
+            {
+                Text = filePath,
+                FontSize = 10,
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Foreground = new SolidColorBrush(Colors.Gray),
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            
+            // Add tooltip for easy copying
+            ToolTipService.SetToolTip(pathBlock, $"Click to copy path:\n{filePath}");
+            
+            pathPanel.Children.Add(pathBlock);
+            fileInfoPanel.Children.Add(pathPanel);
+            
+            textPanel.Children.Add(fileInfoPanel);
         }
 
         horizontalPanel.Children.Add(textPanel);

@@ -6,17 +6,23 @@ using System;
 namespace MyMemories.Converters;
 
 /// <summary>
-/// Converter that returns red color for Archive-related nodes:
-/// - The main "Archived (n)" node
-/// - Archived rating entries (items with "A" icon that are children of Archive)
+/// Converter that returns special colors for system nodes:
+/// - Red for Archive-related nodes (the main "Archived (n)" node, archived items)
+/// - Blue for Searches node
 /// </summary>
 public class ArchiveNodeColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
-        // Check if value is CategoryItem with ArchivedDate (archived item)
+        // Check if value is CategoryItem with special flags
         if (value is CategoryItem category)
         {
+            // Blue for Searches node
+            if (category.IsSearchesNode)
+            {
+                return new SolidColorBrush(Colors.DodgerBlue);
+            }
+            
             // Red for: Archive node, or any item with ArchivedDate, or icon is "A" (archived rating)
             if (category.IsArchiveNode || category.ArchivedDate.HasValue || category.Icon == "A")
             {

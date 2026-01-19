@@ -514,7 +514,42 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
                 }
             }
             
-            // Add divider (using a special category with separator text)
+            // Add first divider (for Searches)
+            var searchesDividerCategory = new CategoryItem
+            {
+                Name = "———————————————————",
+                Description = null,
+                Icon = "" // Empty icon for divider
+            };
+            var searchesDividerNode = new TreeViewNode
+            {
+                Content = searchesDividerCategory,
+                IsExpanded = false
+            };
+            LinksTreeView.RootNodes.Add(searchesDividerNode);
+            
+            
+            // Add "Searches" node below the first divider
+            var searchesCategory = new CategoryItem
+            {
+                Name = "Searches (0)",
+                Description = "Saved complex searches",
+                Icon = "\U0001F50E", // ?? Right-Pointing Magnifying Glass
+                IsSearchesNode = true
+            };
+            _searchesNode = new TreeViewNode
+            {
+                Content = searchesCategory,
+                IsExpanded = false
+            };
+            LinksTreeView.RootNodes.Add(_searchesNode);
+            
+            // Initialize and load saved searches
+            _savedSearchService = new Services.SavedSearchService(_configService!.WorkingDirectory);
+            await _savedSearchService.LoadAsync();
+            RefreshSearchesNodeChildren();
+            
+            // Add second divider (for Archive)
             var dividerCategory = new CategoryItem
             {
                 Name = "———————————————————",

@@ -31,10 +31,18 @@ public sealed partial class MainWindow
 
         // Check if this node is inside the Archive
         bool isInArchive = IsNodeInArchive(node);
+        
+        // Check if this node is inside the Searches
+        bool isInSearches = IsNodeInSearches(node);
 
         MenuFlyout? menu = null;
         
-        if (isInArchive)
+        if (isInSearches && node.Content is LinkItem searchLink && searchLink.IsSavedSearch)
+        {
+            // Show Saved Search context menu
+            menu = CreateSavedSearchContextMenu(searchLink);
+        }
+        else if (isInArchive)
         {
             // Show Archive context menu for archived items (categories or links)
             menu = LinksTreeView.Resources["ArchiveContextMenu"] as MenuFlyout;
@@ -51,11 +59,19 @@ public sealed partial class MainWindow
                 e.Handled = true;
                 return;
             }
-
-            menu = LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout;
-            if (menu != null)
+            
+            // Check if this is the Searches node itself (show Add Search option)
+            if (category.IsSearchesNode)
             {
-                ConfigureCategoryContextMenu(menu, category, node);
+                menu = CreateSearchesNodeContextMenu();
+            }
+            else
+            {
+                menu = LinksTreeView.Resources["CategoryContextMenu"] as MenuFlyout;
+                if (menu != null)
+                {
+                    ConfigureCategoryContextMenu(menu, category, node);
+                }
             }
         }
         else if (node.Content is LinkItem linkItem)
@@ -69,6 +85,99 @@ public sealed partial class MainWindow
 
         menu?.ShowAt(treeViewItem, e.GetPosition(treeViewItem));
         e.Handled = true;
+    }
+    
+    /// <summary>
+    /// Checks if a node is inside the Searches node.
+    /// </summary>
+    private bool IsNodeInSearches(TreeViewNode node)
+    {
+        if (node == null)
+            return false;
+
+        // Check if node is the searches node itself
+        if (node.Content is CategoryItem cat && cat.IsSearchesNode)
+            return false;
+
+        // Walk up the tree to find if any parent is the Searches node
+        var current = node.Parent;
+        while (current != null)
+        {
+            if (current.Content is CategoryItem category && category.IsSearchesNode)
+                return true;
+            current = current.Parent;
+        }
+
+        return false;
+    }
+    
+    /// <summary>
+    /// Creates a context menu for the Searches node.
+    /// </summary>
+    private MenuFlyout CreateSearchesNodeContextMenu()
+    {
+        var menu = new MenuFlyout();
+        
+        var addSearchItem = new MenuFlyoutItem
+        {
+            Text = "Add Search",
+            Icon = new FontIcon { Glyph = "\uE710" }
+        };
+        addSearchItem.Click += async (s, e) =>
+        {
+            await AddSavedSearchAsync();
+        };
+        menu.Items.Add(addSearchItem);
+        
+        return menu;
+    }
+    
+    /// <summary>
+    /// Creates a context menu for a saved search item.
+    /// </summary>
+    private MenuFlyout CreateSavedSearchContextMenu(LinkItem searchLink)
+    {
+        var menu = new MenuFlyout();
+        
+        var runItem = new MenuFlyoutItem
+        {
+            Text = "Run Search",
+            Icon = new FontIcon { Glyph = "\uE768" } // Play icon
+        };
+        runItem.Click += async (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(searchLink.SavedSearchId))
+                await ExecuteSavedSearchAsync(searchLink.SavedSearchId);
+        };
+        menu.Items.Add(runItem);
+        
+        menu.Items.Add(new MenuFlyoutSeparator());
+        
+        var editItem = new MenuFlyoutItem
+        {
+            Text = "Edit Search",
+            Icon = new FontIcon { Glyph = "\uE70F" } // Edit icon
+        };
+        editItem.Click += async (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(searchLink.SavedSearchId))
+                await EditSavedSearchAsync(searchLink.SavedSearchId);
+        };
+        menu.Items.Add(editItem);
+        
+        var deleteItem = new MenuFlyoutItem
+        {
+            Text = "Delete Search",
+            Icon = new FontIcon { Glyph = "\uE74D" } // Delete icon
+        };
+        deleteItem.Click += async (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(searchLink.SavedSearchId))
+                await DeleteSavedSearchAsync(searchLink.SavedSearchId);
+        };
+        menu.Items.Add(deleteItem);
+        
+        return menu;
     }
 
     /// <summary>

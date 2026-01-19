@@ -674,10 +674,10 @@ public class DetailsViewService : IDetailsViewService
     /// <summary>
     /// Shows category header in the header panel with icon on the left.
     /// </summary>
-    public void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null)
+    public void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null, bool isRootCategory = false)
     {
         if (_headerBuilder == null || _headerPanel == null) return;
-        _headerBuilder.ShowCategoryHeader(categoryName, description, icon, category);
+        _headerBuilder.ShowCategoryHeader(categoryName, description, icon, category, isRootCategory);
     }
 
     /// <summary>
@@ -768,5 +768,439 @@ public class DetailsViewService : IDetailsViewService
             
             _ => false
         };
+    }
+    
+    /// <summary>
+    /// Shows search results in the Summary panel.
+    /// </summary>
+    public async Task ShowSearchResultsAsync(SearchExecutionResult result, Func<SearchResultItem, Task> onNavigateToItem)
+    {
+        var panel = _summaryPanel ?? _detailsPanel;
+        panel.Children.Clear();
+        
+        // Header
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Search Results: {result.Search.Name}",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        
+        // Statistics
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"Found {result.Results.Count} item(s) in {result.ExecutionTime.TotalMilliseconds:F0}ms",
+            FontSize = 13,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+        
+        if (result.Results.Count == 0)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = "No items match the search criteria.",
+                FontStyle = Windows.UI.Text.FontStyle.Italic,
+                Margin = new Thickness(0, 8, 0, 0)
+            });
+            return;
+        }
+        
+        // Results list
+        var resultsPanel = new StackPanel { Spacing = 4 };
+        
+        foreach (var item in result.Results)
+        {
+            var itemBorder = new Border
+            {
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(20, 128, 128, 128)),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+            
+            var itemGrid = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = GridLength.Auto },
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+                },
+                ColumnSpacing = 12
+            };
+            
+            // Icon
+            var iconText = new TextBlock
+            {
+                Text = item.Icon,
+                FontSize = 18,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(iconText, 0);
+            itemGrid.Children.Add(iconText);
+            
+            // Content
+            var contentStack = new StackPanel { Spacing = 2 };
+            
+            // Name with type badge
+            var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            nameRow.Children.Add(new TextBlock
+            {
+                Text = item.Name,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            nameRow.Children.Add(new Border
+            {
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 2, 6, 2),
+                Child = new TextBlock
+                {
+                    Text = item.ItemType,
+                    FontSize = 10,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                }
+            });
+            contentStack.Children.Add(nameRow);
+            
+            // Category path
+            contentStack.Children.Add(new TextBlock
+            {
+                Text = item.CategoryPath,
+                FontSize = 11,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            });
+            
+            // Description if present
+            if (!string.IsNullOrEmpty(item.Description))
+            {
+                contentStack.Children.Add(new TextBlock
+                {
+                    Text = item.Description,
+                    FontSize = 11,
+                    Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxLines = 1
+                });
+            }
+            
+            Grid.SetColumn(contentStack, 1);
+            itemGrid.Children.Add(contentStack);
+            
+            itemBorder.Child = itemGrid;
+            
+            // Click handler
+            var capturedItem = item;
+            itemBorder.PointerPressed += async (s, e) =>
+            {
+                await onNavigateToItem(capturedItem);
+            };
+            
+            // Hover effect
+            itemBorder.PointerEntered += (s, e) =>
+            {
+                itemBorder.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 120, 215));
+            };
+            itemBorder.PointerExited += (s, e) =>
+            {
+                itemBorder.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(20, 128, 128, 128));
+            };
+            
+            resultsPanel.Children.Add(itemBorder);
+        }
+        
+        panel.Children.Add(resultsPanel);
+        
+        await Task.CompletedTask;
+    }
+    
+    /// <summary>
+    /// Shows the Searches node details with Add Search button.
+    /// </summary>
+    public void ShowSearchesNodeDetails(int searchCount, Func<Task> onAddSearch)
+    {
+        var panel = _summaryPanel ?? _detailsPanel;
+        panel.Children.Clear();
+        
+        // Header
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Saved Searches",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        
+        // Description
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Create and save complex searches with AND, OR, and NOT conditions. Saved searches can be executed at any time to find matching items across all categories.",
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 16)
+        });
+        
+        // Statistics
+        var statsPanel = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
+        
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"Saved Searches: {searchCount}",
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        
+        panel.Children.Add(statsPanel);
+        
+        // Add Search button
+        var addButton = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE710", FontSize = 16 },
+                    new TextBlock { Text = "Add Search", VerticalAlignment = VerticalAlignment.Center }
+                }
+            },
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        
+        addButton.Click += async (s, e) =>
+        {
+            await onAddSearch();
+        };
+        
+        panel.Children.Add(addButton);
+        
+        // Help section
+        var helpPanel = new Border
+        {
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(30, 0, 120, 215)),
+            BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 16, 0, 0)
+        };
+        
+        var helpContent = new StackPanel { Spacing = 8 };
+        helpContent.Children.Add(new TextBlock
+        {
+            Text = "How to Use Saved Searches",
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+        helpContent.Children.Add(new TextBlock
+        {
+            Text = "• Click 'Add Search' to create a new saved search\n• Define conditions using field, operator, and value\n• Use groups for complex AND/OR logic\n• Use NOT to exclude items matching a condition\n• Double-click a saved search to execute it",
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap
+        });
+        
+        helpPanel.Child = helpContent;
+        panel.Children.Add(helpPanel);
+    }
+    
+    /// <summary>
+    /// Shows details for a specific saved search with Run, Edit, Delete buttons.
+    /// </summary>
+    public async Task ShowSavedSearchDetailsAsync(SavedSearch search, Func<Task> onRun, Func<Task> onEdit, Func<Task> onDelete)
+    {
+        var panel = _summaryPanel ?? _detailsPanel;
+        panel.Children.Clear();
+        
+        // Header
+        panel.Children.Add(new TextBlock
+        {
+            Text = search.Name,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        
+        // Description
+        if (!string.IsNullOrEmpty(search.Description))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = search.Description,
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+                Margin = new Thickness(0, 0, 0, 16)
+            });
+        }
+        
+        // Action buttons
+        var buttonPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        
+        // Run button
+        var runButton = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE768", FontSize = 16 }, // Play icon
+                    new TextBlock { Text = "Run Search", VerticalAlignment = VerticalAlignment.Center }
+                }
+            }
+        };
+        runButton.Click += async (s, e) => await onRun();
+        buttonPanel.Children.Add(runButton);
+        
+        // Edit button
+        var editButton = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE70F", FontSize = 16 }, // Edit icon
+                    new TextBlock { Text = "Edit", VerticalAlignment = VerticalAlignment.Center }
+                }
+            }
+        };
+        editButton.Click += async (s, e) => await onEdit();
+        buttonPanel.Children.Add(editButton);
+        
+        // Delete button
+        var deleteButton = new Button
+        {
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new FontIcon { Glyph = "\uE74D", FontSize = 16 }, // Delete icon
+                    new TextBlock { Text = "Delete", VerticalAlignment = VerticalAlignment.Center }
+                }
+            }
+        };
+        deleteButton.Click += async (s, e) => await onDelete();
+        buttonPanel.Children.Add(deleteButton);
+        
+        panel.Children.Add(buttonPanel);
+        
+        // Statistics
+        var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"Created: {search.CreatedDate:yyyy-MM-dd HH:mm}",
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+        });
+        
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"Modified: {search.ModifiedDate:yyyy-MM-dd HH:mm}",
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+        });
+        
+        // Show included categories
+        var categoriesText = search.IncludedCategories.Count == 0 
+            ? "All Categories" 
+            : string.Join(", ", search.IncludedCategories);
+        statsPanel.Children.Add(new TextBlock
+        {
+            Text = $"Searches In: {categoriesText}",
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            TextWrapping = TextWrapping.Wrap
+        });
+        
+        if (search.LastExecutedDate.HasValue)
+        {
+            statsPanel.Children.Add(new TextBlock
+            {
+                Text = $"Last Run: {search.LastExecutedDate:yyyy-MM-dd HH:mm} ({search.LastResultCount ?? 0} results)",
+                FontSize = 12,
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            });
+        }
+        
+        panel.Children.Add(statsPanel);
+        
+        // Conditions section
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Search Conditions",
+            FontSize = 16,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 8)
+        });
+        
+        var conditionsPanel = new StackPanel { Spacing = 8 };
+        
+        foreach (var group in search.ConditionGroups)
+        {
+            var groupBorder = new Border
+            {
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(20, 0, 120, 215)),
+                BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DodgerBlue),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8)
+            };
+            
+            var groupContent = new StackPanel { Spacing = 4 };
+            
+            // Group header
+            var groupHeader = group.IsNegated ? "NOT (" : "";
+            groupContent.Children.Add(new TextBlock
+            {
+                Text = $"{groupHeader}Condition Group ({group.GroupOperator})",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            });
+            
+            // Conditions
+            foreach (var condition in group.Conditions)
+            {
+                var conditionText = $"  {condition.ConditionOperator} {condition.Field} {condition.Operator} \"{condition.Value}\"";
+                if (condition.IsNegated)
+                    conditionText = "  NOT " + conditionText.TrimStart();
+                
+                groupContent.Children.Add(new TextBlock
+                {
+                    Text = conditionText,
+                    FontSize = 11,
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas")
+                });
+            }
+            
+            if (group.IsNegated)
+            {
+                groupContent.Children.Add(new TextBlock { Text = ")", FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+            }
+            
+            groupBorder.Child = groupContent;
+            conditionsPanel.Children.Add(groupBorder);
+        }
+        
+        panel.Children.Add(conditionsPanel);
+        
+        await Task.CompletedTask;
     }
 }

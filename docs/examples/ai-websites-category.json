@@ -1,0 +1,991 @@
+{
+  "Name": "AI Websites",
+  "Description": "Comprehensive collection of AI tools, services, and platforms organized by category",
+  "Icon": "??",
+  "Keywords": "artificial intelligence machine learning ai ml chatbot image generation llm",
+  "TagIds": [
+    "tag-ai",
+    "tag-technology",
+    "tag-tools"
+  ],
+  "Ratings": [
+    {
+      "Rating": "Quality",
+      "Score": 5,
+      "Reason": "Curated collection of top AI tools and services",
+      "CreatedDate": "2024-12-20T10:00:00",
+      "ModifiedDate": "2024-12-20T10:00:00"
+    }
+  ],
+  "CreatedDate": "2024-12-20T10:00:00",
+  "ModifiedDate": "2024-12-20T10:00:00",
+  "PasswordProtection": "None",
+  "SortOrder": "NameAscending",
+  "IsBookmarkCategory": true,
+  "IsBookmarkLookup": false,
+  "IsAuditLoggingEnabled": false,
+  "SubCategories": [
+    {
+      "Name": "Language Models & Chatbots",
+      "Description": "AI conversational assistants and large language models",
+      "Icon": "??",
+      "Keywords": "chatbot llm conversation gpt claude gemini",
+      "TagIds": ["tag-chatbot", "tag-llm"],
+      "Ratings": [
+        {
+          "Rating": "Usefulness",
+          "Score": 5,
+          "Reason": "Essential tools for everyday AI interaction",
+          "CreatedDate": "2024-12-20T10:05:00",
+          "ModifiedDate": "2024-12-20T10:05:00"
+        }
+      ],
+      "CreatedDate": "2024-12-20T10:05:00",
+      "ModifiedDate": "2024-12-20T10:05:00",
+      "Links": [
+        {
+          "Title": "ChatGPT",
+          "Url": "https://chat.openai.com/",
+          "Description": "OpenAI's flagship conversational AI featuring GPT-4o for advanced reasoning, GPT-4 for complex tasks, and GPT-3.5 for quick responses. Supports text, image analysis, web browsing, and code generation.",
+          "Keywords": "openai gpt chatgpt ai assistant",
+          "TagIds": ["tag-openai", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Industry-leading conversational AI with exceptional accuracy",
+              "CreatedDate": "2024-12-20T10:10:00",
+              "ModifiedDate": "2024-12-20T10:10:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Essential for writing, coding, research, and problem-solving tasks",
+              "CreatedDate": "2024-12-20T10:10:00",
+              "ModifiedDate": "2024-12-20T10:10:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:10:00",
+          "ModifiedDate": "2024-12-20T10:10:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Claude",
+          "Url": "https://claude.ai/",
+          "Description": "Anthropic's AI assistant powered by Claude 3.5 Sonnet, known for exceptional context understanding (200K tokens), nuanced reasoning, and strong safety features. Excellent for complex analysis and long documents.",
+          "Keywords": "anthropic claude ai assistant sonnet",
+          "TagIds": ["tag-anthropic", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Excels at complex reasoning, long context, and thoughtful responses",
+              "CreatedDate": "2024-12-20T10:11:00",
+              "ModifiedDate": "2024-12-20T10:11:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Perfect for detailed analysis, code review, and document processing",
+              "CreatedDate": "2024-12-20T10:11:00",
+              "ModifiedDate": "2024-12-20T10:11:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:11:00",
+          "ModifiedDate": "2024-12-20T10:11:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Google Gemini",
+          "Url": "https://gemini.google.com/",
+          "Description": "Google's multimodal AI featuring Gemini Ultra, Pro, and Nano models with native understanding of text, images, audio, and video. Seamlessly integrated with Google Workspace and Search.",
+          "Keywords": "google gemini bard ai assistant multimodal",
+          "TagIds": ["tag-google", "tag-multimodal"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Strong multimodal capabilities with excellent Google integration",
+              "CreatedDate": "2024-12-20T10:12:00",
+              "ModifiedDate": "2024-12-20T10:12:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Great for research, Google Workspace tasks, and multimodal queries",
+              "CreatedDate": "2024-12-20T10:12:00",
+              "ModifiedDate": "2024-12-20T10:12:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:12:00",
+          "ModifiedDate": "2024-12-20T10:12:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Microsoft Copilot",
+          "Url": "https://copilot.microsoft.com/",
+          "Description": "Microsoft's AI assistant powered by GPT-4 with free access, real-time web search, image generation via DALL-E 3, and deep integration with Microsoft 365 apps.",
+          "Keywords": "microsoft copilot bing ai assistant",
+          "TagIds": ["tag-microsoft"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Free GPT-4 access with reliable web search capabilities",
+              "CreatedDate": "2024-12-20T10:13:00",
+              "ModifiedDate": "2024-12-20T10:13:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Excellent for web research and Microsoft 365 productivity",
+              "CreatedDate": "2024-12-20T10:13:00",
+              "ModifiedDate": "2024-12-20T10:13:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:13:00",
+          "ModifiedDate": "2024-12-20T10:13:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Perplexity AI",
+          "Url": "https://www.perplexity.ai/",
+          "Description": "AI-powered search engine that provides comprehensive answers with inline citations, source links, and follow-up questions. Combines the power of LLMs with real-time web search for accurate, cited information.",
+          "Keywords": "perplexity search research citations ai",
+          "TagIds": ["tag-search", "tag-research"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Outstanding accuracy with properly cited sources",
+              "CreatedDate": "2024-12-20T10:14:00",
+              "ModifiedDate": "2024-12-20T10:14:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Essential for research requiring verified, cited information",
+              "CreatedDate": "2024-12-20T10:14:00",
+              "ModifiedDate": "2024-12-20T10:14:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:14:00",
+          "ModifiedDate": "2024-12-20T10:14:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Poe (Platform for Open Exploration)",
+          "Url": "https://poe.com/",
+          "Description": "Quora's unified platform providing access to multiple AI models (GPT-4, Claude, Gemini, etc.) in one interface with a single subscription. Create custom bots and compare responses across models.",
+          "Keywords": "poe quora multiple models ai chatbots",
+          "TagIds": ["tag-aggregator"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Access multiple premium AI models with one subscription",
+              "CreatedDate": "2024-12-20T10:15:00",
+              "ModifiedDate": "2024-12-20T10:15:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:15:00",
+          "ModifiedDate": "2024-12-20T10:15:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Image Generation",
+      "Description": "AI tools for creating and editing images",
+      "Icon": "??",
+      "Keywords": "image generation art midjourney dalle stable diffusion",
+      "TagIds": ["tag-image", "tag-creative"],
+      "CreatedDate": "2024-12-20T10:20:00",
+      "ModifiedDate": "2024-12-20T10:20:00",
+      "Links": [
+        {
+          "Title": "Midjourney",
+          "Url": "https://www.midjourney.com/",
+          "Description": "Leading AI image generator accessible via Discord, renowned for producing stunning photorealistic renders and artistic compositions. Offers precise control through detailed prompting and parameter adjustments.",
+          "Keywords": "midjourney image generation art discord",
+          "TagIds": ["tag-popular", "tag-paid"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Industry-leading image quality and artistic capabilities",
+              "CreatedDate": "2024-12-20T10:21:00",
+              "ModifiedDate": "2024-12-20T10:21:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Perfect for professional artwork, marketing materials, and creative projects",
+              "CreatedDate": "2024-12-20T10:21:00",
+              "ModifiedDate": "2024-12-20T10:21:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:21:00",
+          "ModifiedDate": "2024-12-20T10:21:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "DALL-E 3",
+          "Url": "https://openai.com/dall-e-3",
+          "Description": "OpenAI's advanced image generation model with exceptional prompt understanding and adherence to text details. Seamlessly integrated with ChatGPT Plus for iterative refinement and creative exploration.",
+          "Keywords": "dalle openai image generation",
+          "TagIds": ["tag-openai"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Superior text understanding and ChatGPT integration",
+              "CreatedDate": "2024-12-20T10:22:00",
+              "ModifiedDate": "2024-12-20T10:22:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Ideal for precise image generation with conversational refinement",
+              "CreatedDate": "2024-12-20T10:22:00",
+              "ModifiedDate": "2024-12-20T10:22:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:22:00",
+          "ModifiedDate": "2024-12-20T10:22:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Stable Diffusion (Stability AI)",
+          "Url": "https://stability.ai/",
+          "Description": "Open-source image generation platform featuring SDXL and SD3 models. Offers unprecedented customization through fine-tuning, LoRAs, and local deployment options. Free to use with active community support.",
+          "Keywords": "stable diffusion stability ai open source",
+          "TagIds": ["tag-open-source"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Powerful open-source alternative with extensive customization",
+              "CreatedDate": "2024-12-20T10:23:00",
+              "ModifiedDate": "2024-12-20T10:23:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Best for developers and users needing full control and privacy",
+              "CreatedDate": "2024-12-20T10:23:00",
+              "ModifiedDate": "2024-12-20T10:23:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:23:00",
+          "ModifiedDate": "2024-12-20T10:23:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Adobe Firefly",
+          "Url": "https://www.adobe.com/products/firefly.html",
+          "Description": "Adobe's commercial-safe generative AI trained exclusively on licensed content, stock images, and public domain materials. Deeply integrated with Creative Cloud apps like Photoshop and Illustrator for professional workflows.",
+          "Keywords": "adobe firefly image generation commercial",
+          "TagIds": ["tag-adobe", "tag-commercial"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Essential for commercial projects requiring legal safety and Adobe integration",
+              "CreatedDate": "2024-12-20T10:24:00",
+              "ModifiedDate": "2024-12-20T10:24:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:24:00",
+          "ModifiedDate": "2024-12-20T10:24:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Leonardo AI",
+          "Url": "https://leonardo.ai/",
+          "Description": "Versatile AI art platform with specialized fine-tuned models for different art styles (anime, fantasy, realistic). Features Canvas editor, motion generation, and extensive control over composition and aesthetics.",
+          "Keywords": "leonardo ai image generation art",
+          "TagIds": ["tag-creative"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Excellent balance of quality, control, and style variety",
+              "CreatedDate": "2024-12-20T10:25:00",
+              "ModifiedDate": "2024-12-20T10:25:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Great for game assets, concept art, and style-specific artwork",
+              "CreatedDate": "2024-12-20T10:25:00",
+              "ModifiedDate": "2024-12-20T10:25:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:25:00",
+          "ModifiedDate": "2024-12-20T10:25:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Video Generation",
+      "Description": "AI tools for video creation and editing",
+      "Icon": "??",
+      "Keywords": "video generation editing runway pika sora",
+      "TagIds": ["tag-video", "tag-creative"],
+      "CreatedDate": "2024-12-20T10:30:00",
+      "ModifiedDate": "2024-12-20T10:30:00",
+      "Links": [
+        {
+          "Title": "Runway Gen-3",
+          "Url": "https://runwayml.com/",
+          "Description": "Professional-grade AI video platform offering text-to-video, image-to-video, video editing, motion tracking, and green screen removal. Trusted by filmmakers and content creators for high-quality video generation.",
+          "Keywords": "runway video generation editing",
+          "TagIds": ["tag-professional", "tag-paid"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Industry-leading video generation quality and consistency",
+              "CreatedDate": "2024-12-20T10:31:00",
+              "ModifiedDate": "2024-12-20T10:31:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Essential for professional video production and creative filmmaking",
+              "CreatedDate": "2024-12-20T10:31:00",
+              "ModifiedDate": "2024-12-20T10:31:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:31:00",
+          "ModifiedDate": "2024-12-20T10:31:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Pika Labs",
+          "Url": "https://pika.art/",
+          "Description": "User-friendly AI video generator creating short clips from text prompts or images with cinematic camera movements. Features intuitive interface and fast generation times perfect for social media content.",
+          "Keywords": "pika video generation ai",
+          "TagIds": ["tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Easy to use with consistently good results",
+              "CreatedDate": "2024-12-20T10:32:00",
+              "ModifiedDate": "2024-12-20T10:32:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Perfect for quick social media videos and content marketing",
+              "CreatedDate": "2024-12-20T10:32:00",
+              "ModifiedDate": "2024-12-20T10:32:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:32:00",
+          "ModifiedDate": "2024-12-20T10:32:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Sora (OpenAI)",
+          "Url": "https://openai.com/sora",
+          "Description": "OpenAI's groundbreaking text-to-video AI capable of generating up to 60-second videos with complex scenes, multiple characters, and accurate motion physics. Currently in limited beta with exceptional quality.",
+          "Keywords": "sora openai video generation",
+          "TagIds": ["tag-openai", "tag-coming-soon"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Revolutionary video generation capabilities (preview access)",
+              "CreatedDate": "2024-12-20T10:33:00",
+              "ModifiedDate": "2024-12-20T10:33:00"
+            },
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Game-changing for video production once publicly available",
+              "CreatedDate": "2024-12-20T10:33:00",
+              "ModifiedDate": "2024-12-20T10:33:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:33:00",
+          "ModifiedDate": "2024-12-20T10:33:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "HeyGen",
+          "Url": "https://www.heygen.com/",
+          "Description": "AI video platform specializing in avatar-based content with realistic lip-syncing across 40+ languages, voice cloning, and customizable digital avatars. Ideal for training videos, marketing, and multilingual content.",
+          "Keywords": "heygen video avatar voice cloning",
+          "TagIds": ["tag-avatar", "tag-business"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Perfect for business presentations, training, and localized marketing",
+              "CreatedDate": "2024-12-20T10:34:00",
+              "ModifiedDate": "2024-12-20T10:34:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:34:00",
+          "ModifiedDate": "2024-12-20T10:34:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Audio & Music",
+      "Description": "AI tools for voice, music, and audio generation",
+      "Icon": "??",
+      "Keywords": "audio music voice generation elevenlabs suno",
+      "TagIds": ["tag-audio", "tag-music"],
+      "CreatedDate": "2024-12-20T10:40:00",
+      "ModifiedDate": "2024-12-20T10:40:00",
+      "Links": [
+        {
+          "Title": "ElevenLabs",
+          "Url": "https://elevenlabs.io/",
+          "Description": "Leading AI voice generation and cloning",
+          "Keywords": "elevenlabs voice generation cloning tts",
+          "TagIds": ["tag-voice", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Best-in-class voice generation quality",
+              "CreatedDate": "2024-12-20T10:41:00",
+              "ModifiedDate": "2024-12-20T10:41:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:41:00",
+          "ModifiedDate": "2024-12-20T10:41:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Suno AI",
+          "Url": "https://suno.ai/",
+          "Description": "AI music generation from text descriptions",
+          "Keywords": "suno music generation ai songs",
+          "TagIds": ["tag-music", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Amazing music generation quality",
+              "CreatedDate": "2024-12-20T10:42:00",
+              "ModifiedDate": "2024-12-20T10:42:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:42:00",
+          "ModifiedDate": "2024-12-20T10:42:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Udio",
+          "Url": "https://www.udio.com/",
+          "Description": "AI music creation platform",
+          "Keywords": "udio music generation ai",
+          "TagIds": ["tag-music"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "High-quality music generation",
+              "CreatedDate": "2024-12-20T10:43:00",
+              "ModifiedDate": "2024-12-20T10:43:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:43:00",
+          "ModifiedDate": "2024-12-20T10:43:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Murf AI",
+          "Url": "https://murf.ai/",
+          "Description": "AI voice generation for videos and presentations",
+          "Keywords": "murf voice generation video voiceover",
+          "TagIds": ["tag-voice", "tag-business"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Professional voice-overs made easy",
+              "CreatedDate": "2024-12-20T10:44:00",
+              "ModifiedDate": "2024-12-20T10:44:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:44:00",
+          "ModifiedDate": "2024-12-20T10:44:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Code Assistants",
+      "Description": "AI-powered coding and development tools",
+      "Icon": "??",
+      "Keywords": "coding programming development copilot cursor ai",
+      "TagIds": ["tag-development", "tag-coding"],
+      "CreatedDate": "2024-12-20T10:50:00",
+      "ModifiedDate": "2024-12-20T10:50:00",
+      "Links": [
+        {
+          "Title": "GitHub Copilot",
+          "Url": "https://github.com/features/copilot",
+          "Description": "AI pair programmer integrated with VS Code and other IDEs",
+          "Keywords": "github copilot coding assistant ai programming",
+          "TagIds": ["tag-github", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Essential tool for modern development",
+              "CreatedDate": "2024-12-20T10:51:00",
+              "ModifiedDate": "2024-12-20T10:51:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:51:00",
+          "ModifiedDate": "2024-12-20T10:51:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Cursor",
+          "Url": "https://cursor.sh/",
+          "Description": "AI-first code editor built on VS Code",
+          "Keywords": "cursor ide editor ai coding",
+          "TagIds": ["tag-editor", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Best AI-integrated coding experience",
+              "CreatedDate": "2024-12-20T10:52:00",
+              "ModifiedDate": "2024-12-20T10:52:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:52:00",
+          "ModifiedDate": "2024-12-20T10:52:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Codeium",
+          "Url": "https://codeium.com/",
+          "Description": "Free AI code completion and chat",
+          "Keywords": "codeium coding assistant ai free",
+          "TagIds": ["tag-free", "tag-coding"],
+          "Ratings": [
+            {
+              "Rating": "Value",
+              "Score": 5,
+              "Reason": "Excellent free alternative to Copilot",
+              "CreatedDate": "2024-12-20T10:53:00",
+              "ModifiedDate": "2024-12-20T10:53:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:53:00",
+          "ModifiedDate": "2024-12-20T10:53:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Tabnine",
+          "Url": "https://www.tabnine.com/",
+          "Description": "AI code completion with privacy-first approach",
+          "Keywords": "tabnine coding assistant ai privacy",
+          "TagIds": ["tag-privacy", "tag-coding"],
+          "Ratings": [
+            {
+              "Rating": "Privacy",
+              "Score": 5,
+              "Reason": "On-premise options available",
+              "CreatedDate": "2024-12-20T10:54:00",
+              "ModifiedDate": "2024-12-20T10:54:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:54:00",
+          "ModifiedDate": "2024-12-20T10:54:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Replit AI",
+          "Url": "https://replit.com/ai",
+          "Description": "AI-powered coding in browser-based IDE",
+          "Keywords": "replit coding ai browser online ide",
+          "TagIds": ["tag-online", "tag-coding"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Great for quick prototyping and learning",
+              "CreatedDate": "2024-12-20T10:55:00",
+              "ModifiedDate": "2024-12-20T10:55:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T10:55:00",
+          "ModifiedDate": "2024-12-20T10:55:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Research & Writing",
+      "Description": "AI tools for research, writing, and content creation",
+      "Icon": "??",
+      "Keywords": "research writing content creation academic",
+      "TagIds": ["tag-research", "tag-writing"],
+      "CreatedDate": "2024-12-20T11:00:00",
+      "ModifiedDate": "2024-12-20T11:00:00",
+      "Links": [
+        {
+          "Title": "Consensus",
+          "Url": "https://consensus.app/",
+          "Description": "AI search engine for scientific research papers",
+          "Keywords": "consensus research papers academic science",
+          "TagIds": ["tag-academic", "tag-search"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Excellent for academic research",
+              "CreatedDate": "2024-12-20T11:01:00",
+              "ModifiedDate": "2024-12-20T11:01:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:01:00",
+          "ModifiedDate": "2024-12-20T11:01:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Grammarly",
+          "Url": "https://www.grammarly.com/",
+          "Description": "AI-powered writing assistant with grammar and style suggestions",
+          "Keywords": "grammarly writing grammar editing ai",
+          "TagIds": ["tag-writing", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Essential writing tool",
+              "CreatedDate": "2024-12-20T11:02:00",
+              "ModifiedDate": "2024-12-20T11:02:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:02:00",
+          "ModifiedDate": "2024-12-20T11:02:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Jasper AI",
+          "Url": "https://www.jasper.ai/",
+          "Description": "AI content creation for marketing and business",
+          "Keywords": "jasper ai content writing marketing",
+          "TagIds": ["tag-marketing", "tag-business"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Great for marketing content",
+              "CreatedDate": "2024-12-20T11:03:00",
+              "ModifiedDate": "2024-12-20T11:03:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:03:00",
+          "ModifiedDate": "2024-12-20T11:03:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Notion AI",
+          "Url": "https://www.notion.so/product/ai",
+          "Description": "AI writing assistant integrated with Notion workspace",
+          "Keywords": "notion ai writing productivity workspace",
+          "TagIds": ["tag-productivity", "tag-writing"],
+          "Ratings": [
+            {
+              "Rating": "Integration",
+              "Score": 5,
+              "Reason": "Seamless integration with Notion",
+              "CreatedDate": "2024-12-20T11:04:00",
+              "ModifiedDate": "2024-12-20T11:04:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:04:00",
+          "ModifiedDate": "2024-12-20T11:04:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Semantic Scholar",
+          "Url": "https://www.semanticscholar.org/",
+          "Description": "AI-powered academic search engine",
+          "Keywords": "semantic scholar research papers academic ai",
+          "TagIds": ["tag-academic", "tag-free"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Free and comprehensive academic search",
+              "CreatedDate": "2024-12-20T11:05:00",
+              "ModifiedDate": "2024-12-20T11:05:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:05:00",
+          "ModifiedDate": "2024-12-20T11:05:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "Design & Productivity",
+      "Description": "AI tools for design, productivity, and workflow automation",
+      "Icon": "?",
+      "Keywords": "design productivity automation workflow tools",
+      "TagIds": ["tag-productivity", "tag-design"],
+      "CreatedDate": "2024-12-20T11:10:00",
+      "ModifiedDate": "2024-12-20T11:10:00",
+      "Links": [
+        {
+          "Title": "Canva AI",
+          "Url": "https://www.canva.com/ai-image-generator/",
+          "Description": "AI-powered design tools integrated with Canva",
+          "Keywords": "canva design ai graphics",
+          "TagIds": ["tag-design", "tag-popular"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 5,
+              "Reason": "Easy design tool with AI features",
+              "CreatedDate": "2024-12-20T11:11:00",
+              "ModifiedDate": "2024-12-20T11:11:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:11:00",
+          "ModifiedDate": "2024-12-20T11:11:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Remove.bg",
+          "Url": "https://www.remove.bg/",
+          "Description": "AI-powered background removal for images",
+          "Keywords": "remove bg background removal ai",
+          "TagIds": ["tag-image", "tag-tools"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Best background removal tool",
+              "CreatedDate": "2024-12-20T11:12:00",
+              "ModifiedDate": "2024-12-20T11:12:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:12:00",
+          "ModifiedDate": "2024-12-20T11:12:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Zapier AI",
+          "Url": "https://zapier.com/ai",
+          "Description": "Workflow automation with AI capabilities",
+          "Keywords": "zapier automation workflow ai integration",
+          "TagIds": ["tag-automation", "tag-business"],
+          "Ratings": [
+            {
+              "Rating": "Usefulness",
+              "Score": 4,
+              "Reason": "Powerful workflow automation",
+              "CreatedDate": "2024-12-20T11:13:00",
+              "ModifiedDate": "2024-12-20T11:13:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:13:00",
+          "ModifiedDate": "2024-12-20T11:13:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Gamma",
+          "Url": "https://gamma.app/",
+          "Description": "AI-powered presentation creation",
+          "Keywords": "gamma presentations ai slides deck",
+          "TagIds": ["tag-presentations", "tag-productivity"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 4,
+              "Reason": "Quick and beautiful presentations",
+              "CreatedDate": "2024-12-20T11:14:00",
+              "ModifiedDate": "2024-12-20T11:14:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:14:00",
+          "ModifiedDate": "2024-12-20T11:14:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Beautiful.ai",
+          "Url": "https://www.beautiful.ai/",
+          "Description": "AI-powered presentation software",
+          "Keywords": "beautiful ai presentations design slides",
+          "TagIds": ["tag-presentations", "tag-design"],
+          "Ratings": [
+            {
+              "Rating": "Design",
+              "Score": 5,
+              "Reason": "Beautiful templates with smart layouts",
+              "CreatedDate": "2024-12-20T11:15:00",
+              "ModifiedDate": "2024-12-20T11:15:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:15:00",
+          "ModifiedDate": "2024-12-20T11:15:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    },
+    {
+      "Name": "AI Directories & Resources",
+      "Description": "Comprehensive directories and resources for discovering AI tools",
+      "Icon": "??",
+      "Keywords": "directory catalog resources discovery ai tools",
+      "TagIds": ["tag-directory", "tag-resources"],
+      "CreatedDate": "2024-12-20T11:20:00",
+      "ModifiedDate": "2024-12-20T11:20:00",
+      "Links": [
+        {
+          "Title": "There's An AI For That",
+          "Url": "https://theresanaiforthat.com/",
+          "Description": "Comprehensive AI tools directory with thousands of listings",
+          "Keywords": "ai directory tools catalog database",
+          "TagIds": ["tag-directory", "tag-comprehensive"],
+          "Ratings": [
+            {
+              "Rating": "Completeness",
+              "Score": 5,
+              "Reason": "Most comprehensive AI tool directory",
+              "CreatedDate": "2024-12-20T11:21:00",
+              "ModifiedDate": "2024-12-20T11:21:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:21:00",
+          "ModifiedDate": "2024-12-20T11:21:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Futurepedia",
+          "Url": "https://www.futurepedia.io/",
+          "Description": "Curated directory of AI tools with reviews and comparisons",
+          "Keywords": "futurepedia ai tools directory reviews",
+          "TagIds": ["tag-directory", "tag-reviews"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Well-organized with helpful reviews",
+              "CreatedDate": "2024-12-20T11:22:00",
+              "ModifiedDate": "2024-12-20T11:22:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:22:00",
+          "ModifiedDate": "2024-12-20T11:22:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "AI Tool Hunt",
+          "Url": "https://www.aitoolhunt.com/",
+          "Description": "Daily updated AI tools directory",
+          "Keywords": "ai tool hunt directory daily updates",
+          "TagIds": ["tag-directory", "tag-updated"],
+          "Ratings": [
+            {
+              "Rating": "Freshness",
+              "Score": 5,
+              "Reason": "Daily updates with new tools",
+              "CreatedDate": "2024-12-20T11:23:00",
+              "ModifiedDate": "2024-12-20T11:23:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:23:00",
+          "ModifiedDate": "2024-12-20T11:23:00",
+          "UrlStatus": "Accessible"
+        },
+        {
+          "Title": "Hugging Face",
+          "Url": "https://huggingface.co/",
+          "Description": "Open-source AI model repository and community",
+          "Keywords": "hugging face ai models open source community",
+          "TagIds": ["tag-open-source", "tag-models"],
+          "Ratings": [
+            {
+              "Rating": "Quality",
+              "Score": 5,
+              "Reason": "Premier platform for open-source AI",
+              "CreatedDate": "2024-12-20T11:24:00",
+              "ModifiedDate": "2024-12-20T11:24:00"
+            }
+          ],
+          "CreatedDate": "2024-12-20T11:24:00",
+          "ModifiedDate": "2024-12-20T11:24:00",
+          "UrlStatus": "Accessible"
+        }
+      ]
+    }
+  ],
+  "Links": [
+    {
+      "Title": "OpenAI Platform",
+      "Url": "https://platform.openai.com/",
+      "Description": "OpenAI's API platform for developers",
+      "Keywords": "openai api platform developers gpt",
+      "TagIds": ["tag-api", "tag-openai"],
+      "Ratings": [
+        {
+          "Rating": "Quality",
+          "Score": 5,
+          "Reason": "Leading AI API platform",
+          "CreatedDate": "2024-12-20T11:30:00",
+          "ModifiedDate": "2024-12-20T11:30:00"
+        }
+      ],
+      "CreatedDate": "2024-12-20T11:30:00",
+      "ModifiedDate": "2024-12-20T11:30:00",
+      "UrlStatus": "Accessible"
+    },
+    {
+      "Title": "Anthropic Claude API",
+      "Url": "https://www.anthropic.com/api",
+      "Description": "Anthropic's API for Claude models",
+      "Keywords": "anthropic claude api developers",
+      "TagIds": ["tag-api", "tag-anthropic"],
+      "Ratings": [
+        {
+          "Rating": "Quality",
+          "Score": 5,
+          "Reason": "Excellent for long context and reasoning",
+          "CreatedDate": "2024-12-20T11:31:00",
+          "ModifiedDate": "2024-12-20T11:31:00"
+        }
+      ],
+      "CreatedDate": "2024-12-20T11:31:00",
+      "ModifiedDate": "2024-12-20T11:31:00",
+      "UrlStatus": "Accessible"
+    },
+    {
+      "Title": "Google AI Studio",
+      "Url": "https://aistudio.google.com/",
+      "Description": "Google's platform for experimenting with Gemini models",
+      "Keywords": "google gemini ai studio api",
+      "TagIds": ["tag-api", "tag-google"],
+      "Ratings": [
+        {
+          "Rating": "Value",
+          "Score": 5,
+          "Reason": "Generous free tier with Gemini access",
+          "CreatedDate": "2024-12-20T11:32:00",
+          "ModifiedDate": "2024-12-20T11:32:00"
+        }
+      ],
+      "CreatedDate": "2024-12-20T11:32:00",
+      "ModifiedDate": "2024-12-20T11:32:00",
+      "UrlStatus": "Accessible"
+    }
+  ]
+}

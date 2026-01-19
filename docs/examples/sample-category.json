@@ -1,25 +1,25 @@
 {
-  "Name": "Development Resources",
-  "Description": "A comprehensive collection of development tools, documentation, and code references",
-  "Icon": "??",
-  "Keywords": "programming coding development software engineering",
-  "TagIds": [
-    "tag-work",
-    "tag-important"
-  ],
-  "CreatedDate": "2024-01-15T09:00:00",
-  "ModifiedDate": "2024-12-20T14:35:22",
-  "PasswordProtection": "None",
-  "SortOrder": "NameAscending",
-  "IsBookmarkCategory": true,
-  "IsBookmarkLookup": true,
-  "IsAuditLoggingEnabled": true,
-  "SubCategories": [
-    {
-      "Name": "Documentation",
-      "Description": "Official documentation and API references",
-      "Icon": "??",
-      "Keywords": "docs api reference manual",
+"Name": "Development Resources",
+"Description": "A comprehensive collection of development tools, documentation, and code references",
+"Icon": "💻",
+"Keywords": "programming coding development software engineering",
+"TagIds": [
+  "tag-work",
+  "tag-important"
+],
+"CreatedDate": "2024-01-15T09:00:00",
+"ModifiedDate": "2024-12-20T14:35:22",
+"PasswordProtection": "None",
+"SortOrder": "NameAscending",
+"IsBookmarkCategory": true,
+"IsBookmarkLookup": true,
+"IsAuditLoggingEnabled": true,
+"SubCategories": [
+  {
+    "Name": "Documentation",
+    "Description": "Official documentation and API references",
+    "Icon": "📚",
+    "Keywords": "docs api reference manual",
       "CreatedDate": "2024-01-15T09:05:00",
       "ModifiedDate": "2024-12-15T10:20:00",
       "SortOrder": "NameAscending",

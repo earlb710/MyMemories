@@ -4,6 +4,7 @@ using MyMemories.Dialogs;
 using MyMemories.Utilities;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -594,5 +595,325 @@ public sealed partial class MainWindow
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Opens a file picker to select and load a category JSON file.
+    /// </summary>
+    private async void OpenCategoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Create file picker
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.FileTypeFilter.Add(".json");
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            
+            // Get the window handle for the picker
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            
+            // Show picker
+            var file = await picker.PickSingleFileAsync();
+            if (file == null)
+            {
+                StatusText.Text = "Category selection cancelled";
+                return;
+            }
+            
+            StatusText.Text = $"Loading category: {file.Name}";
+            
+            // Read and parse the JSON file with proper enum handling
+            var json = await Windows.Storage.FileIO.ReadTextAsync(file);
+            var jsonOptions = new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+            };
+            var categoryData = System.Text.Json.JsonSerializer.Deserialize<CategoryData>(json, jsonOptions);
+            
+            if (categoryData == null || string.IsNullOrEmpty(categoryData.Name))
+            {
+                await DialogUtilities.ShowErrorAsync(
+                    Content.XamlRoot,
+                    "Invalid Category File",
+                    "The selected file is not a valid category JSON file.");
+                StatusText.Text = "Ready";
+                return;
+            }
+            
+            var categoryName = categoryData.Name;
+            
+            // Check if category already exists
+            var existingNode = LinksTreeView.RootNodes
+                .FirstOrDefault(n => n.Content is CategoryItem existing && existing.Name == categoryName);
+            
+            if (existingNode != null)
+            {
+                var confirmDialog = new ContentDialog
+                {
+                    Title = "Category Already Loaded",
+                    Content = $"The category '{categoryName}' is already loaded. Do you want to reload it?",
+                    PrimaryButtonText = "Reload",
+                    CloseButtonText = "Cancel",
+                    XamlRoot = Content.XamlRoot
+                };
+                
+                var result = await confirmDialog.ShowAsync();
+                if (result != ContentDialogResult.Primary)
+                {
+                    StatusText.Text = "Ready";
+                    return;
+                }
+                
+                // Remove existing node (file will be overwritten)
+                LinksTreeView.RootNodes.Remove(existingNode);
+            }
+            
+            // Get working directory
+            var appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyMemories",
+                "Categories"
+            );
+            Directory.CreateDirectory(appDataFolder);
+            
+            // Determine the target filename - use the category name for consistency
+            var sanitizedName = FileUtilities.SanitizeFileName(categoryName);
+            var targetFileName = sanitizedName + ".json";
+            var targetPath = Path.Combine(appDataFolder, targetFileName);
+            
+            // Copy/rename file to working directory with the category name as filename
+            if (Path.GetFullPath(file.Path) != Path.GetFullPath(targetPath))
+            {
+                // If target exists and is different from source, delete it first
+                if (File.Exists(targetPath) && Path.GetFileName(file.Path) != targetFileName)
+                {
+                    File.Delete(targetPath);
+                }
+                
+                File.Copy(file.Path, targetPath, overwrite: true);
+                
+                // Delete the original file if it's in the Categories folder but has a different name
+                if (Path.GetDirectoryName(file.Path) == appDataFolder && 
+                    Path.GetFileName(file.Path) != targetFileName)
+                {
+                    try
+                    {
+                        File.Delete(file.Path);
+                    }
+                    catch
+                    {
+                        // Ignore errors - file might be in use or read-only
+                    }
+                }
+            }
+            
+            // Create the category node manually from the data
+            var categoryItem = new CategoryItem
+            {
+                Name = categoryData.Name,
+                Description = categoryData.Description ?? string.Empty,
+                Icon = categoryData.Icon ?? "??",
+                Keywords = categoryData.Keywords ?? string.Empty,
+                TagIds = categoryData.TagIds ?? new List<string>(),
+                Ratings = categoryData.Ratings?.Select(r => new RatingValue
+                {
+                    Rating = r.Rating,
+                    Score = r.Score,
+                    Reason = r.Reason,
+                    CreatedDate = r.CreatedDate,
+                    ModifiedDate = r.ModifiedDate
+                }).ToList() ?? new List<RatingValue>(),
+                CreatedDate = categoryData.CreatedDate ?? DateTime.Now,
+                ModifiedDate = categoryData.ModifiedDate ?? DateTime.Now,
+                PasswordProtection = categoryData.PasswordProtection,
+                OwnPasswordHash = categoryData.OwnPasswordHash,
+                SortOrder = categoryData.SortOrder,
+                IsBookmarkImport = categoryData.IsBookmarkImport,
+                SourceBrowserType = categoryData.SourceBrowserType,
+                SourceBrowserName = categoryData.SourceBrowserName,
+                IsBookmarkCategory = categoryData.IsBookmarkCategory,
+                IsBookmarkLookup = categoryData.IsBookmarkLookup,
+                IsAuditLoggingEnabled = categoryData.IsAuditLoggingEnabled
+                // Note: SourceFileName is no longer needed - file is renamed to match category name
+            };
+            
+            var categoryNode = new TreeViewNode { Content = categoryItem };
+            
+            // Load links
+            if (categoryData.Links != null)
+            {
+                foreach (var linkData in categoryData.Links)
+                {
+                    var linkItem = new LinkItem
+                    {
+                        Title = linkData.Title,
+                        Url = linkData.Url,
+                        Description = linkData.Description ?? string.Empty,
+                        Keywords = linkData.Keywords ?? string.Empty,
+                        TagIds = linkData.TagIds ?? new List<string>(),
+                        Ratings = linkData.Ratings?.Select(r => new RatingValue
+                        {
+                            Rating = r.Rating,
+                            Score = r.Score,
+                            Reason = r.Reason,
+                            CreatedDate = r.CreatedDate,
+                            ModifiedDate = r.ModifiedDate
+                        }).ToList() ?? new List<RatingValue>(),
+                        IsDirectory = linkData.IsDirectory ?? false,
+                        CategoryPath = categoryName,
+                        CreatedDate = linkData.CreatedDate ?? DateTime.Now,
+                        ModifiedDate = linkData.ModifiedDate ?? DateTime.Now
+                    };
+                    
+                    categoryNode.Children.Add(new TreeViewNode { Content = linkItem });
+                }
+            }
+            
+            // Load subcategories recursively
+            if (categoryData.SubCategories != null)
+            {
+                foreach (var subCategoryData in categoryData.SubCategories)
+                {
+                    LoadSubCategoryRecursive(categoryNode, subCategoryData, categoryName);
+                }
+            }
+            
+            // Add to tree view
+            LinksTreeView.RootNodes.Insert(0, categoryNode);
+            categoryNode.IsExpanded = true;
+            LinksTreeView.SelectedNode = categoryNode;
+            
+            // Count total items including subcategories
+            int totalItems = CountTotalItems(categoryNode);
+            StatusText.Text = $"Loaded category: {categoryName} ({totalItems} items)";
+            UpdateBookmarkLookupCategories();
+        }
+        catch (Exception ex)
+        {
+            await DialogUtilities.ShowErrorAsync(
+                Content.XamlRoot,
+                "Failed to Open Category",
+                $"An error occurred while loading the category:\n{ex.Message}");
+            StatusText.Text = "Ready";
+        }
+    }
+
+    /// <summary>
+    /// Opens the categories folder in Windows Explorer.
+    /// </summary>
+    private void CategoryMenu_OpenInExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Get the app data folder for categories
+            var appDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyMemories",
+                "Categories"
+            );
+            
+            // Create directory if it doesn't exist
+            Directory.CreateDirectory(appDataFolder);
+
+            // Open the folder in Windows Explorer
+            System.Diagnostics.Process.Start("explorer.exe", appDataFolder);
+            StatusText.Text = $"Opened categories folder";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Recursively loads subcategories and their links from CategoryData.
+    /// </summary>
+    private void LoadSubCategoryRecursive(TreeViewNode parentNode, CategoryData subCategoryData, string rootCategoryName)
+    {
+        // Create subcategory item
+        var subCategoryItem = new CategoryItem
+        {
+            Name = subCategoryData.Name,
+            Description = subCategoryData.Description ?? string.Empty,
+            Icon = subCategoryData.Icon ?? "??",
+            Keywords = subCategoryData.Keywords ?? string.Empty,
+            TagIds = subCategoryData.TagIds ?? new List<string>(),
+            Ratings = subCategoryData.Ratings?.Select(r => new RatingValue
+            {
+                Rating = r.Rating,
+                Score = r.Score,
+                Reason = r.Reason,
+                CreatedDate = r.CreatedDate,
+                ModifiedDate = r.ModifiedDate
+            }).ToList() ?? new List<RatingValue>(),
+            CreatedDate = subCategoryData.CreatedDate ?? DateTime.Now,
+            ModifiedDate = subCategoryData.ModifiedDate ?? DateTime.Now,
+            SortOrder = subCategoryData.SortOrder,
+            IsBookmarkCategory = subCategoryData.IsBookmarkCategory,
+            IsBookmarkLookup = subCategoryData.IsBookmarkLookup
+        };
+
+        var subCategoryNode = new TreeViewNode { Content = subCategoryItem };
+
+        // Load links for this subcategory
+        if (subCategoryData.Links != null)
+        {
+            foreach (var linkData in subCategoryData.Links)
+            {
+                var linkItem = new LinkItem
+                {
+                    Title = linkData.Title,
+                    Url = linkData.Url,
+                    Description = linkData.Description ?? string.Empty,
+                    Keywords = linkData.Keywords ?? string.Empty,
+                    TagIds = linkData.TagIds ?? new List<string>(),
+                    Ratings = linkData.Ratings?.Select(r => new RatingValue
+                    {
+                        Rating = r.Rating,
+                        Score = r.Score,
+                        Reason = r.Reason,
+                        CreatedDate = r.CreatedDate,
+                        ModifiedDate = r.ModifiedDate
+                    }).ToList() ?? new List<RatingValue>(),
+                    IsDirectory = linkData.IsDirectory ?? false,
+                    CategoryPath = _treeViewService!.GetCategoryPath(parentNode) + "/" + subCategoryData.Name,
+                    CreatedDate = linkData.CreatedDate ?? DateTime.Now,
+                    ModifiedDate = linkData.ModifiedDate ?? DateTime.Now
+                };
+
+                subCategoryNode.Children.Add(new TreeViewNode { Content = linkItem });
+            }
+        }
+
+        // Recursively load nested subcategories
+        if (subCategoryData.SubCategories != null)
+        {
+            foreach (var nestedSubCategoryData in subCategoryData.SubCategories)
+            {
+                LoadSubCategoryRecursive(subCategoryNode, nestedSubCategoryData, rootCategoryName);
+            }
+        }
+
+        // Add subcategory to parent
+        parentNode.Children.Add(subCategoryNode);
+    }
+
+    /// <summary>
+    /// Counts total items (links and subcategories) recursively in a node.
+    /// </summary>
+    private int CountTotalItems(TreeViewNode node)
+    {
+        int count = 0;
+        foreach (var child in node.Children)
+        {
+            count++;
+            if (child.Content is CategoryItem)
+            {
+                count += CountTotalItems(child);
+            }
+        }
+        return count;
     }
 }

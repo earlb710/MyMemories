@@ -1,52 +1,171 @@
-# MyMemories Import Examples
+# MyMemories JSON Examples
 
-This directory contains example import files demonstrating the category import format for MyMemories.
+This directory contains example JSON files demonstrating various features and use cases for MyMemories.
 
-## Overview
+## Category Examples
 
-The import format allows you to perform batch operations on categories, links, and subcategories using JSON files. Each import file contains a series of operations that can add, update, or delete items.
+### `minimal-category.json`
+**Purpose:** Simplest possible category with just links  
+**Features:**
+- Basic category structure
+- Simple links with URLs
+- No subcategories, tags, or ratings
+- Use this as a starting template
 
-## Example Files
+### `sample-category.json`
+**Purpose:** Comprehensive example showing most features  
+**Features:**
+- Nested subcategories
+- Tags on categories and links
+- Sub-links (hierarchical links)
+- URL status tracking
+- Bookmark category configuration
+- Audit logging enabled
+- Mixed content (URLs, local files)
 
-### 1. `import-add-resources.json`
-**Purpose**: Add new categories, subcategories, and links
+### `password-protected-category.json`
+**Purpose:** Demonstrates password protection  
+**Features:**
+- Own password protection (not global)
+- Password hash storage
+- Sensitive file paths (local directories)
+- Audit logging for security
+- Descending date sort order
 
-**Operations**:
-- Creates a new "Learning Resources" category
-- Adds two subcategories: "Video Courses" and "Interactive Platforms"
-- Adds multiple learning platform links (Pluralsight, Udemy, YouTube, etc.)
-- Updates an existing link with additional tags
-- Adds tags and ratings to existing items
+### `complete-category-example.json` ? NEW
+**Purpose:** Shows ALL current features including ratings  
+**Features:**
+- **Ratings on categories** (Quality, Organization, etc.)
+- **Ratings on links** with reasons
+- **Ratings on subcategories**
+- **Ratings on catalog entries**
+- Backup directories configuration
+- Cataloged directory with file filters
+- Auto-refresh catalog
+- Complete URL status information
+- Multiple tag assignments
+- All optional fields demonstrated
 
-**Use Case**: Expanding your collection with new educational resources
+## Import Examples
 
----
+### `import-template.json`
+**Purpose:** Complete template with all import operations  
+**Features:**
+- Add, update, move, and delete operations
+- All available update flags explained
+- Comments documenting each section
+- Examples of conditional operations
 
-### 2. `import-bulk-update.json`
-**Purpose**: Update existing categories and links with new information
+### `import-ratings-from-mymemories.json`
+**Purpose:** Bulk rating assignment example  
+**Features:**
+- Real-world rating assignments
+- Multiple links rated at once
+- MergeRatings flag demonstration
 
-**Operations**:
-- Updates category description and keywords
-- Updates multiple link descriptions to include version information
-- Adds tags to existing links using `MergeTagIds` option
-- Updates ratings for documentation links
-- Refreshes URL status for web links
+### `import-ratings-with-reasons.json`
+**Purpose:** Detailed ratings with explanations  
+**Features:**
+- Ratings with Reason field
+- Code quality assessments
+- Detailed justifications
 
-**Use Case**: Maintaining and updating existing category information
+### `import-bulk-update.json`
+**Purpose:** Mass update operations  
+**Features:**
+- Updating multiple items
+- Tag management
+- Description updates
 
----
+### `import-cleanup.json`
+**Purpose:** Maintenance and cleanup operations  
+**Features:**
+- Removing outdated items
+- Tag cleanup
+- Moving items to new categories
 
-### 3. `import-cleanup.json`
-**Purpose**: Remove outdated links and clean up old data
+## Key Differences from Older Examples
 
-**Operations**:
-- Deletes broken or obsolete links
-- Removes outdated tags from items
-- Deletes unused ratings
-- Removes entire subcategories with all their contents
-- Creates backups before deleting (using `BackupBeforeDelete` option)
+### ? Updated Features (December 2024)
+- **Ratings Support:** Categories, links, and catalog entries can now have ratings
+- **Emoji Icons:** Using actual emojis (??????) instead of placeholder "??"
+- **CategoryPath Removed from Links:** No longer needed in JSON (auto-calculated)
+- **Backup Directories:** New [MANUAL] and [AUTO] prefix support
+- **Enhanced Catalog:** FileFilters, AutoRefreshCatalog, CatalogSortOrder fields
 
-**Use Case**: Regular maintenance to keep categories clean and current
+### ?? Deprecated/Changed
+- **`CategoryPath` in LinkData:** Still supported but optional (auto-calculated from tree structure)
+- **Icon placeholder "??":** Replace with actual emoji or omit for default ??
+
+## Using These Examples
+
+### Loading a Category
+1. Use **File ? Open Category...** or the **Open** toolbar button
+2. Select any `.json` file
+3. File will be copied to: `%LOCALAPPDATA%\MyMemories\Categories`
+4. Category appears in tree with all content
+
+### Creating from Template
+1. Copy `minimal-category.json`
+2. Edit Name, Icon, and Links
+3. Save as `YourCategoryName.json`
+4. Load via Open Category
+
+### Import Operations
+1. Create category operations JSON
+2. Use **File ? Import Category Operations...**
+3. Review changes in preview
+4. Apply operations
+
+## Field Reference
+
+### Required Fields
+- `Name` - Category name (must be unique)
+- `CreatedDate` - ISO 8601 datetime
+- `ModifiedDate` - ISO 8601 datetime
+
+### Common Optional Fields
+- `Description` - Category description text
+- `Icon` - Emoji or icon character
+- `Keywords` - Space-separated search keywords
+- `TagIds` - Array of tag IDs (e.g., ["tag-work", "tag-important"])
+- `Ratings` - Array of rating objects with Rating, Score, Reason
+- `BackupDirectories` - Paths with [MANUAL] or [AUTO] prefix
+
+### Link Fields
+- `Title` - Link display name (required)
+- `Url` - URL or file path (required)
+- `Description` - Link description
+- `Keywords` - Search keywords
+- `TagIds` - Array of tag IDs
+- `Ratings` - Array of rating objects
+- `IsDirectory` - true for folder links
+- `SubLinks` - Array of nested links
+- `UrlStatus` - "Accessible", "Inaccessible", "Warning", etc.
+- `UrlLastChecked` - Last check timestamp
+- `FileSize` - File size in bytes
+
+### Catalog Fields (for `IsDirectory: true`)
+- `FolderType` - "None", "LinkOnly", "CatalogueFiles"
+- `FileFilters` - Semicolon-separated patterns (e.g., "*.cs;*.json")
+- `AutoRefreshCatalog` - true to auto-update
+- `CatalogSortOrder` - Sort order for entries
+- `LastCatalogUpdate` - Last catalog update time
+- `CatalogEntries` - Array of cataloged files
+
+## Version History
+
+- **v1.3** (Dec 2024) - Added ratings support, emoji icons, complete example
+- **v1.2** (Nov 2024) - Added backup directories, catalog enhancements
+- **v1.1** (Oct 2024) - Added URL status tracking
+- **v1.0** (Sep 2024) - Initial examples
+
+## Need Help?
+
+- See `category-json-format.md` for complete schema documentation
+- Check `IMPORT-SYSTEM-README.md` for import operations guide
+- Review `category-import-quick-reference.md` for quick tips
+
 
 ---
 

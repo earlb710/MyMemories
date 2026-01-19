@@ -96,7 +96,7 @@ public interface IDetailsViewService
     /// <summary>
     /// Shows category header in the header panel with icon on the left.
     /// </summary>
-    void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null);
+    void ShowCategoryHeader(string categoryName, string? description, string icon, CategoryItem? category = null, bool isRootCategory = false);
 
     /// <summary>
     /// Shows link header in the header panel with icon on the left and optional link badge.

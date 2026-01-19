@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using MyMemories.Utilities;
 using System;
 using System.Threading.Tasks;
 
@@ -82,12 +83,31 @@ public class TreeViewEventService
         await _detailsViewService.ShowCategoryDetailsAsync(category, node, refreshBookmarks, refreshUrlState, syncBookmarks, clearArchive);
 
         var categoryPath = _treeViewService.GetCategoryPath(node);
-        _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category);
+        bool isRootCategory = node.Parent == null; // Root category has no parent
+        _detailsViewService.ShowCategoryHeader(categoryPath, category.Description, category.Icon, category, isRootCategory);
 
         // Show Content tab message for categories
         _detailsViewService.ShowContentMessage("Categories do not have content. Select a link to view content.");
 
         showDetailsViewers();
-        setStatus($"Viewing: {categoryPath} ({node.Children.Count} item(s))");
+        
+        // Build status message with file location for root categories
+        var statusMessage = $"Viewing: {categoryPath} ({node.Children.Count} item(s))";
+        
+        // Add file location for root categories
+        if (node.Parent == null) // Root category
+        {
+            var appDataFolder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyMemories",
+                "Categories");
+            
+            // Use sanitized category name for the filename
+            var fileName = FileUtilities.SanitizeFileName(category.Name) + ".json";
+            var filePath = System.IO.Path.Combine(appDataFolder, fileName);
+            statusMessage += $" | File: {filePath}";
+        }
+        
+        setStatus(statusMessage);
     }
 }

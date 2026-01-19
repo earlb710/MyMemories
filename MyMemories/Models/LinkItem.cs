@@ -112,6 +112,7 @@ public class LinkItem : INotifyPropertyChanged
     public bool IsCatalogEntry { get; set; }
     public SortOption CatalogSortOrder { get; set; } = SortOption.NameAscending;
     
+    
     // Archive metadata
     /// <summary>
     /// Date when this link was archived (soft deleted).
@@ -122,6 +123,19 @@ public class LinkItem : INotifyPropertyChanged
     /// Original category path before archiving (for restoration).
     /// </summary>
     public string? OriginalCategoryPath { get; set; }
+    
+    // Saved Search metadata
+    /// <summary>
+    /// Indicates this item represents a saved search.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSavedSearch { get; set; }
+    
+    /// <summary>
+    /// The ID of the saved search this item represents.
+    /// </summary>
+    [JsonIgnore]
+    public string? SavedSearchId { get; set; }
     
     
     /// <summary>

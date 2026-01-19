@@ -21,6 +21,17 @@ Title="My Memories - File Viewer">
         <!-- Menu Bar -->
         <MenuBar Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <MenuBarItem Title="File">
+                <MenuFlyoutItem Text="New Category..." Click="CreateCategoryButton_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8F4;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutItem Text="Open Category..." Click="OpenCategoryButton_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8E5;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Import Browser Bookmarks..." Click="MenuFile_ImportBookmarks_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE8A7;"/>
@@ -158,33 +169,48 @@ Title="My Memories - File Viewer">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     
                     <Button 
                         Grid.Column="0"
                         Click="CreateCategoryButton_Click"
                         HorizontalAlignment="Stretch"
-                        Margin="0,0,4,0">
+                        Margin="0,0,2,0">
                         <ToolTipService.ToolTip>
                             <ToolTip Content="Create Category"/>
                         </ToolTipService.ToolTip>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE8F4;" FontSize="16"/>
-                            <TextBlock Text="Category" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8F4;" FontSize="14"/>
+                            <TextBlock Text="New" VerticalAlignment="Center" FontSize="12"/>
                         </StackPanel>
                     </Button>
                     
                     <Button 
                         Grid.Column="1"
+                        Click="OpenCategoryButton_Click"
+                        HorizontalAlignment="Stretch"
+                        Margin="2,0,2,0">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Open Category"/>
+                        </ToolTipService.ToolTip>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                            <TextBlock Text="Open" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button 
+                        Grid.Column="2"
                         Click="AddBookmarkButton_Click"
                         HorizontalAlignment="Stretch"
-                        Margin="4,0,0,0">
+                        Margin="2,0,0,0">
                         <ToolTipService.ToolTip>
                             <ToolTip Content="Add Link"/>
                         </ToolTipService.ToolTip>
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon Glyph="&#xE71B;" FontSize="16"/>
-                            <TextBlock Text="Link" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE71B;" FontSize="14"/>
+                            <TextBlock Text="Link" VerticalAlignment="Center" FontSize="12"/>
                         </StackPanel>
                     </Button>
                 </Grid>
@@ -211,33 +237,14 @@ Title="My Memories - File Viewer">
                             <local:TreeNodeTemplateSelector.CategoryTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <!-- Tooltip for category -->
+                                        <!-- Tooltip for category with file path for root categories -->
                                         <ToolTipService.ToolTip>
                                             <ToolTip>
-                                                <StackPanel Spacing="4" MaxWidth="400">
-                                                    <TextBlock 
-                                                        Text="{Binding Content.Name, Mode=OneWay}" 
-                                                        FontWeight="SemiBold"
-                                                        TextWrapping="Wrap"/>
-                                                    <TextBlock 
-                                                        Text="{Binding Content.Description, Mode=OneWay}" 
-                                                        TextWrapping="Wrap"
-                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                                                        <TextBlock.Visibility>
-                                                            <Binding Path="Content.Description" Mode="OneWay">
-                                                                <Binding.Converter>
-                                                                    <local:StringToVisibilityConverter/>
-                                                                </Binding.Converter>
-                                                            </Binding>
-                                                        </TextBlock.Visibility>
-                                                    </TextBlock>
-                                                    <!-- Tag list with names -->
-                                                    <TextBlock 
-                                                        Text="{Binding Content.TagDisplayText, Mode=OneWay}" 
-                                                        TextWrapping="Wrap"
-                                                        Visibility="{Binding Content.HasTags, Mode=OneWay}"
-                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                                                </StackPanel>
+                                                <Binding Mode="OneWay">
+                                                    <Binding.Converter>
+                                                        <converters:CategoryTooltipConverter/>
+                                                    </Binding.Converter>
+                                                </Binding>
                                             </ToolTip>
                                         </ToolTipService.ToolTip>
                                         
@@ -524,6 +531,12 @@ Title="My Memories - File Viewer">
                         <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPressed" Color="White"/>
                         
                         <MenuFlyout x:Key="CategoryContextMenu">
+                            <MenuFlyoutItem Text="Open in Explorer" Click="CategoryMenu_OpenInExplorer_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8E5;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
                             <MenuFlyoutItem Text="Add Link" Icon="Add" Click="CategoryMenu_AddLink_Click"/>
                             <MenuFlyoutItem Text="Add Sub Category" Click="CategoryMenu_AddSubCategory_Click">
                                 <MenuFlyoutItem.Icon>
@@ -953,9 +966,15 @@ Title="My Memories - File Viewer">
                             <TabViewItem.IconSource>
                                 <FontIconSource Glyph="&#xE7C3;"/>
                             </TabViewItem.IconSource>
-                            <ScrollViewer Padding="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                                <StackPanel x:Name="SummaryPanel" Spacing="12"/>
-                            </ScrollViewer>
+                            <Border 
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Margin="8">
+                                <ScrollViewer Padding="20" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                    <StackPanel x:Name="SummaryPanel" Spacing="12"/>
+                                </ScrollViewer>
+                            </Border>
                         </TabViewItem>
                         
                         <!-- Content Tab -->
@@ -963,7 +982,13 @@ Title="My Memories - File Viewer">
                             <TabViewItem.IconSource>
                                 <FontIconSource Glyph="&#xE8A5;"/>
                             </TabViewItem.IconSource>
-                            <Border HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Border 
+                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Margin="8"
+                                HorizontalAlignment="Stretch" 
+                                VerticalAlignment="Stretch">
                                 <Grid x:Name="ContentTabGrid">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="*"/>

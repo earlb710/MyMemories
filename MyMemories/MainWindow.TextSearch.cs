@@ -305,27 +305,19 @@ public sealed partial class MainWindow
     /// </summary>
     private void Window_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        System.Diagnostics.Debug.WriteLine($"[Window_KeyDown] Key pressed: {e.Key}");
-        
         // Check for Ctrl+F
         var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
         bool isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
 
-        System.Diagnostics.Debug.WriteLine($"[Window_KeyDown] Ctrl pressed: {isCtrlPressed}, Key is F: {e.Key == Windows.System.VirtualKey.F}");
-
         if (isCtrlPressed && e.Key == Windows.System.VirtualKey.F)
         {
-            System.Diagnostics.Debug.WriteLine("[Window_KeyDown] Ctrl+F detected! Toggling search");
-            
             // Toggle: if search panel is visible, close it; otherwise open it
             if (ContentTabSearchPanel?.Visibility == Visibility.Visible)
             {
-                System.Diagnostics.Debug.WriteLine("[Window_KeyDown] Search panel is visible, closing it");
                 CloseSearch_Click(sender, null!);
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("[Window_KeyDown] Search panel is hidden, opening it");
                 ShowTextSearch();
             }
             

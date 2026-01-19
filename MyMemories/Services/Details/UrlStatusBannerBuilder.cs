@@ -95,7 +95,7 @@ public class UrlStatusBannerBuilder
             Text = $"URL Status: {statusText}",
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Colors.White)
+            Foreground = new SolidColorBrush(Colors.Black)
         });
 
         bannerContent.Children.Add(headerPanel);
@@ -106,7 +106,7 @@ public class UrlStatusBannerBuilder
             {
                 Text = $"Message: {linkItem.UrlStatusMessage}",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Colors.White),
+                Foreground = new SolidColorBrush(Colors.Black),
                 TextWrapping = TextWrapping.Wrap
             });
         }
@@ -117,7 +117,7 @@ public class UrlStatusBannerBuilder
             {
                 Text = $"Last checked: {linkItem.UrlLastChecked.Value:yyyy-MM-dd HH:mm:ss}",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Colors.LightGray),
+                Foreground = new SolidColorBrush(Colors.DarkGray),
                 FontStyle = Windows.UI.Text.FontStyle.Italic
             });
         }
