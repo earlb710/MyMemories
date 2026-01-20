@@ -186,6 +186,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
             
+            // Set the Git config callback
+            _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
+            
             // Initialize new refactored services
             _fileLauncherService = new FileLauncherService();
             _folderPickerService = new FolderPickerService(this);
@@ -517,7 +520,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add first divider (for Searches)
             var searchesDividerCategory = new CategoryItem
             {
-                Name = "———————————————————",
+                Name = "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };
@@ -552,7 +555,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add second divider (for Archive)
             var dividerCategory = new CategoryItem
             {
-                Name = "———————————————————",
+                Name = "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };

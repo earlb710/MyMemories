@@ -360,6 +360,7 @@ public sealed partial class MainWindow
             if (globalPasswordChanged && _linkDialog != null)
             {
                 _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+                _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
             }
             
             StatusText.Text = "Security settings saved successfully";

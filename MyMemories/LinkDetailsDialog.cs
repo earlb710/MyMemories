@@ -34,8 +34,16 @@ public class LinkDetailsDialog
     {
         _linkDialogBuilder.SetBookmarkLookupCategories(categories);
     }
+    
+    /// <summary>
+    /// Sets the callback to open Git configuration dialog.
+    /// </summary>
+    public void SetGitConfigCallback(Func<Task> callback)
+    {
+        _linkDialogBuilder.SetGitConfigCallback(callback);
+    }
 
-    public Task<bool> ShowAsync(LinkItem link) => 
+    public Task<bool> ShowAsync(LinkItem link) =>
         _detailsViewer.ShowAsync(link);
 
     public Task<AddLinkResult?> ShowAddAsync(IEnumerable<CategoryNode> categories, CategoryNode? selectedCategory) => 

@@ -27,6 +27,7 @@ public class LinkDialogBuilder
     private readonly ConfigurationService? _configService;
     private List<TreeViewNode>? _bookmarkLookupCategories;
     private CancellationTokenSource? _summarizeCts;
+    private Func<Task>? _openGitConfigCallback;
 
     public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
     {
@@ -43,6 +44,14 @@ public class LinkDialogBuilder
     public void SetBookmarkLookupCategories(List<TreeViewNode> categories)
     {
         _bookmarkLookupCategories = categories;
+    }
+    
+    /// <summary>
+    /// Sets the callback to open Git configuration dialog.
+    /// </summary>
+    public void SetGitConfigCallback(Func<Task> callback)
+    {
+        _openGitConfigCallback = callback;
     }
 
     /// <summary>
@@ -245,6 +254,60 @@ public class LinkDialogBuilder
                 gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
             }
         }
+        
+        // Add Config button next to Git repo ComboBox
+        var gitConfigButton = new Button
+        {
+            Content = new SymbolIcon(Symbol.Add),
+            Width = 40,
+            Height = 32,
+            Margin = new Thickness(8, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+        ToolTipService.SetToolTip(gitConfigButton, "Configure Git repositories");
+        
+        // Panel to hold Git repo ComboBox and config button
+        var gitRepoPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Visibility = Visibility.Collapsed
+        };
+        gitRepoPanel.Children.Add(gitRepoComboBox);
+        gitRepoPanel.Children.Add(gitConfigButton);
+        
+        // Git config button click handler
+        gitConfigButton.Click += async (s, args) =>
+        {
+            if (_openGitConfigCallback != null)
+            {
+                await _openGitConfigCallback();
+                
+                // Refresh Git repositories list after config dialog closes
+                var selectedRepo = gitRepoComboBox.SelectedItem as ComboBoxItem;
+                var selectedName = selectedRepo?.Tag as string;
+                
+                gitRepoComboBox.Items.Clear();
+                if (_configService?.GitRepositories != null)
+                {
+                    foreach (var repoName in _configService.GitRepositories.Keys)
+                    {
+                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+                    }
+                    
+                    // Try to reselect the previously selected repository
+                    if (!string.IsNullOrEmpty(selectedName))
+                    {
+                        var itemToSelect = gitRepoComboBox.Items
+                            .OfType<ComboBoxItem>()
+                            .FirstOrDefault(item => item.Tag as string == selectedName);
+                        if (itemToSelect != null)
+                        {
+                            gitRepoComboBox.SelectedItem = itemToSelect;
+                        }
+                    }
+                }
+            }
+        };
 
         var (folderControls, _) = BuildFolderControls();
 
@@ -258,7 +321,7 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(urlTextBox);
         stackPanel.Children.Add(browseButton);
         stackPanel.Children.Add(gitRepoLabel);
-        stackPanel.Children.Add(gitRepoComboBox);
+        stackPanel.Children.Add(gitRepoPanel);
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Title: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(titleTextBox);
         
@@ -291,7 +354,9 @@ public class LinkDialogBuilder
             SummarizeButton = summarizeButton,
             SummarizeProgress = summarizeProgress,
             GitRepoLabel = gitRepoLabel,
-            GitRepoComboBox = gitRepoComboBox
+            GitRepoComboBox = gitRepoComboBox,
+            GitRepoPanel = gitRepoPanel,
+            GitConfigButton = gitConfigButton
         };
 
         return (stackPanel, controls);
@@ -570,7 +635,7 @@ public class LinkDialogBuilder
                             }
                         };
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
-                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Collapsed;
                         break;
                     case "File":
                         controls.UrlTextBox.PlaceholderText = "Enter file path or click Browse";
@@ -578,7 +643,7 @@ public class LinkDialogBuilder
                         controls.BrowseButton.Visibility = Visibility.Visible;
                         controls.BrowseButton.Content = "Browse File...";
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
-                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Collapsed;
                         break;
                     case "Folder":
                         controls.UrlTextBox.PlaceholderText = "Enter folder path or click Browse";
@@ -586,13 +651,13 @@ public class LinkDialogBuilder
                         controls.BrowseButton.Visibility = Visibility.Visible;
                         controls.BrowseButton.Content = "Browse Folder...";
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
-                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Collapsed;
                         break;
                     case "Git":
                         controls.UrlTextBox.Visibility = Visibility.Collapsed;
                         controls.BrowseButton.Visibility = Visibility.Collapsed;
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Visible;
-                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Visible;
+                        if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Visible;
                         break;
                 }
             }
@@ -1278,6 +1343,8 @@ public class LinkDialogBuilder
         public ProgressRing? SummarizeProgress { get; set; }
         public TextBlock? GitRepoLabel { get; set; }
         public ComboBox? GitRepoComboBox { get; set; }
+        public StackPanel? GitRepoPanel { get; set; }
+        public Button? GitConfigButton { get; set; }
     }
 
     private class FolderControlsGroup
