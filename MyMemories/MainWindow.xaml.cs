@@ -520,7 +520,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add first divider (for Searches)
             var searchesDividerCategory = new CategoryItem
             {
-                Name = "�������������������",
+                Name = "───────────────────",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };
@@ -537,7 +537,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             {
                 Name = "Searches (0)",
                 Description = "Saved complex searches",
-                Icon = "\U0001F50E", // ?? Right-Pointing Magnifying Glass
+                Icon = "\U0001F50E", // 🔎 Right-Pointing Magnifying Glass
                 IsSearchesNode = true
             };
             _searchesNode = new TreeViewNode
@@ -555,7 +555,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add second divider (for Archive)
             var dividerCategory = new CategoryItem
             {
-                Name = "�������������������",
+                Name = "───────────────────",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };

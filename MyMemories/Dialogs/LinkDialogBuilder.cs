@@ -264,6 +264,17 @@ public class LinkDialogBuilder
         };
         ToolTipService.SetToolTip(gitConfigButton, "Configure Git repositories");
         
+        // Add Edit button next to Git repo ComboBox (shown only when a repo is selected)
+        var gitEditButton = new Button
+        {
+            Content = new FontIcon { Glyph = "\uE70F" }, // Edit icon
+            Width = 40,
+            Height = 32,
+            Margin = new Thickness(8, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+        ToolTipService.SetToolTip(gitEditButton, "Edit selected repository");
+        
         // Panel to hold Git repo ComboBox and config button
         var gitRepoPanel = new StackPanel
         {
@@ -272,9 +283,50 @@ public class LinkDialogBuilder
         };
         gitRepoPanel.Children.Add(gitRepoComboBox);
         gitRepoPanel.Children.Add(gitConfigButton);
+        gitRepoPanel.Children.Add(gitEditButton);
+        
+        // Update edit button visibility when selection changes
+        gitRepoComboBox.SelectionChanged += (s, args) =>
+        {
+            gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
+        };
         
         // Git config button click handler
         gitConfigButton.Click += async (s, args) =>
+        {
+            if (_openGitConfigCallback != null)
+            {
+                await _openGitConfigCallback();
+                
+                // Refresh Git repositories list after config dialog closes
+                var selectedRepo = gitRepoComboBox.SelectedItem as ComboBoxItem;
+                var selectedName = selectedRepo?.Tag as string;
+                
+                gitRepoComboBox.Items.Clear();
+                if (_configService?.GitRepositories != null)
+                {
+                    foreach (var repoName in _configService.GitRepositories.Keys)
+                    {
+                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+                    }
+                    
+                    // Try to reselect the previously selected repository
+                    if (!string.IsNullOrEmpty(selectedName))
+                    {
+                        var itemToSelect = gitRepoComboBox.Items
+                            .OfType<ComboBoxItem>()
+                            .FirstOrDefault(item => item.Tag as string == selectedName);
+                        if (itemToSelect != null)
+                        {
+                            gitRepoComboBox.SelectedItem = itemToSelect;
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Git edit button click handler (same as config button - opens config dialog)
+        gitEditButton.Click += async (s, args) =>
         {
             if (_openGitConfigCallback != null)
             {
@@ -354,7 +406,8 @@ public class LinkDialogBuilder
             GitRepoLabel = gitRepoLabel,
             GitRepoComboBox = gitRepoComboBox,
             GitRepoPanel = gitRepoPanel,
-            GitConfigButton = gitConfigButton
+            GitConfigButton = gitConfigButton,
+            GitEditButton = gitEditButton
         };
 
         return (stackPanel, controls);
@@ -1343,6 +1396,7 @@ public class LinkDialogBuilder
         public ComboBox? GitRepoComboBox { get; set; }
         public StackPanel? GitRepoPanel { get; set; }
         public Button? GitConfigButton { get; set; }
+        public Button? GitEditButton { get; set; }
     }
 
     private class FolderControlsGroup
