@@ -33,42 +33,59 @@ public static class ImageMetadataService
             metadata.FileSize = basicProps.Size;
             metadata.DateModified = basicProps.DateModified.DateTime;
 
-            // Get image properties
-            var imageProps = await file.Properties.GetImagePropertiesAsync();
-            metadata.Width = imageProps.Width;
-            metadata.Height = imageProps.Height;
-            metadata.Title = imageProps.Title;
-            metadata.DateTaken = imageProps.DateTaken.Year > 1900 ? (DateTime?)imageProps.DateTaken.DateTime : null;
-            metadata.CameraManufacturer = imageProps.CameraManufacturer;
-            metadata.CameraModel = imageProps.CameraModel;
-            metadata.Orientation = imageProps.Orientation.ToString();
-
-            // Get EXIF data using BitmapDecoder
-            using (var stream = await file.OpenReadAsync())
+            // Get image properties - wrap in try-catch as this can fail for unsupported formats
+            try
             {
-                var decoder = await BitmapDecoder.CreateAsync(stream);
-                
-                // Get pixel dimensions
-                metadata.PixelWidth = decoder.PixelWidth;
-                metadata.PixelHeight = decoder.PixelHeight;
-                
-                // Get DPI
-                metadata.DpiX = decoder.DpiX;
-                metadata.DpiY = decoder.DpiY;
+                var imageProps = await file.Properties.GetImagePropertiesAsync();
+                metadata.Width = imageProps.Width;
+                metadata.Height = imageProps.Height;
+                metadata.Title = imageProps.Title;
+                metadata.DateTaken = imageProps.DateTaken.Year > 1900 ? (DateTime?)imageProps.DateTaken.DateTime : null;
+                metadata.CameraManufacturer = imageProps.CameraManufacturer;
+                metadata.CameraModel = imageProps.CameraModel;
+                metadata.Orientation = imageProps.Orientation.ToString();
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // Image properties not available for this file format
+                System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not get image properties: {ex.Message} (HResult: 0x{ex.HResult:X})");
+            }
 
-                // Get EXIF data (only if bitmap properties are available)
-                if (decoder.BitmapProperties != null)
+            // Get EXIF data using BitmapDecoder - wrap in try-catch as this can fail for unsupported formats
+            try
+            {
+                using (var stream = await file.OpenReadAsync())
                 {
-                    try
+                    var decoder = await BitmapDecoder.CreateAsync(stream);
+                    
+                    // Get pixel dimensions
+                    metadata.PixelWidth = decoder.PixelWidth;
+                    metadata.PixelHeight = decoder.PixelHeight;
+                    
+                    // Get DPI
+                    metadata.DpiX = decoder.DpiX;
+                    metadata.DpiY = decoder.DpiY;
+
+                    // Get EXIF data (only if bitmap properties are available)
+                    if (decoder.BitmapProperties != null)
                     {
-                        await ExtractExifDataAsync(decoder.BitmapProperties, metadata);
-                    }
-                    catch (System.Runtime.InteropServices.COMException)
-                    {
-                        // EXIF data not available or corrupted - continue without it
-                        System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not extract EXIF data from {filePath}");
+                        try
+                        {
+                            await ExtractExifDataAsync(decoder.BitmapProperties, metadata);
+                        }
+                        catch (System.Runtime.InteropServices.COMException)
+                        {
+                            // EXIF data not available or corrupted - continue without it
+                            System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not extract EXIF data from {filePath}");
+                        }
                     }
                 }
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // BitmapDecoder creation failed - likely unsupported format or corrupted file
+                System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not create BitmapDecoder: {ex.Message} (HResult: 0x{ex.HResult:X})");
+                // Continue with the metadata we have so far
             }
 
             return metadata;
@@ -191,7 +208,7 @@ public static class ImageMetadataService
                         {
                             metadata.GpsLatitude = latitude.Value;
                             metadata.GpsLongitude = longitude.Value;
-                            metadata.GpsLocation = $"{latitude:F6}° {latRef}, {longitude:F6}° {lonRef}";
+                            metadata.GpsLocation = $"{latitude:F6}ï¿½ {latRef}, {longitude:F6}ï¿½ {lonRef}";
                         }
                     }
                 }
