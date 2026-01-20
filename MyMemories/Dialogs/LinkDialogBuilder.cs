@@ -1281,12 +1281,7 @@ public class LinkDialogBuilder
                 if (_configService?.GitRepositories?.TryGetValue(repoName, out var repoInfo) == true)
                 {
                     url = $"git://{repoName}"; // Use git:// scheme to identify Git links
-                    
-                    // Build description with repository info
-                    var repoDescription = $"Git Repository: {repoName}\nPath: {repoInfo.Path}";
-                    description = string.IsNullOrEmpty(description) 
-                        ? repoDescription 
-                        : $"{repoDescription}\n\n{description}";
+                    // Note: Description is kept as user-entered, repository info can be looked up from git:// URL
                 }
             }
             
