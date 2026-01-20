@@ -79,7 +79,19 @@ public class LinkDialogBuilder
         };
 
         // Set the close action so button handlers can close the dialog
-        controls.CloseParentDialogAction = () => dialog.Hide();
+        // Use TaskCompletionSource to wait for the Closed event to ensure dialog is fully dismissed
+        controls.CloseParentDialogAction = () =>
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            void OnClosed(ContentDialog sender, ContentDialogClosedEventArgs args)
+            {
+                dialog.Closed -= OnClosed;
+                tcs.TrySetResult(true);
+            }
+            dialog.Closed += OnClosed;
+            dialog.Hide();
+            return tcs.Task;
+        };
         
         SetupAddLinkEventHandlers(controls, dialog);
 
@@ -294,17 +306,17 @@ public class LinkDialogBuilder
             gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
         };
         
-        // Action that will close the parent dialog - will be set after dialog creation
-        Action? closeParentDialog = null;
+        // Func that will close the parent dialog - will be set after dialog creation
+        Func<Task>? closeParentDialog = null;
         
         // Git config button click handler
         gitConfigButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            closeParentDialog?.Invoke();
-            
-            // Wait for the dialog to fully close before opening the next one (WinUI requires time to dismiss dialog)
-            await Task.Delay(500);
+            if (closeParentDialog != null)
+            {
+                await closeParentDialog();
+            }
             
             if (_openGitConfigCallback != null)
             {
@@ -341,10 +353,11 @@ public class LinkDialogBuilder
         gitEditButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            closeParentDialog?.Invoke();
+            if (closeParentDialog != null)
+            {
+                await closeParentDialog();
+            }
             
-            // Wait for the dialog to fully close before opening the next one (WinUI requires time to dismiss dialog)
-            await Task.Delay(500);
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
@@ -1415,7 +1428,7 @@ public class LinkDialogBuilder
         public StackPanel? GitRepoPanel { get; set; }
         public Button? GitConfigButton { get; set; }
         public Button? GitEditButton { get; set; }
-        public Action? CloseParentDialogAction { get; set; }
+        public Func<Task>? CloseParentDialogAction { get; set; }
     }
 
     private class FolderControlsGroup
