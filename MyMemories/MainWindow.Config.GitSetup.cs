@@ -203,6 +203,12 @@ public sealed partial class MainWindow
                 repoPathTextBox.Text = repoInfo.Path;
                 usernameTextBox.Text = repoInfo.Username;
             }
+            else
+            {
+                // Clear fields when no valid repository is selected
+                repoPathTextBox.Text = string.Empty;
+                usernameTextBox.Text = string.Empty;
+            }
         };
 
         // Add button click handler
@@ -271,28 +277,34 @@ public sealed partial class MainWindow
             var result = await confirmDialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
-                _configService?.GitRepositories?.Remove(selectedName);
-                await _configService?.SaveConfigurationAsync()!;
-
-                repoNameComboBox.Items.Remove(selectedName);
-                if (repoNameComboBox.Items.Count > 0)
+                if (_configService?.GitRepositories != null)
                 {
-                    repoNameComboBox.SelectedIndex = 0;
-                }
-                else
-                {
-                    repoNameComboBox.SelectedIndex = -1;
-                    repoPathTextBox.Text = string.Empty;
-                    usernameTextBox.Text = string.Empty;
-                    removeButton.IsEnabled = false;
-                }
+                    _configService.GitRepositories.Remove(selectedName);
+                    await _configService.SaveConfigurationAsync();
 
-                statusTextBlock.Text = _configService?.GitRepositories?.Count > 0
-                    ? $"{_configService.GitRepositories.Count} repository(ies) configured"
-                    : "No repositories configured";
+                    repoNameComboBox.Items.Remove(selectedName);
+                    if (repoNameComboBox.Items.Count > 0)
+                    {
+                        repoNameComboBox.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        repoNameComboBox.SelectedIndex = -1;
+                        repoPathTextBox.Text = string.Empty;
+                        usernameTextBox.Text = string.Empty;
+                        removeButton.IsEnabled = false;
+                    }
 
-                statusBanner.Title = "Repository Removed";
-                statusBanner.Message = $"Repository '{selectedName}' has been removed.";
+                    statusTextBlock.Text = _configService.GitRepositories.Count > 0
+                        ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                        : "No repositories configured";
+
+                    statusBanner.Title = "Repository Removed";
+                    statusBanner.Message = $"Repository '{selectedName}' has been removed.";
+                    statusBanner.Severity = InfoBarSeverity.Success;
+                    statusBanner.IsOpen = true;
+                }
+            }
                 statusBanner.Severity = InfoBarSeverity.Success;
                 statusBanner.IsOpen = true;
             }
