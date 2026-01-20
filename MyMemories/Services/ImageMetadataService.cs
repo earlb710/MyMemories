@@ -25,13 +25,33 @@ public static class ImageMetadataService
 
         try
         {
-            var file = await StorageFile.GetFileFromPathAsync(filePath);
+            StorageFile file;
+            try
+            {
+                file = await StorageFile.GetFileFromPathAsync(filePath);
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // File access failed - may be locked, inaccessible, or path is invalid
+                System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not access file: {ex.Message} (HResult: 0x{ex.HResult:X})");
+                return null;
+            }
+            
             var metadata = new ImageMetadata();
 
             // Get basic properties
-            var basicProps = await file.GetBasicPropertiesAsync();
-            metadata.FileSize = basicProps.Size;
-            metadata.DateModified = basicProps.DateModified.DateTime;
+            try
+            {
+                var basicProps = await file.GetBasicPropertiesAsync();
+                metadata.FileSize = basicProps.Size;
+                metadata.DateModified = basicProps.DateModified.DateTime;
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // Basic properties not available
+                System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not get basic properties: {ex.Message} (HResult: 0x{ex.HResult:X})");
+                // Continue without basic properties
+            }
 
             // Get image properties - wrap in try-catch as this can fail for unsupported formats
             try

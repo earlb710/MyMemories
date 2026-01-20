@@ -590,7 +590,7 @@ public class LinkDetailsBuilder
             }
             else if (File.Exists(linkItem.Url))
             {
-                AddFileInfo(linkItem.Url);
+                await AddFileInfo(linkItem.Url);
             }
         }
         catch (Exception ex)
@@ -707,7 +707,7 @@ public class LinkDetailsBuilder
         _detailsPanel.Children.Add(infoPanel);
     }
 
-    private async void AddFileInfo(string path)
+    private async Task AddFileInfo(string path)
     {
         var fileInfo = new FileInfo(path);
         var extension = fileInfo.Extension.ToLowerInvariant();
@@ -720,7 +720,16 @@ public class LinkDetailsBuilder
 
         if (isImage)
         {
-            await AddImageFileInfoAsync(path, fileInfo);
+            try
+            {
+                await AddImageFileInfoAsync(path, fileInfo);
+            }
+            catch (Exception ex)
+            {
+                // Fallback to regular file info if image metadata extraction fails
+                System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Error loading image metadata: {ex.Message}");
+                await AddRegularFileInfoAsync(path, fileInfo);
+            }
         }
         else if (isPdf)
         {
@@ -777,7 +786,7 @@ public class LinkDetailsBuilder
             // Dimensions & Technical Info
             if (metadata.PixelWidth > 0 && metadata.PixelHeight > 0)
             {
-                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} × {metadata.PixelHeight} pixels"));
+                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} ï¿½ {metadata.PixelHeight} pixels"));
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Megapixels: {metadata.Megapixels}"));
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aspect Ratio: {metadata.AspectRatio}"));
             }
@@ -786,7 +795,7 @@ public class LinkDetailsBuilder
             {
                 var dpiText = metadata.DpiX == metadata.DpiY 
                     ? $"Resolution: {metadata.DpiX:F0} DPI" 
-                    : $"Resolution: {metadata.DpiX:F0} × {metadata.DpiY:F0} DPI";
+                    : $"Resolution: {metadata.DpiX:F0} ï¿½ {metadata.DpiY:F0} DPI";
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", dpiText));
             }
 
