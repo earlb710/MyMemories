@@ -74,7 +74,19 @@ public static class ImageMetadataService
             // Get EXIF data using BitmapDecoder - wrap in try-catch as this can fail for unsupported formats
             try
             {
-                using (var stream = await file.OpenReadAsync())
+                IRandomAccessStream stream;
+                try
+                {
+                    stream = await file.OpenReadAsync();
+                }
+                catch (System.Runtime.InteropServices.COMException ex)
+                {
+                    // Could not open file for reading
+                    System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not open file stream: {ex.Message} (HResult: 0x{ex.HResult:X})");
+                    return metadata; // Return what we have so far
+                }
+                
+                using (stream)
                 {
                     var decoder = await BitmapDecoder.CreateAsync(stream);
                     
@@ -105,6 +117,12 @@ public static class ImageMetadataService
             {
                 // BitmapDecoder creation failed - likely unsupported format or corrupted file
                 System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not create BitmapDecoder: {ex.Message} (HResult: 0x{ex.HResult:X})");
+                // Continue with the metadata we have so far
+            }
+            catch (Exception ex)
+            {
+                // Catch any other exceptions that might occur
+                System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Unexpected error during bitmap decoding: {ex.Message}");
                 // Continue with the metadata we have so far
             }
 
