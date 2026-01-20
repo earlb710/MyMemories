@@ -136,7 +136,7 @@ public class LinkDialogBuilder
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F310 URL", Tag = "URL" }); // ??
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C4 File", Tag = "File" }); // ??
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C1 Folder", Tag = "Folder" }); // ??
-        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\uE943 Git Repository", Tag = "Git" }); // Git icon
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\uE943 Git Repository", Tag = "Git" }); // Segoe MDL2 Assets - Repo icon
         linkTypeComboBox.SelectedIndex = 0; // Default to URL
 
         var titleTextBox = new TextBox
@@ -1126,8 +1126,12 @@ public class LinkDialogBuilder
                 if (_configService?.GitRepositories?.TryGetValue(repoName, out var repoInfo) == true)
                 {
                     url = $"git://{repoName}"; // Use git:// scheme to identify Git links
-                    description = $"Git Repository: {repoName}\nPath: {repoInfo.Path}" + 
-                                  (string.IsNullOrEmpty(description) ? "" : $"\n\n{description}");
+                    
+                    // Build description with repository info
+                    var repoDescription = $"Git Repository: {repoName}\nPath: {repoInfo.Path}";
+                    description = string.IsNullOrEmpty(description) 
+                        ? repoDescription 
+                        : $"{repoDescription}\n\n{description}";
                 }
             }
             
@@ -1142,7 +1146,7 @@ public class LinkDialogBuilder
                     CloseButtonText = "OK",
                     XamlRoot = _xamlRoot
                 };
-                _ = errorDialog.ShowAsync(); // Fire and forget
+                _ = errorDialog.ShowAsync(); // Fire and forget - error dialogs are non-blocking UI feedback
                 return null;
             }
         }
