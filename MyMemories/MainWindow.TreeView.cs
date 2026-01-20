@@ -206,23 +206,6 @@ public sealed partial class MainWindow
     }
     
     /// <summary>
-    /// Handles pointer entering URL status badge to show detailed information.
-    /// </summary>
-    private void UrlStatusBadge_PointerEntered(object sender, PointerRoutedEventArgs e)
-    {
-        // The TreeViewItem event handler will already show the status
-        // This just ensures the badge itself also triggers the status update
-    }
-    
-    /// <summary>
-    /// Handles pointer exiting URL status badge.
-    /// </summary>
-    private void UrlStatusBadge_PointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        StatusText.Text = "Ready";
-    }
-    
-    /// <summary>
     /// Finds all visual children of a specific type in the visual tree.
     /// </summary>
     private IEnumerable<T> FindVisualChildren<T>(DependencyObject depObj) where T : DependencyObject
@@ -257,7 +240,7 @@ public sealed partial class MainWindow
         if (node.Content is CategoryItem category)
         {
             // Don't edit special system nodes
-            if (category.IsArchiveNode || category.IsSearchesNode || category.Name.StartsWith("———"))
+            if (category.IsArchiveNode || category.IsSearchesNode || category.Name.StartsWith("ï¿½ï¿½ï¿½"))
             {
                 e.Handled = true;
                 return;
@@ -951,10 +934,10 @@ public sealed partial class MainWindow
             var stats = await Task.Run(() => statisticsService.CalculateMultipleFoldersStatistics(folderPaths.ToArray()));
 
             var statsMessage = $"?? {category.Name} Statistics:\n\n" +
-                              $"• Items: {selectedNode.Children.Count}\n" +
-                              $"• Folders: {stats.FolderCount:N0}\n" +
-                              $"• Files: {stats.FileCount:N0}\n" +
-                              $"• Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
+                              $"ï¿½ Items: {selectedNode.Children.Count}\n" +
+                              $"ï¿½ Folders: {stats.FolderCount:N0}\n" +
+                              $"ï¿½ Files: {stats.FileCount:N0}\n" +
+                              $"ï¿½ Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
 
             var dialog = new ContentDialog
             {
