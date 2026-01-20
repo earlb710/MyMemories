@@ -422,6 +422,16 @@ public class UrlStateCheckerService
                     }
                     catch (HttpRequestException httpEx)
                     {
+                        // Check if this is actually an SSL/TLS error wrapped anywhere in the exception chain
+                        if (IsAuthenticationException(httpEx, out var authEx))
+                        {
+                            Debug.WriteLine($"[UrlStateChecker] HEAD failed with SSL/TLS error in chain: {authEx?.Message}");
+                            response?.Dispose();
+                            result.Status = UrlStatus.Error;
+                            result.Message = $"SSL/TLS Error: {authEx?.InnerException?.Message ?? authEx?.Message ?? httpEx.Message}";
+                            return result;
+                        }
+                        
                         // HEAD failed with HTTP error, try GET
                         Debug.WriteLine($"[UrlStateChecker] HEAD failed with HttpRequestException, trying GET: {httpEx.Message}");
                         response?.Dispose();
@@ -442,6 +452,15 @@ public class UrlStateCheckerService
                         }
                         catch (HttpRequestException getEx)
                         {
+                            // Check for SSL/TLS error anywhere in GET exception chain
+                            if (IsAuthenticationException(getEx, out var getAuthEx2))
+                            {
+                                Debug.WriteLine($"[UrlStateChecker] GET failed with SSL/TLS error in chain: {getAuthEx2?.Message}");
+                                result.Status = UrlStatus.Error;
+                                result.Message = $"SSL/TLS Error: {getAuthEx2?.InnerException?.Message ?? getAuthEx2?.Message ?? getEx.Message}";
+                                return result;
+                            }
+                            
                             // Both HEAD and GET failed with HTTP errors
                             Debug.WriteLine($"[UrlStateChecker] Both HEAD and GET failed with HttpRequestException: {getEx.Message}");
                             result.Status = UrlStatus.Error;
@@ -620,6 +639,15 @@ public class UrlStateCheckerService
             }
             catch (HttpRequestException ex)
             {
+                // Check if SSL/TLS error is anywhere in the exception chain
+                if (IsAuthenticationException(ex, out var authEx))
+                {
+                    Debug.WriteLine($"[UrlStateChecker] HttpRequestException with SSL/TLS in chain: {authEx?.Message}");
+                    result.Status = UrlStatus.Error;
+                    result.Message = $"SSL/TLS Error: {authEx?.InnerException?.Message ?? authEx?.Message ?? ex.Message}";
+                    return result;
+                }
+                
                 Debug.WriteLine($"[UrlStateChecker] HttpRequestException: {ex.Message}");
                 result.Status = UrlStatus.Error;
                 result.Message = $"Connection failed: {ex.InnerException?.Message ?? ex.Message}";
@@ -679,6 +707,25 @@ public class UrlStateCheckerService
         {
             return url.TrimEnd('/').ToLowerInvariant();
         }
+    }
+
+    /// <summary>
+    /// Checks if an exception or any of its inner exceptions is an AuthenticationException (SSL/TLS error).
+    /// </summary>
+    private static bool IsAuthenticationException(Exception ex, out AuthenticationException? authEx)
+    {
+        var current = ex;
+        while (current != null)
+        {
+            if (current is AuthenticationException auth)
+            {
+                authEx = auth;
+                return true;
+            }
+            current = current.InnerException;
+        }
+        authEx = null;
+        return false;
     }
 }
 
