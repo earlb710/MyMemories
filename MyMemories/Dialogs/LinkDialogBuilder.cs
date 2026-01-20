@@ -143,10 +143,10 @@ public class LinkDialogBuilder
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 8)
         };
-        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F310 URL", Tag = "URL" }); // ??
-        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C4 File", Tag = "File" }); // ??
-        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C1 Folder", Tag = "Folder" }); // ??
-        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\uE943 Git Repository", Tag = "Git" }); // Segoe MDL2 Assets - Repo icon
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F310 URL", Tag = "URL" }); // 🌐
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C4 File", Tag = "File" }); // 📄
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C1 Folder", Tag = "Folder" }); // 📁
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4E6 Git Repository", Tag = "Git" }); // 📦 Package (represents repository)
         linkTypeComboBox.SelectedIndex = 0; // Default to URL
 
         var titleTextBox = new TextBox
