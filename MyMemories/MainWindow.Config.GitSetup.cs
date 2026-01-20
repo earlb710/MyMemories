@@ -65,15 +65,15 @@ public sealed partial class MainWindow
 
         var browseRepoButton = new Button
         {
-            Content = "Browse Local...",
-            ToolTipService = { ToolTip = "Browse for a local Git repository" }
+            Content = "Browse Local..."
         };
+        ToolTipService.SetToolTip(browseRepoButton, "Browse for a local Git repository");
 
         var testConnectionButton = new Button
         {
-            Content = "Test Connection",
-            ToolTipService = { ToolTip = "Test if repository is valid" }
+            Content = "Test Connection"
         };
+        ToolTipService.SetToolTip(testConnectionButton, "Test if repository is valid");
 
         browseRepoButton.Click += (s, args) =>
         {
@@ -193,6 +193,45 @@ public sealed partial class MainWindow
         await dialog.ShowAsync();
     }
 
+    private (bool isValid, string title, string message, InfoBarSeverity severity) ValidateGitRepository(string repoPath)
+    {
+        if (string.IsNullOrEmpty(repoPath))
+        {
+            return (false, "Validation Error", "Repository path or URL is required.", InfoBarSeverity.Error);
+        }
+
+        try
+        {
+            // Check if it's a local path
+            if (Directory.Exists(repoPath))
+            {
+                // Test if it's a valid Git repository
+                if (Repository.IsValid(repoPath))
+                {
+                    using var repo = new Repository(repoPath);
+                    return (true, "Connection Successful", $"Valid local Git repository found. Branch: {repo.Head.FriendlyName}", InfoBarSeverity.Success);
+                }
+                else
+                {
+                    return (false, "Invalid Repository", "The specified directory is not a valid Git repository.", InfoBarSeverity.Warning);
+                }
+            }
+            else if (repoPath.StartsWith("http://") || repoPath.StartsWith("https://") || repoPath.StartsWith("git@"))
+            {
+                // For remote URLs, we can't fully test without credentials
+                return (true, "Remote URL Detected", "Remote repository URL format looks valid. Full connection will be tested on save.", InfoBarSeverity.Informational);
+            }
+            else
+            {
+                return (false, "Invalid Path", "The specified path does not exist and is not a valid URL.", InfoBarSeverity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            return (false, "Error", $"Failed to validate repository: {ex.Message}", InfoBarSeverity.Error);
+        }
+    }
+
     private async Task TestGitConnectionAsync(string repoPath, InfoBar statusBanner)
     {
         await Task.Run(() =>
@@ -205,73 +244,14 @@ public sealed partial class MainWindow
                 statusBanner.IsOpen = true;
             });
 
-            try
+            var (isValid, title, message, severity) = ValidateGitRepository(repoPath);
+            
+            DispatcherQueue.TryEnqueue(() =>
             {
-                if (string.IsNullOrEmpty(repoPath))
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Validation Error";
-                        statusBanner.Message = "Repository path or URL is required.";
-                        statusBanner.Severity = InfoBarSeverity.Error;
-                    });
-                    return;
-                }
-
-                // Check if it's a local path
-                if (Directory.Exists(repoPath))
-                {
-                    // Test if it's a valid Git repository
-                    if (Repository.IsValid(repoPath))
-                    {
-                        using var repo = new Repository(repoPath);
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            statusBanner.Title = "Connection Successful";
-                            statusBanner.Message = $"Valid local Git repository found. Branch: {repo.Head.FriendlyName}";
-                            statusBanner.Severity = InfoBarSeverity.Success;
-                        });
-                    }
-                    else
-                    {
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            statusBanner.Title = "Invalid Repository";
-                            statusBanner.Message = "The specified directory is not a valid Git repository.";
-                            statusBanner.Severity = InfoBarSeverity.Warning;
-                        });
-                    }
-                }
-                else if (repoPath.StartsWith("http://") || repoPath.StartsWith("https://") || repoPath.StartsWith("git@"))
-                {
-                    // For remote URLs, we can't fully test without credentials
-                    // Just validate the format
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Remote URL Detected";
-                        statusBanner.Message = "Remote repository URL format looks valid. Full connection will be tested on save.";
-                        statusBanner.Severity = InfoBarSeverity.Informational;
-                    });
-                }
-                else
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Invalid Path";
-                        statusBanner.Message = "The specified path does not exist and is not a valid URL.";
-                        statusBanner.Severity = InfoBarSeverity.Error;
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    statusBanner.Title = "Error";
-                    statusBanner.Message = $"Failed to validate repository: {ex.Message}";
-                    statusBanner.Severity = InfoBarSeverity.Error;
-                });
-            }
+                statusBanner.Title = title;
+                statusBanner.Message = message;
+                statusBanner.Severity = severity;
+            });
         });
     }
 
@@ -279,84 +259,17 @@ public sealed partial class MainWindow
     {
         return await Task.Run(() =>
         {
-            try
+            var (isValid, title, message, severity) = ValidateGitRepository(repoPath);
+            
+            DispatcherQueue.TryEnqueue(() =>
             {
-                if (string.IsNullOrEmpty(repoPath))
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Validation Error";
-                        statusBanner.Message = "Repository path or URL is required.";
-                        statusBanner.Severity = InfoBarSeverity.Error;
-                        statusBanner.IsOpen = true;
-                    });
-                    return false;
-                }
-
-                // Check if it's a local path
-                if (Directory.Exists(repoPath))
-                {
-                    // Validate it's a Git repository
-                    if (Repository.IsValid(repoPath))
-                    {
-                        using var repo = new Repository(repoPath);
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            statusBanner.Title = "Connection Successful";
-                            statusBanner.Message = $"Connected to local repository. Branch: {repo.Head.FriendlyName}";
-                            statusBanner.Severity = InfoBarSeverity.Success;
-                            statusBanner.IsOpen = true;
-                        });
-                        return true;
-                    }
-                    else
-                    {
-                        DispatcherQueue.TryEnqueue(() =>
-                        {
-                            statusBanner.Title = "Invalid Repository";
-                            statusBanner.Message = "The specified directory is not a valid Git repository.";
-                            statusBanner.Severity = InfoBarSeverity.Error;
-                            statusBanner.IsOpen = true;
-                        });
-                        return false;
-                    }
-                }
-                else if (repoPath.StartsWith("http://") || repoPath.StartsWith("https://") || repoPath.StartsWith("git@"))
-                {
-                    // For remote URLs, we consider them valid if they have the right format
-                    // Actual connection will happen during sync operations
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Remote Repository Configured";
-                        statusBanner.Message = "Remote repository URL saved. Connection will be established during sync operations.";
-                        statusBanner.Severity = InfoBarSeverity.Success;
-                        statusBanner.IsOpen = true;
-                    });
-                    return true;
-                }
-                else
-                {
-                    DispatcherQueue.TryEnqueue(() =>
-                    {
-                        statusBanner.Title = "Invalid Path";
-                        statusBanner.Message = "The specified path does not exist and is not a valid URL.";
-                        statusBanner.Severity = InfoBarSeverity.Error;
-                        statusBanner.IsOpen = true;
-                    });
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    statusBanner.Title = "Error";
-                    statusBanner.Message = $"Failed to connect to repository: {ex.Message}";
-                    statusBanner.Severity = InfoBarSeverity.Error;
-                    statusBanner.IsOpen = true;
-                });
-                return false;
-            }
+                statusBanner.Title = title;
+                statusBanner.Message = message;
+                statusBanner.Severity = severity;
+                statusBanner.IsOpen = true;
+            });
+            
+            return isValid;
         });
     }
 }
