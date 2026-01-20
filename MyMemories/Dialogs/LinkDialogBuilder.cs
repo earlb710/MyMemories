@@ -303,8 +303,8 @@ public class LinkDialogBuilder
             // Close the current dialog to allow opening the Git config dialog
             closeParentDialog?.Invoke();
             
-            // Wait for the dialog to fully close before opening the next one
-            await Task.Delay(100);
+            // Wait for the dialog to fully close before opening the next one (WinUI requires time to dismiss dialog)
+            await Task.Delay(500);
             
             if (_openGitConfigCallback != null)
             {
@@ -343,8 +343,8 @@ public class LinkDialogBuilder
             // Close the current dialog to allow opening the Git config dialog
             closeParentDialog?.Invoke();
             
-            // Wait for the dialog to fully close before opening the next one
-            await Task.Delay(100);
+            // Wait for the dialog to fully close before opening the next one (WinUI requires time to dismiss dialog)
+            await Task.Delay(500);
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
