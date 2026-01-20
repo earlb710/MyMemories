@@ -261,7 +261,7 @@ public class LinkDialogBuilder
         var gitConfigButton = new Button
         {
             Content = new SymbolIcon(Symbol.Add),
-            Width = 40,
+            Width = 50,
             Height = 32,
             Margin = new Thickness(8, 0, 0, 8)
         };
@@ -303,6 +303,9 @@ public class LinkDialogBuilder
             // Close the current dialog to allow opening the Git config dialog
             closeParentDialog?.Invoke();
             
+            // Wait for the dialog to fully close before opening the next one
+            await Task.Delay(100);
+            
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
@@ -339,6 +342,9 @@ public class LinkDialogBuilder
         {
             // Close the current dialog to allow opening the Git config dialog
             closeParentDialog?.Invoke();
+            
+            // Wait for the dialog to fully close before opening the next one
+            await Task.Delay(100);
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
