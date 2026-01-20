@@ -93,6 +93,12 @@ public class LinkDialogBuilder
             return tcs.Task;
         };
         
+        // Update the wrapper so button handlers can access the close action
+        if (controls.CloseActionWrapper != null)
+        {
+            controls.CloseActionWrapper.Action = controls.CloseParentDialogAction;
+        }
+        
         SetupAddLinkEventHandlers(controls, dialog);
 
         var result = await dialog.ShowAsync();
@@ -306,16 +312,16 @@ public class LinkDialogBuilder
             gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
         };
         
-        // Func that will close the parent dialog - will be set after dialog creation
-        Func<Task>? closeParentDialog = null;
+        // Wrapper to hold the close action - will be set after dialog creation via controls object
+        var closeActionWrapper = new CloseActionWrapper();
         
         // Git config button click handler
         gitConfigButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            if (closeParentDialog != null)
+            if (closeActionWrapper.Action != null)
             {
-                await closeParentDialog();
+                await closeActionWrapper.Action();
             }
             
             if (_openGitConfigCallback != null)
@@ -353,9 +359,9 @@ public class LinkDialogBuilder
         gitEditButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            if (closeParentDialog != null)
+            if (closeActionWrapper.Action != null)
             {
-                await closeParentDialog();
+                await closeActionWrapper.Action();
             }
             
             if (_openGitConfigCallback != null)
@@ -438,7 +444,8 @@ public class LinkDialogBuilder
             GitRepoPanel = gitRepoPanel,
             GitConfigButton = gitConfigButton,
             GitEditButton = gitEditButton,
-            CloseParentDialogAction = closeParentDialog
+            CloseParentDialogAction = null, // Will be set by ShowAddAsync after dialog is created
+            CloseActionWrapper = closeActionWrapper // Pass wrapper so button handlers can access the action
         };
 
         return (stackPanel, controls);
@@ -1429,6 +1436,13 @@ public class LinkDialogBuilder
         public Button? GitConfigButton { get; set; }
         public Button? GitEditButton { get; set; }
         public Func<Task>? CloseParentDialogAction { get; set; }
+        public CloseActionWrapper? CloseActionWrapper { get; set; } // Holds the mutable wrapper for the close action
+    }
+    
+    // Mutable wrapper to hold the close action so button handlers can access it
+    private class CloseActionWrapper
+    {
+        public Func<Task>? Action { get; set; }
     }
 
     private class FolderControlsGroup
