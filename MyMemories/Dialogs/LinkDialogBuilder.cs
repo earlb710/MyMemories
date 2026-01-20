@@ -23,15 +23,17 @@ public class LinkDialogBuilder
     private readonly XamlRoot _xamlRoot;
     private readonly FolderPickerService _folderPickerService;
     private readonly WebSummaryService _webSummaryService;
+    private readonly ConfigurationService? _configService;
     private List<TreeViewNode>? _bookmarkLookupCategories;
     private CancellationTokenSource? _summarizeCts;
 
-    public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot)
+    public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
         _folderPickerService = new FolderPickerService(parentWindow);
         _webSummaryService = new WebSummaryService();
+        _configService = configService;
     }
     
     /// <summary>
@@ -134,6 +136,7 @@ public class LinkDialogBuilder
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F310 URL", Tag = "URL" }); // ??
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C4 File", Tag = "File" }); // ??
         linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\U0001F4C1 Folder", Tag = "Folder" }); // ??
+        linkTypeComboBox.Items.Add(new ComboBoxItem { Content = "\uE943 Git Repository", Tag = "Git" }); // Git icon
         linkTypeComboBox.SelectedIndex = 0; // Default to URL
 
         var titleTextBox = new TextBox
@@ -216,6 +219,32 @@ public class LinkDialogBuilder
             }
         };
 
+        // Git Repository ComboBox (initially hidden, shown only for Git)
+        var gitRepoLabel = new TextBlock
+        {
+            Text = "Git Repository: *",
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 4),
+            Visibility = Visibility.Collapsed
+        };
+
+        var gitRepoComboBox = new ComboBox
+        {
+            PlaceholderText = "Select a Git repository",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 8),
+            Visibility = Visibility.Collapsed
+        };
+
+        // Load Git repositories from configuration
+        if (_configService?.GitRepositories != null)
+        {
+            foreach (var repoName in _configService.GitRepositories.Keys)
+            {
+                gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+            }
+        }
+
         var (folderControls, _) = BuildFolderControls();
 
         var stackPanel = new StackPanel();
@@ -227,6 +256,8 @@ public class LinkDialogBuilder
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Location: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(urlTextBox);
         stackPanel.Children.Add(browseButton);
+        stackPanel.Children.Add(gitRepoLabel);
+        stackPanel.Children.Add(gitRepoComboBox);
         stackPanel.Children.Add(DialogHelpers.CreateLabel("Title: *", new Thickness(0, 8, 0, 4)));
         stackPanel.Children.Add(titleTextBox);
         
@@ -257,7 +288,9 @@ public class LinkDialogBuilder
             BrowseButton = browseButton,
             BookmarkInfoText = bookmarkInfoText,
             SummarizeButton = summarizeButton,
-            SummarizeProgress = summarizeProgress
+            SummarizeProgress = summarizeProgress,
+            GitRepoLabel = gitRepoLabel,
+            GitRepoComboBox = gitRepoComboBox
         };
 
         return (stackPanel, controls);
@@ -523,6 +556,7 @@ public class LinkDialogBuilder
                 {
                     case "URL":
                         controls.UrlTextBox.PlaceholderText = "Enter URL (e.g., https://example.com)";
+                        controls.UrlTextBox.Visibility = Visibility.Visible;
                         controls.BrowseButton.Visibility = Visibility.Visible;
                         controls.BrowseButton.Content = new StackPanel
                         {
@@ -534,16 +568,30 @@ public class LinkDialogBuilder
                                 new TextBlock { Text = "Browse Bookmarks", VerticalAlignment = VerticalAlignment.Center }
                             }
                         };
+                        if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
                         break;
                     case "File":
                         controls.UrlTextBox.PlaceholderText = "Enter file path or click Browse";
+                        controls.UrlTextBox.Visibility = Visibility.Visible;
                         controls.BrowseButton.Visibility = Visibility.Visible;
                         controls.BrowseButton.Content = "Browse File...";
+                        if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
                         break;
                     case "Folder":
                         controls.UrlTextBox.PlaceholderText = "Enter folder path or click Browse";
+                        controls.UrlTextBox.Visibility = Visibility.Visible;
                         controls.BrowseButton.Visibility = Visibility.Visible;
                         controls.BrowseButton.Content = "Browse Folder...";
+                        if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Collapsed;
+                        break;
+                    case "Git":
+                        controls.UrlTextBox.Visibility = Visibility.Collapsed;
+                        controls.BrowseButton.Visibility = Visibility.Collapsed;
+                        if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Visible;
+                        if (controls.GitRepoComboBox != null) controls.GitRepoComboBox.Visibility = Visibility.Visible;
                         break;
                 }
             }
@@ -1058,9 +1106,50 @@ public class LinkDialogBuilder
     private AddLinkResult? CreateAddLinkResult(LinkDialogControls controls)
     {
         string title = controls.TitleTextBox.Text.Trim();
-        string url = controls.UrlTextBox.Text.Trim();
+        string url = string.Empty;
         string description = controls.DescriptionTextBox.Text.Trim();
         string keywords = controls.KeywordsTextBox?.Text.Trim() ?? string.Empty;
+
+        // Get selected link type
+        string linkType = "URL";
+        if (controls.LinkTypeComboBox?.SelectedItem is ComboBoxItem linkTypeItem)
+        {
+            linkType = linkTypeItem.Tag?.ToString() ?? "URL";
+        }
+
+        // For Git links, get the repository path from the selected Git repository
+        if (linkType == "Git")
+        {
+            if (controls.GitRepoComboBox?.SelectedItem is ComboBoxItem gitRepoItem &&
+                gitRepoItem.Tag is string repoName)
+            {
+                if (_configService?.GitRepositories?.TryGetValue(repoName, out var repoInfo) == true)
+                {
+                    url = $"git://{repoName}"; // Use git:// scheme to identify Git links
+                    description = $"Git Repository: {repoName}\nPath: {repoInfo.Path}" + 
+                                  (string.IsNullOrEmpty(description) ? "" : $"\n\n{description}");
+                }
+            }
+            
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                // Show error if no Git repository selected
+                var errorDialog = new ContentDialog
+                {
+                    Title = "Git Repository Required",
+                    Content = "Please select a Git repository from the list.\n\n" +
+                             "If no repositories are available, configure them in Config > Git Repository.",
+                    CloseButtonText = "OK",
+                    XamlRoot = _xamlRoot
+                };
+                _ = errorDialog.ShowAsync(); // Fire and forget
+                return null;
+            }
+        }
+        else
+        {
+            url = controls.UrlTextBox.Text.Trim();
+        }
 
         if (controls.CategoryComboBox?.SelectedIndex < 0 || 
             string.IsNullOrWhiteSpace(title) || 
@@ -1182,6 +1271,8 @@ public class LinkDialogBuilder
         public TextBlock BookmarkInfoText { get; set; } = null!;
         public Button? SummarizeButton { get; set; }
         public ProgressRing? SummarizeProgress { get; set; }
+        public TextBlock? GitRepoLabel { get; set; }
+        public ComboBox? GitRepoComboBox { get; set; }
     }
 
     private class FolderControlsGroup

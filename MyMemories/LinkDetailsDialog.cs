@@ -22,7 +22,7 @@ public class LinkDetailsDialog
     public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
     {
         _detailsViewer = new LinkDetailsViewer(xamlRoot);
-        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot);
+        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot, configService);
         _categoryDialogBuilder = new CategoryDialogBuilder(xamlRoot, configService);
         _zipDialogBuilder = new ZipDialogBuilder(parentWindow, xamlRoot);
     }
