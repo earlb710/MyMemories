@@ -78,6 +78,9 @@ public class LinkDialogBuilder
             IsPrimaryButtonEnabled = selectedIndex >= 0
         };
 
+        // Set the parent dialog reference so button handlers can close it
+        controls.ParentDialog = dialog;
+        
         SetupAddLinkEventHandlers(controls, dialog);
 
         var result = await dialog.ShowAsync();
@@ -294,6 +297,10 @@ public class LinkDialogBuilder
         // Git config button click handler
         gitConfigButton.Click += async (s, args) =>
         {
+            // Close the current dialog to allow opening the Git config dialog
+            var parentDialog = controls.ParentDialog;
+            parentDialog?.Hide();
+            
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
@@ -328,6 +335,9 @@ public class LinkDialogBuilder
         // Git edit button click handler (same as config button - opens config dialog)
         gitEditButton.Click += async (s, args) =>
         {
+            // Close the current dialog to allow opening the Git config dialog
+            var parentDialog = controls.ParentDialog;
+            parentDialog?.Hide();
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
@@ -407,7 +417,8 @@ public class LinkDialogBuilder
             GitRepoComboBox = gitRepoComboBox,
             GitRepoPanel = gitRepoPanel,
             GitConfigButton = gitConfigButton,
-            GitEditButton = gitEditButton
+            GitEditButton = gitEditButton,
+            ParentDialog = null // Will be set after dialog creation
         };
 
         return (stackPanel, controls);
@@ -1397,6 +1408,7 @@ public class LinkDialogBuilder
         public StackPanel? GitRepoPanel { get; set; }
         public Button? GitConfigButton { get; set; }
         public Button? GitEditButton { get; set; }
+        public ContentDialog? ParentDialog { get; set; }
     }
 
     private class FolderControlsGroup
