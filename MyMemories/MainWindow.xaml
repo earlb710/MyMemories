@@ -67,6 +67,12 @@ Title="My Memories - File Viewer">
                     </MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Git Repository" Click="MenuConfig_GitSetup_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE943;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Tag Management" Click="MenuConfig_TagManagement_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE8EC;"/>

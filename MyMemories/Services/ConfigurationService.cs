@@ -212,6 +212,33 @@ public class ConfigurationService
     /// </summary>
     public AuditLogService? AuditLogService => _auditLogService;
 
+    /// <summary>
+    /// Gets or sets the Git repository path.
+    /// </summary>
+    public string GitRepositoryPath
+    {
+        get => _config.GitRepositoryPath;
+        set => _config.GitRepositoryPath = value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Gets or sets the Git username.
+    /// </summary>
+    public string GitUsername
+    {
+        get => _config.GitUsername;
+        set => _config.GitUsername = value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Gets or sets the Git repository connected status.
+    /// </summary>
+    public bool GitRepositoryConnected
+    {
+        get => _config.GitRepositoryConnected;
+        set => _config.GitRepositoryConnected = value;
+    }
+
     public void SetCategoryPassword(string categoryPath, string passwordHash)
     {
         _config.CategoryPasswords[categoryPath] = passwordHash;
@@ -448,4 +475,19 @@ public class AppConfiguration
     /// Categories not in this dictionary inherit the global AuditLoggingEnabled setting.
     /// </summary>
     public Dictionary<string, bool> CategoryAuditSettings { get; set; } = new();
+    
+    /// <summary>
+    /// Git repository URL or local path for synchronization.
+    /// </summary>
+    public string GitRepositoryPath { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Git repository username for authentication (optional).
+    /// </summary>
+    public string GitUsername { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the Git repository is configured and connected.
+    /// </summary>
+    public bool GitRepositoryConnected { get; set; } = false;
 }
