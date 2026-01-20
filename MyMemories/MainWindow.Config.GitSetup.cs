@@ -305,9 +305,6 @@ public sealed partial class MainWindow
                     statusBanner.IsOpen = true;
                 }
             }
-                statusBanner.Severity = InfoBarSeverity.Success;
-                statusBanner.IsOpen = true;
-            }
         };
 
         // Create dialog
