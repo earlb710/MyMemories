@@ -479,4 +479,19 @@ public class GitRepositoryInfo
     /// Whether the repository is configured and connected.
     /// </summary>
     public bool Connected { get; set; } = false;
+    
+    /// <summary>
+    /// Default branch to use (e.g., "main", "master").
+    /// </summary>
+    public string DefaultBranch { get; set; } = "main";
+    
+    /// <summary>
+    /// Whether the repository has been cloned locally.
+    /// </summary>
+    public bool IsCloned { get; set; } = false;
+    
+    /// <summary>
+    /// Local clone path (if cloned).
+    /// </summary>
+    public string LocalClonePath { get; set; } = string.Empty;
 }

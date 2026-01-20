@@ -164,10 +164,48 @@ public sealed partial class MainWindow
             Text = string.Empty,
             PlaceholderText = "Git username for authentication",
             IsReadOnly = false,
-            Margin = new Thickness(0, 0, 0, 16),
+            Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 720
         };
         stackPanel.Children.Add(usernameTextBox);
+
+        // Default Branch
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Default Branch:",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+
+        var defaultBranchTextBox = new TextBox
+        {
+            Text = "main",
+            PlaceholderText = "e.g., main, master, develop",
+            IsReadOnly = false,
+            Margin = new Thickness(0, 0, 0, 8),
+            MinWidth = 720
+        };
+        stackPanel.Children.Add(defaultBranchTextBox);
+
+        // Clone button
+        var cloneButton = new Button
+        {
+            Content = "Clone Repository",
+            Margin = new Thickness(0, 0, 0, 16),
+            IsEnabled = false
+        };
+        ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
+        stackPanel.Children.Add(cloneButton);
+
+        // Enable clone button when both name and path are entered
+        repoNameComboBox.TextChanged += (s, args) =>
+        {
+            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
+        };
+        
+        repoPathTextBox.TextChanged += (s, args) =>
+        {
+            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
+        };
 
         // Current status display
         var currentStatusPanel = new StackPanel
@@ -202,12 +240,16 @@ public sealed partial class MainWindow
             {
                 repoPathTextBox.Text = repoInfo.Path;
                 usernameTextBox.Text = repoInfo.Username;
+                defaultBranchTextBox.Text = string.IsNullOrEmpty(repoInfo.DefaultBranch) ? "main" : repoInfo.DefaultBranch;
+                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoInfo.Path);
             }
             else
             {
                 // Clear fields when no valid repository is selected
                 repoPathTextBox.Text = string.Empty;
                 usernameTextBox.Text = string.Empty;
+                defaultBranchTextBox.Text = "main";
+                cloneButton.IsEnabled = false;
             }
         };
 
@@ -307,6 +349,36 @@ public sealed partial class MainWindow
             }
         };
 
+        // Clone button click handler
+        cloneButton.Click += async (s, args) =>
+        {
+            var repoName = repoNameComboBox.Text.Trim();
+            var repoPath = repoPathTextBox.Text.Trim();
+            var username = usernameTextBox.Text.Trim();
+            var defaultBranch = defaultBranchTextBox.Text.Trim();
+
+            if (string.IsNullOrEmpty(repoName))
+            {
+                statusBanner.Title = "Validation Error";
+                statusBanner.Message = "Please enter a repository name.";
+                statusBanner.Severity = InfoBarSeverity.Error;
+                statusBanner.IsOpen = true;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(repoPath))
+            {
+                statusBanner.Title = "Validation Error";
+                statusBanner.Message = "Please enter a repository path or URL.";
+                statusBanner.Severity = InfoBarSeverity.Error;
+                statusBanner.IsOpen = true;
+                return;
+            }
+
+            // Clone the repository
+            await CloneGitRepositoryAsync(repoName, repoPath, username, defaultBranch, statusBanner);
+        };
+
         // Create dialog
         var dialog = new ContentDialog
         {
@@ -326,6 +398,12 @@ public sealed partial class MainWindow
                 var repoName = repoNameComboBox.Text.Trim();
                 var repoPath = repoPathTextBox.Text.Trim();
                 var username = usernameTextBox.Text.Trim();
+                var defaultBranch = defaultBranchTextBox.Text.Trim();
+                
+                if (string.IsNullOrEmpty(defaultBranch))
+                {
+                    defaultBranch = "main";
+                }
 
                 if (string.IsNullOrEmpty(repoName))
                 {
@@ -357,7 +435,8 @@ public sealed partial class MainWindow
                     {
                         Path = repoPath,
                         Username = username,
-                        Connected = true
+                        Connected = true,
+                        DefaultBranch = defaultBranch
                     };
                     await _configService.SaveConfigurationAsync();
 
@@ -458,5 +537,118 @@ public sealed partial class MainWindow
             
             return isValid;
         });
+    }
+
+    private async Task CloneGitRepositoryAsync(string repoName, string repoUrl, string username, string defaultBranch, InfoBar statusBanner)
+    {
+        await Task.Run(async () =>
+        {
+            try
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Cloning Repository...";
+                    statusBanner.Message = $"Cloning '{repoName}' to local git directory...";
+                    statusBanner.Severity = InfoBarSeverity.Informational;
+                    statusBanner.IsOpen = true;
+                });
+
+                // Get app data directory and create git subdirectory
+                var appDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MyMemories"
+                );
+                var gitDirectory = Path.Combine(appDataFolder, "git");
+                Directory.CreateDirectory(gitDirectory);
+
+                // Create repository-specific directory
+                var repoDirectory = Path.Combine(gitDirectory, SanitizeDirectoryName(repoName));
+                
+                // If directory already exists, delete it first
+                if (Directory.Exists(repoDirectory))
+                {
+                    try
+                    {
+                        Directory.Delete(repoDirectory, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            statusBanner.Title = "Error";
+                            statusBanner.Message = $"Failed to delete existing clone directory: {ex.Message}";
+                            statusBanner.Severity = InfoBarSeverity.Error;
+                        });
+                        return;
+                    }
+                }
+
+                // Setup clone options
+                var cloneOptions = new CloneOptions
+                {
+                    BranchName = string.IsNullOrEmpty(defaultBranch) ? null : defaultBranch
+                };
+
+                // Add credentials handler if username is provided
+                if (!string.IsNullOrEmpty(username))
+                {
+                    cloneOptions.CredentialsProvider = (url, usernameFromUrl, types) =>
+                    {
+                        // For now, we'll use the username without password
+                        // In a production app, you'd want to prompt for password or use a credential manager
+                        return new UsernamePasswordCredentials
+                        {
+                            Username = username,
+                            Password = string.Empty // User would need to configure git credentials or use SSH
+                        };
+                    };
+                }
+
+                // Clone the repository
+                try
+                {
+                    Repository.Clone(repoUrl, repoDirectory, cloneOptions);
+
+                    // Update configuration
+                    if (_configService != null && _configService.GitRepositories.ContainsKey(repoName))
+                    {
+                        _configService.GitRepositories[repoName].IsCloned = true;
+                        _configService.GitRepositories[repoName].LocalClonePath = repoDirectory;
+                        await _configService.SaveConfigurationAsync();
+                    }
+
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        statusBanner.Title = "Clone Successful";
+                        statusBanner.Message = $"Repository '{repoName}' cloned successfully to: {repoDirectory}";
+                        statusBanner.Severity = InfoBarSeverity.Success;
+                    });
+                }
+                catch (LibGit2SharpException gitEx)
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        statusBanner.Title = "Clone Failed";
+                        statusBanner.Message = $"Git error: {gitEx.Message}";
+                        statusBanner.Severity = InfoBarSeverity.Error;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Error";
+                    statusBanner.Message = $"Failed to clone repository: {ex.Message}";
+                    statusBanner.Severity = InfoBarSeverity.Error;
+                });
+            }
+        });
+    }
+
+    private string SanitizeDirectoryName(string name)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        return string.Join("_", name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
     }
 }
