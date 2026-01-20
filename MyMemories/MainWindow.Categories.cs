@@ -344,11 +344,11 @@ public sealed partial class MainWindow
             deleteMessage += "\n\nThis will delete:";
             if (totalLinks > 0)
             {
-                deleteMessage += $"\n  � {totalLinks} link{(totalLinks == 1 ? "" : "s")}";
+                deleteMessage += $"\n  • {totalLinks} link{(totalLinks == 1 ? "" : "s")}";
             }
             if (totalSubcategories > 0)
             {
-                deleteMessage += $"\n  � {totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
+                deleteMessage += $"\n  • {totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
                 // Count links in subcategories
                 int subcategoryLinks = 0;
                 foreach (var child in node.Children)
@@ -360,7 +360,7 @@ public sealed partial class MainWindow
                 }
                 if (subcategoryLinks > 0)
                 {
-                    deleteMessage += $"\n  � {subcategoryLinks} link{(subcategoryLinks == 1 ? "" : "s")} within subcategories";
+                    deleteMessage += $"\n  • {subcategoryLinks} link{(subcategoryLinks == 1 ? "" : "s")} within subcategories";
                 }
             }
         }

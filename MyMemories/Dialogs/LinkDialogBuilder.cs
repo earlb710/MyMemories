@@ -242,8 +242,7 @@ public class LinkDialogBuilder
         {
             PlaceholderText = "Select a Git repository",
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 0, 0, 8),
-            Visibility = Visibility.Collapsed
+            Margin = new Thickness(0, 0, 0, 8)
         };
 
         // Load Git repositories from configuration
@@ -261,8 +260,7 @@ public class LinkDialogBuilder
             Content = new SymbolIcon(Symbol.Add),
             Width = 40,
             Height = 32,
-            Margin = new Thickness(8, 0, 0, 8),
-            Visibility = Visibility.Collapsed
+            Margin = new Thickness(8, 0, 0, 8)
         };
         ToolTipService.SetToolTip(gitConfigButton, "Configure Git repositories");
         
