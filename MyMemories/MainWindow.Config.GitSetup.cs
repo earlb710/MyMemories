@@ -204,6 +204,7 @@ public sealed partial class MainWindow
 
         // Enable clone button when both name and path are entered
         repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
+        repoNameComboBox.TextSubmitted += (s, args) => UpdateCloneButtonState();
         repoPathTextBox.TextChanged += (s, args) => UpdateCloneButtonState();
 
         // Current status display
