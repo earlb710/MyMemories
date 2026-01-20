@@ -196,16 +196,15 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
         stackPanel.Children.Add(cloneButton);
 
+        // Helper method to update clone button state
+        void UpdateCloneButtonState()
+        {
+            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
+        }
+
         // Enable clone button when both name and path are entered
-        repoNameComboBox.TextChanged += (s, args) =>
-        {
-            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
-        };
-        
-        repoPathTextBox.TextChanged += (s, args) =>
-        {
-            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
-        };
+        repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
+        repoPathTextBox.TextChanged += (s, args) => UpdateCloneButtonState();
 
         // Current status display
         var currentStatusPanel = new StackPanel
@@ -586,13 +585,14 @@ public sealed partial class MainWindow
                 // Setup clone options
                 var cloneOptions = new CloneOptions
                 {
-                    BranchName = string.IsNullOrEmpty(defaultBranch) ? null : defaultBranch
+                    BranchName = string.IsNullOrEmpty(defaultBranch) ? null : defaultBranch,
+                    FetchOptions = new FetchOptions()
                 };
 
                 // Add credentials handler if username is provided
                 if (!string.IsNullOrEmpty(username))
                 {
-                    cloneOptions.CredentialsProvider = (url, usernameFromUrl, types) =>
+                    cloneOptions.FetchOptions.CredentialsProvider = (url, usernameFromUrl, types) =>
                     {
                         // For now, we'll use the username without password
                         // In a production app, you'd want to prompt for password or use a credential manager
