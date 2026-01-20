@@ -405,7 +405,8 @@ public sealed partial class MainWindow
                 Text = $"Checked {stats.TotalUrls} URLs:",
                 FontSize = 14,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
             });
             
             // Accessible count with green icon
@@ -424,7 +425,8 @@ public sealed partial class MainWindow
             {
                 Text = $"Accessible: {stats.AccessibleCount}",
                 FontSize = 14,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextSelectionEnabled = true
             });
             resultsPanel.Children.Add(accessiblePanel);
             
@@ -444,7 +446,8 @@ public sealed partial class MainWindow
             {
                 Text = $"Error: {stats.ErrorCount}",
                 FontSize = 14,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextSelectionEnabled = true
             });
             resultsPanel.Children.Add(errorPanel);
             
@@ -464,7 +467,8 @@ public sealed partial class MainWindow
             {
                 Text = $"Not Found: {stats.NotFoundCount}",
                 FontSize = 14,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextSelectionEnabled = true
             });
             resultsPanel.Children.Add(notFoundPanel);
             
@@ -486,7 +490,8 @@ public sealed partial class MainWindow
                 {
                     Text = $"Redirects Detected: {stats.RedirectCount}",
                     FontSize = 14,
-                    VerticalAlignment = VerticalAlignment.Center
+                    VerticalAlignment = VerticalAlignment.Center,
+                    IsTextSelectionEnabled = true
                 });
                 resultsPanel.Children.Add(redirectPanel);
             }

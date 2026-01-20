@@ -56,10 +56,18 @@ public static class ImageMetadataService
                 metadata.DpiX = decoder.DpiX;
                 metadata.DpiY = decoder.DpiY;
 
-                // Get EXIF data
+                // Get EXIF data (only if bitmap properties are available)
                 if (decoder.BitmapProperties != null)
                 {
-                    await ExtractExifDataAsync(decoder.BitmapProperties, metadata);
+                    try
+                    {
+                        await ExtractExifDataAsync(decoder.BitmapProperties, metadata);
+                    }
+                    catch (System.Runtime.InteropServices.COMException)
+                    {
+                        // EXIF data not available or corrupted - continue without it
+                        System.Diagnostics.Debug.WriteLine($"[ImageMetadataService] Could not extract EXIF data from {filePath}");
+                    }
                 }
             }
 
@@ -87,23 +95,44 @@ public static class ImageMetadataService
 
             // Exposure Time (Shutter Speed)
             var exposureTime = await TryGetPropertyAsync<BitmapTypedValue>(properties, $"{exifQuery}/{{ushort=33434}}");
-            if (exposureTime?.Value is BitmapPropertySet propSet)
+            if (exposureTime != null)
             {
-                metadata.ExposureTime = FormatExposureTime(propSet);
+                try
+                {
+                    if (exposureTime.Value is BitmapPropertySet propSet)
+                    {
+                        metadata.ExposureTime = FormatExposureTime(propSet);
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException) { }
             }
 
             // F-Number (Aperture)
             var fNumber = await TryGetPropertyAsync<BitmapTypedValue>(properties, $"{exifQuery}/{{ushort=33437}}");
-            if (fNumber?.Value is BitmapPropertySet fNumPropSet)
+            if (fNumber != null)
             {
-                metadata.FNumber = FormatFNumber(fNumPropSet);
+                try
+                {
+                    if (fNumber.Value is BitmapPropertySet fNumPropSet)
+                    {
+                        metadata.FNumber = FormatFNumber(fNumPropSet);
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException) { }
             }
 
             // Focal Length
             var focalLength = await TryGetPropertyAsync<BitmapTypedValue>(properties, $"{exifQuery}/{{ushort=37386}}");
-            if (focalLength?.Value is BitmapPropertySet focalPropSet)
+            if (focalLength != null)
             {
-                metadata.FocalLength = FormatFocalLength(focalPropSet);
+                try
+                {
+                    if (focalLength.Value is BitmapPropertySet focalPropSet)
+                    {
+                        metadata.FocalLength = FormatFocalLength(focalPropSet);
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException) { }
             }
 
             // Flash
@@ -149,17 +178,24 @@ public static class ImageMetadataService
             var lonRef = await TryGetPropertyAsync<string>(properties, $"{gpsQuery}/{{ushort=3}}");
             var lon = await TryGetPropertyAsync<BitmapTypedValue>(properties, $"{gpsQuery}/{{ushort=4}}");
 
-            if (lat?.Value is BitmapPropertySet latPropSet && lon?.Value is BitmapPropertySet lonPropSet)
+            if (lat != null && lon != null)
             {
-                var latitude = ConvertGpsCoordinate(latPropSet, latRef);
-                var longitude = ConvertGpsCoordinate(lonPropSet, lonRef);
-
-                if (latitude.HasValue && longitude.HasValue)
+                try
                 {
-                    metadata.GpsLatitude = latitude.Value;
-                    metadata.GpsLongitude = longitude.Value;
-                    metadata.GpsLocation = $"{latitude:F6}° {latRef}, {longitude:F6}° {lonRef}";
+                    if (lat.Value is BitmapPropertySet latPropSet && lon.Value is BitmapPropertySet lonPropSet)
+                    {
+                        var latitude = ConvertGpsCoordinate(latPropSet, latRef);
+                        var longitude = ConvertGpsCoordinate(lonPropSet, lonRef);
+
+                        if (latitude.HasValue && longitude.HasValue)
+                        {
+                            metadata.GpsLatitude = latitude.Value;
+                            metadata.GpsLongitude = longitude.Value;
+                            metadata.GpsLocation = $"{latitude:F6}° {latRef}, {longitude:F6}° {lonRef}";
+                        }
+                    }
                 }
+                catch (System.Runtime.InteropServices.COMException) { }
             }
         }
         catch
@@ -176,14 +212,30 @@ public static class ImageMetadataService
         try
         {
             var value = await properties.GetPropertiesAsync(new[] { propertyPath });
-            if (value.TryGetValue(propertyPath, out var result) && result.Value is T typedValue)
+            if (value.TryGetValue(propertyPath, out var result))
             {
-                return typedValue;
+                try
+                {
+                    if (result.Value is T typedValue)
+                    {
+                        return typedValue;
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing result.Value
+                    // This can happen with certain property types
+                }
             }
         }
-        catch
+        catch (System.Runtime.InteropServices.COMException)
         {
-            // Property doesn't exist or can't be read
+            // Property doesn't exist in this image (WINCODEC_ERR_PROPERTYNOTFOUND)
+            // This is expected for images that don't have all EXIF properties
+        }
+        catch (Exception)
+        {
+            // Other errors reading property
         }
 
         return default;
@@ -197,16 +249,25 @@ public static class ImageMetadataService
         try
         {
             if (propSet.TryGetValue("Numerator", out var num) && 
-                propSet.TryGetValue("Denominator", out var den) &&
-                num.Value is uint numerator && den.Value is uint denominator)
+                propSet.TryGetValue("Denominator", out var den))
             {
-                if (denominator == 0) return null;
-                
-                if (numerator == 1)
-                    return $"1/{denominator} sec";
-                
-                var seconds = (double)numerator / denominator;
-                return seconds >= 1 ? $"{seconds:F1} sec" : $"1/{(int)(1 / seconds)} sec";
+                try
+                {
+                    if (num.Value is uint numerator && den.Value is uint denominator)
+                    {
+                        if (denominator == 0) return null;
+                        
+                        if (numerator == 1)
+                            return $"1/{denominator} sec";
+                        
+                        var seconds = (double)numerator / denominator;
+                        return seconds >= 1 ? $"{seconds:F1} sec" : $"1/{(int)(1 / seconds)} sec";
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing .Value property
+                }
             }
         }
         catch { }
@@ -222,13 +283,22 @@ public static class ImageMetadataService
         try
         {
             if (propSet.TryGetValue("Numerator", out var num) && 
-                propSet.TryGetValue("Denominator", out var den) &&
-                num.Value is uint numerator && den.Value is uint denominator)
+                propSet.TryGetValue("Denominator", out var den))
             {
-                if (denominator == 0) return null;
-                
-                var fNumber = (double)numerator / denominator;
-                return $"f/{fNumber:F1}";
+                try
+                {
+                    if (num.Value is uint numerator && den.Value is uint denominator)
+                    {
+                        if (denominator == 0) return null;
+                        
+                        var fNumber = (double)numerator / denominator;
+                        return $"f/{fNumber:F1}";
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing .Value property
+                }
             }
         }
         catch { }
@@ -244,13 +314,22 @@ public static class ImageMetadataService
         try
         {
             if (propSet.TryGetValue("Numerator", out var num) && 
-                propSet.TryGetValue("Denominator", out var den) &&
-                num.Value is uint numerator && den.Value is uint denominator)
+                propSet.TryGetValue("Denominator", out var den))
             {
-                if (denominator == 0) return null;
-                
-                var focal = (double)numerator / denominator;
-                return $"{focal:F0} mm";
+                try
+                {
+                    if (num.Value is uint numerator && den.Value is uint denominator)
+                    {
+                        if (denominator == 0) return null;
+                        
+                        var focal = (double)numerator / denominator;
+                        return $"{focal:F0} mm";
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing .Value property
+                }
             }
         }
         catch { }
@@ -266,23 +345,35 @@ public static class ImageMetadataService
         try
         {
             // GPS coordinates are stored as 3 rational numbers: degrees, minutes, seconds
-            if (propSet.TryGetValue("0", out var deg) && deg.Value is BitmapPropertySet degSet &&
-                propSet.TryGetValue("1", out var min) && min.Value is BitmapPropertySet minSet &&
-                propSet.TryGetValue("2", out var sec) && sec.Value is BitmapPropertySet secSet)
+            if (propSet.TryGetValue("0", out var deg) && 
+                propSet.TryGetValue("1", out var min) && 
+                propSet.TryGetValue("2", out var sec))
             {
-                var degrees = GetRationalValue(degSet);
-                var minutes = GetRationalValue(minSet);
-                var seconds = GetRationalValue(secSet);
-
-                if (degrees.HasValue && minutes.HasValue && seconds.HasValue)
+                try
                 {
-                    var coordinate = degrees.Value + (minutes.Value / 60.0) + (seconds.Value / 3600.0);
-                    
-                    // Apply negative sign for South/West
-                    if (direction == "S" || direction == "W")
-                        coordinate = -coordinate;
-                    
-                    return coordinate;
+                    if (deg.Value is BitmapPropertySet degSet &&
+                        min.Value is BitmapPropertySet minSet &&
+                        sec.Value is BitmapPropertySet secSet)
+                    {
+                        var degrees = GetRationalValue(degSet);
+                        var minutes = GetRationalValue(minSet);
+                        var seconds = GetRationalValue(secSet);
+
+                        if (degrees.HasValue && minutes.HasValue && seconds.HasValue)
+                        {
+                            var coordinate = degrees.Value + (minutes.Value / 60.0) + (seconds.Value / 3600.0);
+                            
+                            // Apply negative sign for South/West
+                            if (direction == "S" || direction == "W")
+                                coordinate = -coordinate;
+                            
+                            return coordinate;
+                        }
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing .Value property
                 }
             }
         }
@@ -299,11 +390,20 @@ public static class ImageMetadataService
         try
         {
             if (propSet.TryGetValue("Numerator", out var num) && 
-                propSet.TryGetValue("Denominator", out var den) &&
-                num.Value is uint numerator && den.Value is uint denominator)
+                propSet.TryGetValue("Denominator", out var den))
             {
-                if (denominator == 0) return null;
-                return (double)numerator / denominator;
+                try
+                {
+                    if (num.Value is uint numerator && den.Value is uint denominator)
+                    {
+                        if (denominator == 0) return null;
+                        return (double)numerator / denominator;
+                    }
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    // Exception thrown when accessing .Value property
+                }
             }
         }
         catch { }

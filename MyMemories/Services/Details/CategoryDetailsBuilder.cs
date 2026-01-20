@@ -196,7 +196,8 @@ public class CategoryDetailsBuilder
             Text = "Bookmark Import Information",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var importPanel = new Border
@@ -236,7 +237,8 @@ public class CategoryDetailsBuilder
                         Text = $"Source: {category.SourceBrowserName}",
                         FontSize = 14,
                         FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(Colors.White)
+                        Foreground = new SolidColorBrush(Colors.White),
+                        IsTextSelectionEnabled = true
                     }
                 }
             });
@@ -293,7 +295,8 @@ public class CategoryDetailsBuilder
             FontSize = 13,
             FontWeight = isBold ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
             Foreground = new SolidColorBrush(foregroundColor),
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            IsTextSelectionEnabled = true
         });
 
         return row;
@@ -320,7 +323,8 @@ public class CategoryDetailsBuilder
             Text = "Timestamps",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -337,7 +341,8 @@ public class CategoryDetailsBuilder
             Text = "Statistics",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -396,7 +401,7 @@ public class CategoryDetailsBuilder
             Children =
             {
                 new FontIcon { Glyph = glyph, FontSize = 12 },
-                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, IsTextSelectionEnabled = true }
             }
         };
     }
@@ -475,7 +480,8 @@ public class CategoryDetailsBuilder
             Text = "Links in this Category",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var linksListPanel = new StackPanel { Spacing = 8 };

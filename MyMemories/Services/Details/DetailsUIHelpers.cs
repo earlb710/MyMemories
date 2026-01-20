@@ -21,7 +21,8 @@ public static class DetailsUIHelpers
         return new TextBlock
         {
             Text = text,
-            FontSize = 14
+            FontSize = 14,
+            IsTextSelectionEnabled = true
         };
     }
 
@@ -37,7 +38,7 @@ public static class DetailsUIHelpers
             Children =
             {
                 new FontIcon { Glyph = glyph, FontSize = 12 },
-                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, IsTextSelectionEnabled = true }
             }
         };
     }
@@ -52,7 +53,8 @@ public static class DetailsUIHelpers
             Text = title,
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var contentTextBlock = new TextBlock
@@ -96,7 +98,8 @@ public static class DetailsUIHelpers
             Text = message,
             FontSize = 12,
             Foreground = new SolidColorBrush(Colors.Orange),
-            TextWrapping = TextWrapping.Wrap
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
         });
 
         detailsPanel.Children.Add(warningPanel);
@@ -124,7 +127,8 @@ public static class DetailsUIHelpers
         {
             Text = link.ToString(),
             FontSize = 14,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            IsTextSelectionEnabled = true
         });
 
         // Tag badges row
@@ -144,7 +148,8 @@ public static class DetailsUIHelpers
                 Text = link.Description,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Colors.Gray)
+                Foreground = new SolidColorBrush(Colors.Gray),
+                IsTextSelectionEnabled = true
             });
         }
 

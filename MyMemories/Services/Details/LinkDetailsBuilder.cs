@@ -60,7 +60,8 @@ public class LinkDetailsBuilder
                 Text = "Description",
                 FontSize = 18,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, 4),
+                IsTextSelectionEnabled = true
             });
             _detailsPanel.Children.Add(new TextBlock
             {
@@ -68,7 +69,8 @@ public class LinkDetailsBuilder
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Colors.Gray),
-                Margin = new Thickness(0, 0, 0, 16)
+                Margin = new Thickness(0, 0, 0, 16),
+                IsTextSelectionEnabled = true
             });
         }
 
@@ -181,7 +183,8 @@ public class LinkDetailsBuilder
                     Text = "Ratings",
                     FontSize = 18,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 8)
+                    Margin = new Thickness(0, 0, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
                 _detailsPanel.Children.Add(ratingsPanel);
                 System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Added ratings panel to details");
@@ -415,7 +418,8 @@ public class LinkDetailsBuilder
             Text = isZipFile ? "Zip Archive Contents" : "Catalog Statistics",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -468,7 +472,8 @@ public class LinkDetailsBuilder
             Text = "Timestamps",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var timestampsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -510,7 +515,8 @@ public class LinkDetailsBuilder
                 Text = "Zip Entry Information",
                 FontSize = 18,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
             });
 
             var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -602,7 +608,8 @@ public class LinkDetailsBuilder
             Text = "Zip Archive Information",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -680,7 +687,8 @@ public class LinkDetailsBuilder
             Text = "Directory Information",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -726,7 +734,8 @@ public class LinkDetailsBuilder
                 Text = "File Information",
                 FontSize = 18,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
             });
 
             var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -750,7 +759,8 @@ public class LinkDetailsBuilder
             Text = "Image Information",
             FontSize = 18,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
         });
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
@@ -791,7 +801,8 @@ public class LinkDetailsBuilder
                     Text = "Camera Information",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
+                    Margin = new Thickness(0, 8, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
 
                 if (!string.IsNullOrEmpty(metadata.CameraManufacturer))
@@ -816,7 +827,8 @@ public class LinkDetailsBuilder
                     Text = "Camera Settings",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
+                    Margin = new Thickness(0, 8, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
 
                 if (metadata.IsoSpeed.HasValue)
@@ -849,7 +861,8 @@ public class LinkDetailsBuilder
                     Text = "Location",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
+                    Margin = new Thickness(0, 8, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
 
                 infoPanel.Children.Add(CreateIconStatLine("\uE707", $"GPS: {metadata.GpsLocation}"));
@@ -870,7 +883,8 @@ public class LinkDetailsBuilder
                     Text = "Author & Details",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
+                    Margin = new Thickness(0, 8, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
 
                 if (!string.IsNullOrEmpty(metadata.Artist))
@@ -1009,7 +1023,8 @@ public class LinkDetailsBuilder
                     Text = "Author & Creation",
                     FontSize = 16,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
+                    Margin = new Thickness(0, 8, 0, 8),
+                    IsTextSelectionEnabled = true
                 });
 
                 if (!string.IsNullOrEmpty(metadata.Author))
@@ -1031,7 +1046,8 @@ public class LinkDetailsBuilder
                 Text = "Timestamps",
                 FontSize = 16,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 8)
+                Margin = new Thickness(0, 8, 0, 8),
+                IsTextSelectionEnabled = true
             });
 
             if (metadata.PdfCreationDate.HasValue)
@@ -1067,7 +1083,7 @@ public class LinkDetailsBuilder
             Children =
             {
                 new FontIcon { Glyph = glyph, FontSize = 12 },
-                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center }
+                new TextBlock { Text = text, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, IsTextSelectionEnabled = true }
             }
         };
     }
@@ -1084,7 +1100,7 @@ public class LinkDetailsBuilder
             Children =
             {
                 new FontIcon { Glyph = WarningGlyph, FontSize = 12, Foreground = new SolidColorBrush(Colors.Orange) },
-                new TextBlock { Text = text, FontSize = 12, Foreground = new SolidColorBrush(Colors.Orange), TextWrapping = TextWrapping.Wrap }
+                new TextBlock { Text = text, FontSize = 12, Foreground = new SolidColorBrush(Colors.Orange), TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true }
             }
         };
     }
@@ -1107,7 +1123,8 @@ public class LinkDetailsBuilder
                     Text = text, 
                     FontSize = 14, 
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Colors.Orange) 
+                    Foreground = new SolidColorBrush(Colors.Orange),
+                    IsTextSelectionEnabled = true
                 }
             }
         };

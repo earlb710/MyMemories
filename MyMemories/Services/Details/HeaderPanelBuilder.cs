@@ -52,7 +52,8 @@ public class HeaderPanelBuilder
             Text = titleText,
             FontSize = 16,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
         });
 
         if (!string.IsNullOrWhiteSpace(description))
@@ -62,7 +63,8 @@ public class HeaderPanelBuilder
                 Text = description,
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Colors.Gray)
+                Foreground = new SolidColorBrush(Colors.Gray),
+                IsTextSelectionEnabled = true
             });
         }
     }
@@ -100,7 +102,8 @@ public class HeaderPanelBuilder
             Text = categoryName,
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap
+            TextWrapping = TextWrapping.Wrap,
+            IsTextSelectionEnabled = true
         };
         
         // Add tooltip with file location for root categories only
@@ -147,7 +150,8 @@ public class HeaderPanelBuilder
                 Text = description,
                 FontSize = 14,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Colors.Gray)
+                Foreground = new SolidColorBrush(Colors.Gray),
+                IsTextSelectionEnabled = true
             });
         }
         
@@ -189,7 +193,8 @@ public class HeaderPanelBuilder
                 FontSize = 11,
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
                 Foreground = new SolidColorBrush(Colors.DarkGray),
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextSelectionEnabled = true
             });
             
             fileInfoPanel.Children.Add(fileNamePanel);
@@ -215,7 +220,8 @@ public class HeaderPanelBuilder
                 FontStyle = Windows.UI.Text.FontStyle.Italic,
                 Foreground = new SolidColorBrush(Colors.Gray),
                 TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                IsTextSelectionEnabled = true
             };
             
             // Add tooltip for easy copying
@@ -281,7 +287,8 @@ public class HeaderPanelBuilder
             FontSize = 14,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            IsTextSelectionEnabled = true
         });
 
         // Add redirect button if link has a redirect
@@ -354,7 +361,8 @@ public class HeaderPanelBuilder
             {
                 Text = string.Join(" | ", timestampParts),
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Colors.Gray)
+                Foreground = new SolidColorBrush(Colors.Gray),
+                IsTextSelectionEnabled = true
             });
         }
 
