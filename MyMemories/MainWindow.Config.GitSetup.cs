@@ -585,8 +585,7 @@ public sealed partial class MainWindow
                 // Setup clone options
                 var cloneOptions = new CloneOptions
                 {
-                    BranchName = string.IsNullOrEmpty(defaultBranch) ? null : defaultBranch,
-                    FetchOptions = new FetchOptions()
+                    BranchName = string.IsNullOrEmpty(defaultBranch) ? null : defaultBranch
                 };
 
                 // Add credentials handler if username is provided
