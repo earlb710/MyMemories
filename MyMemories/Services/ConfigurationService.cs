@@ -213,31 +213,9 @@ public class ConfigurationService
     public AuditLogService? AuditLogService => _auditLogService;
 
     /// <summary>
-    /// Gets or sets the Git repository path.
+    /// Gets the Git repositories dictionary.
     /// </summary>
-    public string GitRepositoryPath
-    {
-        get => _config.GitRepositoryPath;
-        set => _config.GitRepositoryPath = value ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Gets or sets the Git username.
-    /// </summary>
-    public string GitUsername
-    {
-        get => _config.GitUsername;
-        set => _config.GitUsername = value ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Gets or sets the Git repository connected status.
-    /// </summary>
-    public bool GitRepositoryConnected
-    {
-        get => _config.GitRepositoryConnected;
-        set => _config.GitRepositoryConnected = value;
-    }
+    public Dictionary<string, GitRepositoryInfo> GitRepositories => _config.GitRepositories;
 
     public void SetCategoryPassword(string categoryPath, string passwordHash)
     {
@@ -477,17 +455,28 @@ public class AppConfiguration
     public Dictionary<string, bool> CategoryAuditSettings { get; set; } = new();
     
     /// <summary>
-    /// Git repository URL or local path for synchronization.
+    /// Git repositories configured for synchronization. Key is repository name, value is repository info.
     /// </summary>
-    public string GitRepositoryPath { get; set; } = string.Empty;
+    public Dictionary<string, GitRepositoryInfo> GitRepositories { get; set; } = new();
+}
+
+/// <summary>
+/// Git repository information.
+/// </summary>
+public class GitRepositoryInfo
+{
+    /// <summary>
+    /// Repository path or URL.
+    /// </summary>
+    public string Path { get; set; } = string.Empty;
     
     /// <summary>
-    /// Git repository username for authentication (optional).
+    /// Username for authentication (optional).
     /// </summary>
-    public string GitUsername { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
     
     /// <summary>
-    /// Whether the Git repository is configured and connected.
+    /// Whether the repository is configured and connected.
     /// </summary>
-    public bool GitRepositoryConnected { get; set; } = false;
+    public bool Connected { get; set; } = false;
 }

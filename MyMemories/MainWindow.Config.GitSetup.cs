@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using MyMemories.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace MyMemories;
@@ -22,7 +24,7 @@ public sealed partial class MainWindow
         var infoBanner = new InfoBar
         {
             Title = "Git Repository Configuration",
-            Message = "Connect to a Git repository to synchronize your category data. You can use a local repository path or a remote URL.",
+            Message = "Manage multiple Git repositories for synchronizing your category data. Use local repository paths or remote URLs.",
             Severity = InfoBarSeverity.Informational,
             IsOpen = true,
             IsClosable = false,
@@ -39,6 +41,63 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(statusBanner);
 
+        // Repository Name ComboBox with + and - icons
+        var repoNamePanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Repository Name:",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+
+        var repoNameComboBox = new ComboBox
+        {
+            PlaceholderText = "Select or enter repository name",
+            IsEditable = true,
+            MinWidth = 600,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        // Load existing repository names
+        if (_configService?.GitRepositories != null)
+        {
+            foreach (var repoName in _configService.GitRepositories.Keys)
+            {
+                repoNameComboBox.Items.Add(repoName);
+            }
+            if (repoNameComboBox.Items.Count > 0)
+            {
+                repoNameComboBox.SelectedIndex = 0;
+            }
+        }
+
+        var addButton = new Button
+        {
+            Content = new SymbolIcon(Symbol.Add),
+            Width = 40,
+            Height = 32
+        };
+        ToolTipService.SetToolTip(addButton, "Add new repository");
+
+        var removeButton = new Button
+        {
+            Content = new SymbolIcon(Symbol.Remove),
+            Width = 40,
+            Height = 32,
+            IsEnabled = repoNameComboBox.Items.Count > 0
+        };
+        ToolTipService.SetToolTip(removeButton, "Remove selected repository");
+
+        repoNamePanel.Children.Add(repoNameComboBox);
+        repoNamePanel.Children.Add(addButton);
+        repoNamePanel.Children.Add(removeButton);
+        stackPanel.Children.Add(repoNamePanel);
+
         // Repository Path/URL
         stackPanel.Children.Add(new TextBlock
         {
@@ -48,7 +107,7 @@ public sealed partial class MainWindow
 
         var repoPathTextBox = new TextBox
         {
-            Text = _configService?.GitRepositoryPath ?? string.Empty,
+            Text = string.Empty,
             PlaceholderText = "Enter local path or remote URL (e.g., https://github.com/user/repo.git)",
             IsReadOnly = false,
             Margin = new Thickness(0, 0, 0, 8),
@@ -102,7 +161,7 @@ public sealed partial class MainWindow
 
         var usernameTextBox = new TextBox
         {
-            Text = _configService?.GitUsername ?? string.Empty,
+            Text = string.Empty,
             PlaceholderText = "Git username for authentication",
             IsReadOnly = false,
             Margin = new Thickness(0, 0, 0, 16),
@@ -119,28 +178,132 @@ public sealed partial class MainWindow
 
         currentStatusPanel.Children.Add(new TextBlock
         {
-            Text = "Current Status:",
+            Text = "Configured Repositories:",
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
 
         var statusTextBlock = new TextBlock
         {
-            Text = _configService?.GitRepositoryConnected == true
-                ? $"✓ Connected to: {_configService?.GitRepositoryPath}"
-                : "Not connected",
-            Foreground = _configService?.GitRepositoryConnected == true
+            Text = _configService?.GitRepositories?.Count > 0
+                ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                : "No repositories configured",
+            Foreground = _configService?.GitRepositories?.Count > 0
                 ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green)
                 : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
         };
         currentStatusPanel.Children.Add(statusTextBlock);
         stackPanel.Children.Add(currentStatusPanel);
 
+        // Event handler for repository selection change
+        repoNameComboBox.SelectionChanged += (s, args) =>
+        {
+            if (repoNameComboBox.SelectedItem is string selectedName &&
+                _configService?.GitRepositories?.TryGetValue(selectedName, out var repoInfo) == true)
+            {
+                repoPathTextBox.Text = repoInfo.Path;
+                usernameTextBox.Text = repoInfo.Username;
+            }
+        };
+
+        // Add button click handler
+        addButton.Click += (s, args) =>
+        {
+            var repoName = repoNameComboBox.Text.Trim();
+            if (string.IsNullOrEmpty(repoName))
+            {
+                statusBanner.Title = "Validation Error";
+                statusBanner.Message = "Please enter a repository name.";
+                statusBanner.Severity = InfoBarSeverity.Error;
+                statusBanner.IsOpen = true;
+                return;
+            }
+
+            if (_configService?.GitRepositories?.ContainsKey(repoName) == true)
+            {
+                statusBanner.Title = "Validation Error";
+                statusBanner.Message = $"Repository '{repoName}' already exists.";
+                statusBanner.Severity = InfoBarSeverity.Error;
+                statusBanner.IsOpen = true;
+                return;
+            }
+
+            // Add to combobox if not already there
+            if (!repoNameComboBox.Items.Contains(repoName))
+            {
+                repoNameComboBox.Items.Add(repoName);
+                repoNameComboBox.SelectedItem = repoName;
+            }
+
+            // Clear fields for new entry
+            repoPathTextBox.Text = string.Empty;
+            usernameTextBox.Text = string.Empty;
+            removeButton.IsEnabled = true;
+
+            statusBanner.Title = "New Repository";
+            statusBanner.Message = $"Ready to configure '{repoName}'. Enter path/URL and save.";
+            statusBanner.Severity = InfoBarSeverity.Informational;
+            statusBanner.IsOpen = true;
+        };
+
+        // Remove button click handler
+        removeButton.Click += async (s, args) =>
+        {
+            if (repoNameComboBox.SelectedItem is not string selectedName)
+            {
+                statusBanner.Title = "Validation Error";
+                statusBanner.Message = "Please select a repository to remove.";
+                statusBanner.Severity = InfoBarSeverity.Error;
+                statusBanner.IsOpen = true;
+                return;
+            }
+
+            // Confirm deletion
+            var confirmDialog = new ContentDialog
+            {
+                Title = "Confirm Deletion",
+                Content = $"Are you sure you want to remove the repository '{selectedName}'?",
+                PrimaryButtonText = "Remove",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot
+            };
+
+            var result = await confirmDialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                _configService?.GitRepositories?.Remove(selectedName);
+                await _configService?.SaveConfigurationAsync()!;
+
+                repoNameComboBox.Items.Remove(selectedName);
+                if (repoNameComboBox.Items.Count > 0)
+                {
+                    repoNameComboBox.SelectedIndex = 0;
+                }
+                else
+                {
+                    repoNameComboBox.SelectedIndex = -1;
+                    repoPathTextBox.Text = string.Empty;
+                    usernameTextBox.Text = string.Empty;
+                    removeButton.IsEnabled = false;
+                }
+
+                statusTextBlock.Text = _configService?.GitRepositories?.Count > 0
+                    ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                    : "No repositories configured";
+
+                statusBanner.Title = "Repository Removed";
+                statusBanner.Message = $"Repository '{selectedName}' has been removed.";
+                statusBanner.Severity = InfoBarSeverity.Success;
+                statusBanner.IsOpen = true;
+            }
+        };
+
         // Create dialog
         var dialog = new ContentDialog
         {
             Title = "Git Repository Setup",
             Content = stackPanel,
-            PrimaryButtonText = "Save & Connect",
+            PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot
@@ -151,8 +314,19 @@ public sealed partial class MainWindow
             var deferral = args.GetDeferral();
             try
             {
+                var repoName = repoNameComboBox.Text.Trim();
                 var repoPath = repoPathTextBox.Text.Trim();
                 var username = usernameTextBox.Text.Trim();
+
+                if (string.IsNullOrEmpty(repoName))
+                {
+                    statusBanner.Title = "Validation Error";
+                    statusBanner.Message = "Repository name is required.";
+                    statusBanner.Severity = InfoBarSeverity.Error;
+                    statusBanner.IsOpen = true;
+                    args.Cancel = true;
+                    return;
+                }
 
                 if (string.IsNullOrEmpty(repoPath))
                 {
@@ -169,13 +343,17 @@ public sealed partial class MainWindow
                 
                 if (isConnected && _configService != null)
                 {
-                    _configService.GitRepositoryPath = repoPath;
-                    _configService.GitUsername = username;
-                    _configService.GitRepositoryConnected = true;
+                    // Add or update repository
+                    _configService.GitRepositories[repoName] = new GitRepositoryInfo
+                    {
+                        Path = repoPath,
+                        Username = username,
+                        Connected = true
+                    };
                     await _configService.SaveConfigurationAsync();
 
                     statusBanner.Title = "Success";
-                    statusBanner.Message = "Git repository connection saved successfully.";
+                    statusBanner.Message = $"Repository '{repoName}' saved successfully.";
                     statusBanner.Severity = InfoBarSeverity.Success;
                     statusBanner.IsOpen = true;
                 }
