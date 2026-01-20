@@ -78,8 +78,8 @@ public class LinkDialogBuilder
             IsPrimaryButtonEnabled = selectedIndex >= 0
         };
 
-        // Set the parent dialog reference so button handlers can close it
-        controls.ParentDialog = dialog;
+        // Set the close action so button handlers can close the dialog
+        controls.CloseParentDialogAction = () => dialog.Hide();
         
         SetupAddLinkEventHandlers(controls, dialog);
 
@@ -294,12 +294,14 @@ public class LinkDialogBuilder
             gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
         };
         
+        // Action that will close the parent dialog - will be set after dialog creation
+        Action? closeParentDialog = null;
+        
         // Git config button click handler
         gitConfigButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            var parentDialog = controls.ParentDialog;
-            parentDialog?.Hide();
+            closeParentDialog?.Invoke();
             
             if (_openGitConfigCallback != null)
             {
@@ -336,8 +338,7 @@ public class LinkDialogBuilder
         gitEditButton.Click += async (s, args) =>
         {
             // Close the current dialog to allow opening the Git config dialog
-            var parentDialog = controls.ParentDialog;
-            parentDialog?.Hide();
+            closeParentDialog?.Invoke();
             if (_openGitConfigCallback != null)
             {
                 await _openGitConfigCallback();
@@ -418,7 +419,7 @@ public class LinkDialogBuilder
             GitRepoPanel = gitRepoPanel,
             GitConfigButton = gitConfigButton,
             GitEditButton = gitEditButton,
-            ParentDialog = null // Will be set after dialog creation
+            CloseParentDialogAction = closeParentDialog
         };
 
         return (stackPanel, controls);
@@ -1408,7 +1409,7 @@ public class LinkDialogBuilder
         public StackPanel? GitRepoPanel { get; set; }
         public Button? GitConfigButton { get; set; }
         public Button? GitEditButton { get; set; }
-        public ContentDialog? ParentDialog { get; set; }
+        public Action? CloseParentDialogAction { get; set; }
     }
 
     private class FolderControlsGroup
