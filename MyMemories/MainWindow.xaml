@@ -468,9 +468,7 @@ Title="My Memories - File Viewer">
                                                 HorizontalAlignment="Right"
                                                 VerticalAlignment="Center"
                                                 Margin="0,0,-2,0"
-                                                Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}"
-                                                PointerEntered="UrlStatusBadge_PointerEntered"
-                                                PointerExited="UrlStatusBadge_PointerExited">
+                                                Visibility="{Binding Content.ShowUrlStatusBadge, Mode=OneWay}">
                                                 <Ellipse.Fill>
                                                     <SolidColorBrush Color="{Binding Content.UrlStatusColor, Mode=OneWay}"/>
                                                 </Ellipse.Fill>

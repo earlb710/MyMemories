@@ -279,6 +279,12 @@ public class DetailsViewService : IDetailsViewService
                 
                 // Note: Don't auto-switch tabs - preserve user's tab selection
             }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // Handle codec errors and other COM exceptions
+                System.Diagnostics.Debug.WriteLine($"[ShowContentImageAsync] COMException loading image (HResult: 0x{ex.HResult:X}): {ex.Message}");
+                ShowContentMessage($"Unable to display image: {Path.GetFileName(filePath)}\n\nThe image format may not be supported or the file may be corrupted.\n\nError code: 0x{ex.HResult:X}");
+            }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ShowContentImageAsync] Error loading image: {ex.Message}");

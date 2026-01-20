@@ -590,7 +590,7 @@ public class LinkDetailsBuilder
             }
             else if (File.Exists(linkItem.Url))
             {
-                AddFileInfo(linkItem.Url);
+                await AddFileInfo(linkItem.Url);
             }
         }
         catch (Exception ex)
@@ -707,7 +707,7 @@ public class LinkDetailsBuilder
         _detailsPanel.Children.Add(infoPanel);
     }
 
-    private async void AddFileInfo(string path)
+    private async Task AddFileInfo(string path)
     {
         var fileInfo = new FileInfo(path);
         var extension = fileInfo.Extension.ToLowerInvariant();
@@ -720,7 +720,16 @@ public class LinkDetailsBuilder
 
         if (isImage)
         {
-            await AddImageFileInfoAsync(path, fileInfo);
+            try
+            {
+                await AddImageFileInfoAsync(path, fileInfo);
+            }
+            catch (Exception ex)
+            {
+                // Fallback to regular file info if image metadata extraction fails
+                System.Diagnostics.Debug.WriteLine($"[LinkDetailsBuilder] Error loading image metadata: {ex.Message}");
+                AddRegularFileInfo(path, fileInfo);
+            }
         }
         else if (isPdf)
         {
@@ -729,24 +738,32 @@ public class LinkDetailsBuilder
         else
         {
             // Show regular file info
-            _detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "File Information",
-                FontSize = 18,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-            infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-            infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
-            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
-
-            _detailsPanel.Children.Add(infoPanel);
+            AddRegularFileInfo(path, fileInfo);
         }
+    }
+
+    /// <summary>
+    /// Adds regular file information panel.
+    /// </summary>
+    private void AddRegularFileInfo(string path, FileInfo fileInfo)
+    {
+        _detailsPanel.Children.Add(new TextBlock
+        {
+            Text = "File Information",
+            FontSize = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
+            IsTextSelectionEnabled = true
+        });
+
+        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
+        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
+        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
+        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
+        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
+
+        _detailsPanel.Children.Add(infoPanel);
     }
 
     /// <summary>
@@ -777,7 +794,7 @@ public class LinkDetailsBuilder
             // Dimensions & Technical Info
             if (metadata.PixelWidth > 0 && metadata.PixelHeight > 0)
             {
-                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} × {metadata.PixelHeight} pixels"));
+                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} ï¿½ {metadata.PixelHeight} pixels"));
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Megapixels: {metadata.Megapixels}"));
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aspect Ratio: {metadata.AspectRatio}"));
             }
@@ -786,7 +803,7 @@ public class LinkDetailsBuilder
             {
                 var dpiText = metadata.DpiX == metadata.DpiY 
                     ? $"Resolution: {metadata.DpiX:F0} DPI" 
-                    : $"Resolution: {metadata.DpiX:F0} × {metadata.DpiY:F0} DPI";
+                    : $"Resolution: {metadata.DpiX:F0} ï¿½ {metadata.DpiY:F0} DPI";
                 infoPanel.Children.Add(CreateIconStatLine("\uE7C5", dpiText));
             }
 
