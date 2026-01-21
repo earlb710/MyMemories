@@ -172,10 +172,25 @@ public sealed partial class MainWindow
             Text = string.Empty,
             PlaceholderText = "Git username for authentication",
             IsReadOnly = false,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, 16),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         stackPanel.Children.Add(usernameTextBox);
+
+        // Password (optional for remote repos)
+        stackPanel.Children.Add(new TextBlock
+        {
+            Text = "Password (optional, for remote repositories):",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        });
+
+        var passwordBox = new PasswordBox
+        {
+            PlaceholderText = "Git password for authentication",
+            Margin = new Thickness(0, 0, 0, 16),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        stackPanel.Children.Add(passwordBox);
 
         // Default Branch
         stackPanel.Children.Add(new TextBlock
@@ -282,6 +297,7 @@ public sealed partial class MainWindow
                 {
                     repoPathTextBox.Text = repoConfig.Path;
                     usernameTextBox.Text = repoConfig.Username;
+                    passwordBox.Password = repoConfig.Password;
                     
                     // Load available branches if they were fetched
                     branchComboBox.Items.Clear();
@@ -322,6 +338,7 @@ public sealed partial class MainWindow
                     // Clear fields when repository not found
                     repoPathTextBox.Text = string.Empty;
                     usernameTextBox.Text = string.Empty;
+                    passwordBox.Password = string.Empty;
                     branchComboBox.Items.Clear();
                     cloneButton.IsEnabled = false;
                 }
@@ -331,6 +348,7 @@ public sealed partial class MainWindow
                 // Clear fields when no valid repository is selected
                 repoPathTextBox.Text = string.Empty;
                 usernameTextBox.Text = string.Empty;
+                passwordBox.Password = string.Empty;
                 branchComboBox.Items.Clear();
                 cloneButton.IsEnabled = false;
             }
@@ -344,6 +362,7 @@ public sealed partial class MainWindow
             {
                 repoPathTextBox.Text = repoConfig.Path;
                 usernameTextBox.Text = repoConfig.Username;
+                passwordBox.Password = repoConfig.Password;
                 
                 // Load available branches if they were fetched
                 branchComboBox.Items.Clear();
@@ -460,6 +479,7 @@ public sealed partial class MainWindow
             var repoName = repoNameComboBox.Text.Trim();
             var repoPath = repoPathTextBox.Text.Trim();
             var username = usernameTextBox.Text.Trim();
+            var password = passwordBox.Password.Trim();
             var selectedBranch = branchComboBox.SelectedItem as string;
 
             if (string.IsNullOrEmpty(repoName))
@@ -490,7 +510,7 @@ public sealed partial class MainWindow
             }
 
             // Clone the repository
-            await CloneGitRepositoryAsync(repoName, repoPath, username, selectedBranch, cloneStatusBanner);
+            await CloneGitRepositoryAsync(repoName, repoPath, username, password, selectedBranch, cloneStatusBanner);
         };
 
         // Wrap content in ScrollViewer for better layout
@@ -524,6 +544,7 @@ public sealed partial class MainWindow
                 var repoName = repoNameComboBox.Text.Trim();
                 var repoPath = repoPathTextBox.Text.Trim();
                 var username = usernameTextBox.Text.Trim();
+                var password = passwordBox.Password.Trim();
                 var selectedBranch = branchComboBox.SelectedItem as string;
                 
                 if (string.IsNullOrEmpty(selectedBranch))
@@ -575,6 +596,7 @@ public sealed partial class MainWindow
                         repoConfig = existingRepo;
                         repoConfig.Path = repoPath;
                         repoConfig.Username = username;
+                        repoConfig.Password = password;
                         repoConfig.Connected = true;
                         repoConfig.DefaultBranch = selectedBranch;
                         repoConfig.SelectedBranch = selectedBranch;
@@ -587,6 +609,7 @@ public sealed partial class MainWindow
                         {
                             Path = repoPath,
                             Username = username,
+                            Password = password,
                             Connected = true,
                             DefaultBranch = selectedBranch,
                             SelectedBranch = selectedBranch,
@@ -710,7 +733,7 @@ public sealed partial class MainWindow
         });
     }
 
-    private async Task CloneGitRepositoryAsync(string repoName, string repoUrl, string username, string defaultBranch, InfoBar statusBanner)
+    private async Task CloneGitRepositoryAsync(string repoName, string repoUrl, string username, string password, string defaultBranch, InfoBar statusBanner)
     {
         await Task.Run(async () =>
         {
@@ -765,12 +788,10 @@ public sealed partial class MainWindow
                 {
                     cloneOptions.FetchOptions.CredentialsProvider = (url, usernameFromUrl, types) =>
                     {
-                        // For now, we'll use the username without password
-                        // In a production app, you'd want to prompt for password or use a credential manager
                         return new UsernamePasswordCredentials
                         {
                             Username = username,
-                            Password = string.Empty // User would need to configure git credentials or use SSH
+                            Password = password ?? string.Empty
                         };
                     };
                 }

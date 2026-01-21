@@ -183,6 +183,11 @@ public class GitRepositoryConfig
     public string Username { get; set; } = string.Empty;
 
     /// <summary>
+    /// Password for authentication (optional).
+    /// </summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>
     /// Whether the repository connection was tested successfully.
     /// </summary>
     public bool Connected { get; set; } = false;
