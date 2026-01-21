@@ -387,7 +387,10 @@ public sealed partial class MainWindow
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot
+            XamlRoot = Content.XamlRoot,
+            MinWidth = 700,
+            MaxWidth = 900,
+            MinHeight = 600
         };
 
         dialog.PrimaryButtonClick += async (s, args) =>
