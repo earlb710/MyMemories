@@ -391,12 +391,33 @@ public sealed partial class MainWindow
                 });
                 await tcs.Task;
                 
-                // Fetch branches if path is valid
+                // Fetch branches if path is valid - ALL UI access must happen on UI thread
                 if (!string.IsNullOrWhiteSpace(path))
                 {
-                    cloneStatusBanner.IsOpen = false;
-                    await FetchRemoteBranchesAsync(path, username, branchComboBox, cloneStatusBanner);
-                    DispatcherQueue.TryEnqueue(() => UpdateCloneButtonState());
+                    var fetchTcs = new TaskCompletionSource<bool>();
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        try
+                        {
+                            cloneStatusBanner.IsOpen = false;
+                            await FetchRemoteBranchesAsync(path, username, branchComboBox, cloneStatusBanner);
+                            UpdateCloneButtonState();
+                            fetchTcs.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            fetchTcs.SetException(ex);
+                        }
+                    });
+                    
+                    try
+                    {
+                        await fetchTcs.Task;
+                    }
+                    catch
+                    {
+                        // Fetch failed, ignore
+                    }
                 }
                 
                 pathChangeTimer?.Dispose();
