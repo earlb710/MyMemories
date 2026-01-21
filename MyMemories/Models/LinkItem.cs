@@ -672,7 +672,15 @@ public class LinkItem : INotifyPropertyChanged
         // Guess the type based on existing properties
         if (IsDirectory)
         {
-            Type = LinkType.Folder;
+            // Check if it's a git repository directory
+            if (IsGitRepository(Url))
+            {
+                Type = LinkType.Git;
+            }
+            else
+            {
+                Type = LinkType.Folder;
+            }
         }
         else if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)
         {
@@ -682,6 +690,31 @@ public class LinkItem : INotifyPropertyChanged
         {
             Type = LinkType.File;
         }
+    }
+    
+    /// <summary>
+    /// Checks if a directory is a Git repository by looking for a .git subdirectory.
+    /// </summary>
+    private static bool IsGitRepository(string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return false;
+            
+        try
+        {
+            // Check if the directory exists and contains a .git subdirectory
+            if (Directory.Exists(path))
+            {
+                string gitDir = Path.Combine(path, ".git");
+                return Directory.Exists(gitDir);
+            }
+        }
+        catch
+        {
+            // If we can't access the directory, assume it's not a git repo
+        }
+        
+        return false;
     }
 
     public void NotifyTagsChanged()
