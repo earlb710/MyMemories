@@ -171,40 +171,72 @@ public sealed partial class MainWindow
         // Default Branch
         stackPanel.Children.Add(new TextBlock
         {
-            Text = "Default Branch:",
+            Text = "Branch:",
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
 
-        var defaultBranchTextBox = new TextBox
+        var branchComboBox = new ComboBox
         {
-            Text = "main",
-            PlaceholderText = "e.g., main, master, develop",
-            IsReadOnly = false,
+            PlaceholderText = "Select branch to clone",
+            IsEditable = false,
             Margin = new Thickness(0, 0, 0, 8),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        stackPanel.Children.Add(defaultBranchTextBox);
+        stackPanel.Children.Add(branchComboBox);
+
+        var fetchBranchesButton = new Button
+        {
+            Content = "Fetch Branches",
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
+        stackPanel.Children.Add(fetchBranchesButton);
 
         // Clone button
         var cloneButton = new Button
         {
             Content = "Clone Repository",
-            Margin = new Thickness(0, 0, 0, 16),
+            Margin = new Thickness(0, 0, 0, 8),
             IsEnabled = false
         };
         ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
         stackPanel.Children.Add(cloneButton);
 
+        // Clone status banner (initially hidden, below clone button)
+        var cloneStatusBanner = new InfoBar
+        {
+            IsOpen = false,
+            IsClosable = true,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        stackPanel.Children.Add(cloneStatusBanner);
+
         // Helper method to update clone button state
         void UpdateCloneButtonState()
         {
-            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
+            cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && 
+                                   !string.IsNullOrWhiteSpace(repoPathTextBox.Text) &&
+                                   branchComboBox.SelectedItem != null;
+            fetchBranchesButton.IsEnabled = !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
         }
 
-        // Enable clone button when both name and path are entered
+        // Enable/disable buttons based on input
         repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
         repoNameComboBox.TextSubmitted += (s, args) => UpdateCloneButtonState();
         repoPathTextBox.TextChanged += (s, args) => UpdateCloneButtonState();
+        branchComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
+
+        // Fetch branches button click handler
+        fetchBranchesButton.Click += async (s, args) =>
+        {
+            var repoPath = repoPathTextBox.Text.Trim();
+            var username = usernameTextBox.Text.Trim();
+            
+            branchComboBox.Items.Clear();
+            cloneStatusBanner.IsOpen = false;
+            
+            await FetchRemoteBranchesAsync(repoPath, username, branchComboBox, cloneStatusBanner);
+        };
 
         // Current status display
         var currentStatusPanel = new StackPanel
@@ -239,15 +271,22 @@ public sealed partial class MainWindow
             {
                 repoPathTextBox.Text = repoInfo.Path;
                 usernameTextBox.Text = repoInfo.Username;
-                defaultBranchTextBox.Text = string.IsNullOrEmpty(repoInfo.DefaultBranch) ? "main" : repoInfo.DefaultBranch;
-                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoInfo.Path);
+                
+                // Set branch if available
+                branchComboBox.Items.Clear();
+                if (!string.IsNullOrEmpty(repoInfo.DefaultBranch))
+                {
+                    branchComboBox.Items.Add(repoInfo.DefaultBranch);
+                    branchComboBox.SelectedIndex = 0;
+                }
+                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoInfo.Path) && branchComboBox.SelectedItem != null;
             }
             else
             {
                 // Clear fields when no valid repository is selected
                 repoPathTextBox.Text = string.Empty;
                 usernameTextBox.Text = string.Empty;
-                defaultBranchTextBox.Text = "main";
+                branchComboBox.Items.Clear();
                 cloneButton.IsEnabled = false;
             }
         };
@@ -260,7 +299,7 @@ public sealed partial class MainWindow
             repoNameComboBox.SelectedIndex = -1;
             repoPathTextBox.Text = string.Empty;
             usernameTextBox.Text = string.Empty;
-            defaultBranchTextBox.Text = "main";
+            branchComboBox.Items.Clear();
             cloneButton.IsEnabled = false;
 
             statusBanner.Title = "New Repository";
@@ -331,28 +370,37 @@ public sealed partial class MainWindow
             var repoName = repoNameComboBox.Text.Trim();
             var repoPath = repoPathTextBox.Text.Trim();
             var username = usernameTextBox.Text.Trim();
-            var defaultBranch = defaultBranchTextBox.Text.Trim();
+            var selectedBranch = branchComboBox.SelectedItem as string;
 
             if (string.IsNullOrEmpty(repoName))
             {
-                statusBanner.Title = "Validation Error";
-                statusBanner.Message = "Please enter a repository name.";
-                statusBanner.Severity = InfoBarSeverity.Error;
-                statusBanner.IsOpen = true;
+                cloneStatusBanner.Title = "Validation Error";
+                cloneStatusBanner.Message = "Please enter a repository name.";
+                cloneStatusBanner.Severity = InfoBarSeverity.Error;
+                cloneStatusBanner.IsOpen = true;
                 return;
             }
 
             if (string.IsNullOrEmpty(repoPath))
             {
-                statusBanner.Title = "Validation Error";
-                statusBanner.Message = "Please enter a repository path or URL.";
-                statusBanner.Severity = InfoBarSeverity.Error;
-                statusBanner.IsOpen = true;
+                cloneStatusBanner.Title = "Validation Error";
+                cloneStatusBanner.Message = "Please enter a repository path or URL.";
+                cloneStatusBanner.Severity = InfoBarSeverity.Error;
+                cloneStatusBanner.IsOpen = true;
+                return;
+            }
+
+            if (string.IsNullOrEmpty(selectedBranch))
+            {
+                cloneStatusBanner.Title = "Validation Error";
+                cloneStatusBanner.Message = "Please select a branch to clone.";
+                cloneStatusBanner.Severity = InfoBarSeverity.Error;
+                cloneStatusBanner.IsOpen = true;
                 return;
             }
 
             // Clone the repository
-            await CloneGitRepositoryAsync(repoName, repoPath, username, defaultBranch, statusBanner);
+            await CloneGitRepositoryAsync(repoName, repoPath, username, selectedBranch, cloneStatusBanner);
         };
 
         // Wrap content in ScrollViewer for better layout
@@ -386,11 +434,11 @@ public sealed partial class MainWindow
                 var repoName = repoNameComboBox.Text.Trim();
                 var repoPath = repoPathTextBox.Text.Trim();
                 var username = usernameTextBox.Text.Trim();
-                var defaultBranch = defaultBranchTextBox.Text.Trim();
+                var selectedBranch = branchComboBox.SelectedItem as string;
                 
-                if (string.IsNullOrEmpty(defaultBranch))
+                if (string.IsNullOrEmpty(selectedBranch))
                 {
-                    defaultBranch = "main";
+                    selectedBranch = "main"; // Default if not selected
                 }
 
                 if (string.IsNullOrEmpty(repoName))
@@ -418,14 +466,30 @@ public sealed partial class MainWindow
                 
                 if (isConnected && _configService != null)
                 {
-                    // Add or update repository
-                    _configService.GitRepositories[repoName] = new GitRepositoryInfo
+                    // Check if repository already exists to preserve clone info
+                    GitRepositoryInfo repoInfo;
+                    if (_configService.GitRepositories.TryGetValue(repoName, out var existingRepo))
                     {
-                        Path = repoPath,
-                        Username = username,
-                        Connected = true,
-                        DefaultBranch = defaultBranch
-                    };
+                        // Update existing repository, preserving clone status
+                        repoInfo = existingRepo;
+                        repoInfo.Path = repoPath;
+                        repoInfo.Username = username;
+                        repoInfo.Connected = true;
+                        repoInfo.DefaultBranch = selectedBranch;
+                    }
+                    else
+                    {
+                        // Create new repository
+                        repoInfo = new GitRepositoryInfo
+                        {
+                            Path = repoPath,
+                            Username = username,
+                            Connected = true,
+                            DefaultBranch = selectedBranch
+                        };
+                    }
+                    
+                    _configService.GitRepositories[repoName] = repoInfo;
                     await _configService.SaveConfigurationAsync();
 
                     // Add to ComboBox if it's a new repository
@@ -642,6 +706,116 @@ public sealed partial class MainWindow
                 {
                     statusBanner.Title = "Error";
                     statusBanner.Message = $"Failed to clone repository: {ex.Message}";
+                    statusBanner.Severity = InfoBarSeverity.Error;
+                });
+            }
+        });
+    }
+
+    private async Task FetchRemoteBranchesAsync(string repoUrl, string username, ComboBox branchComboBox, InfoBar statusBanner)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Fetching Branches...";
+                    statusBanner.Message = "Retrieving available branches from repository...";
+                    statusBanner.Severity = InfoBarSeverity.Informational;
+                    statusBanner.IsOpen = true;
+                });
+
+                var branches = new List<string>();
+
+                // For local repositories
+                if (Directory.Exists(repoUrl) && Repository.IsValid(repoUrl))
+                {
+                    using var repo = new Repository(repoUrl);
+                    foreach (var branch in repo.Branches)
+                    {
+                        if (!branch.IsRemote)
+                        {
+                            branches.Add(branch.FriendlyName);
+                        }
+                    }
+                }
+                // For remote repositories
+                else if (repoUrl.StartsWith("http://") || repoUrl.StartsWith("https://") || repoUrl.StartsWith("git@"))
+                {
+                    // List remote references
+                    try
+                    {
+                        var refs = Repository.ListRemoteReferences(repoUrl);
+                        foreach (var reference in refs)
+                        {
+                            // Only include branch references (heads)
+                            if (reference.CanonicalName.StartsWith("refs/heads/"))
+                            {
+                                var branchName = reference.CanonicalName.Substring("refs/heads/".Length);
+                                branches.Add(branchName);
+                            }
+                        }
+                    }
+                    catch (LibGit2SharpException gitEx)
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            statusBanner.Title = "Fetch Failed";
+                            statusBanner.Message = $"Could not fetch branches: {gitEx.Message}. Repository may require authentication.";
+                            statusBanner.Severity = InfoBarSeverity.Warning;
+                        });
+                        return;
+                    }
+                }
+                else
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        statusBanner.Title = "Invalid Repository";
+                        statusBanner.Message = "Please enter a valid repository path or URL.";
+                        statusBanner.Severity = InfoBarSeverity.Error;
+                    });
+                    return;
+                }
+
+                // Update UI with branches
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    branchComboBox.Items.Clear();
+                    foreach (var branch in branches)
+                    {
+                        branchComboBox.Items.Add(branch);
+                    }
+
+                    if (branches.Count > 0)
+                    {
+                        // Select main, master, or first branch
+                        var defaultIndex = branches.FindIndex(b => b.Equals("main", StringComparison.OrdinalIgnoreCase));
+                        if (defaultIndex < 0)
+                        {
+                            defaultIndex = branches.FindIndex(b => b.Equals("master", StringComparison.OrdinalIgnoreCase));
+                        }
+                        branchComboBox.SelectedIndex = defaultIndex >= 0 ? defaultIndex : 0;
+
+                        statusBanner.Title = "Branches Loaded";
+                        statusBanner.Message = $"Found {branches.Count} branch(es). Select a branch to clone.";
+                        statusBanner.Severity = InfoBarSeverity.Success;
+                    }
+                    else
+                    {
+                        statusBanner.Title = "No Branches Found";
+                        statusBanner.Message = "No branches were found in this repository.";
+                        statusBanner.Severity = InfoBarSeverity.Warning;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Error";
+                    statusBanner.Message = $"Failed to fetch branches: {ex.Message}";
                     statusBanner.Severity = InfoBarSeverity.Error;
                 });
             }
