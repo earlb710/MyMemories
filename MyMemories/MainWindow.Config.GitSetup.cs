@@ -78,15 +78,15 @@ public sealed partial class MainWindow
         var addButton = new Button
         {
             Content = new SymbolIcon(Symbol.Add),
-            Width = 40,
+            Width = 50,
             Height = 32
         };
-        ToolTipService.SetToolTip(addButton, "Add new repository");
+        ToolTipService.SetToolTip(addButton, "Clear fields for new repository");
 
         var removeButton = new Button
         {
             Content = new SymbolIcon(Symbol.Remove),
-            Width = 40,
+            Width = 50,
             Height = 32,
             IsEnabled = repoNameComboBox.Items.Count > 0
         };
@@ -252,42 +252,19 @@ public sealed partial class MainWindow
             }
         };
 
-        // Add button click handler
+        // Add button click handler - clears all fields for new repository entry
         addButton.Click += (s, args) =>
         {
-            var repoName = repoNameComboBox.Text.Trim();
-            if (string.IsNullOrEmpty(repoName))
-            {
-                statusBanner.Title = "Validation Error";
-                statusBanner.Message = "Please enter a repository name.";
-                statusBanner.Severity = InfoBarSeverity.Error;
-                statusBanner.IsOpen = true;
-                return;
-            }
-
-            if (_configService?.GitRepositories?.ContainsKey(repoName) == true)
-            {
-                statusBanner.Title = "Validation Error";
-                statusBanner.Message = $"Repository '{repoName}' already exists.";
-                statusBanner.Severity = InfoBarSeverity.Error;
-                statusBanner.IsOpen = true;
-                return;
-            }
-
-            // Add to combobox if not already there
-            if (!repoNameComboBox.Items.Contains(repoName))
-            {
-                repoNameComboBox.Items.Add(repoName);
-                repoNameComboBox.SelectedItem = repoName;
-            }
-
-            // Clear fields for new entry
+            // Clear all fields including name
+            repoNameComboBox.Text = string.Empty;
+            repoNameComboBox.SelectedIndex = -1;
             repoPathTextBox.Text = string.Empty;
             usernameTextBox.Text = string.Empty;
-            removeButton.IsEnabled = true;
+            defaultBranchTextBox.Text = "main";
+            cloneButton.IsEnabled = false;
 
             statusBanner.Title = "New Repository";
-            statusBanner.Message = $"Ready to configure '{repoName}'. Enter path/URL and save.";
+            statusBanner.Message = "Enter repository details and click Save to create.";
             statusBanner.Severity = InfoBarSeverity.Informational;
             statusBanner.IsOpen = true;
         };
@@ -450,6 +427,20 @@ public sealed partial class MainWindow
                         DefaultBranch = defaultBranch
                     };
                     await _configService.SaveConfigurationAsync();
+
+                    // Add to ComboBox if it's a new repository
+                    if (!repoNameComboBox.Items.Contains(repoName))
+                    {
+                        repoNameComboBox.Items.Add(repoName);
+                    }
+                    repoNameComboBox.SelectedItem = repoName;
+                    removeButton.IsEnabled = true;
+
+                    // Update status display
+                    statusTextBlock.Text = _configService.GitRepositories.Count > 0
+                        ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                        : "No repositories configured";
+                    statusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
 
                     statusBanner.Title = "Success";
                     statusBanner.Message = $"Repository '{repoName}' saved successfully.";
