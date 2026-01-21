@@ -140,7 +140,7 @@ public class LinkDialogBuilder
 
         if (result == ContentDialogResult.Primary)
         {
-            return CreateEditLinkResult(controls);
+            return CreateEditLinkResult(controls, link);
         }
 
         return null;
@@ -1398,7 +1398,7 @@ public class LinkDialogBuilder
         };
     }
 
-    private LinkEditResult? CreateEditLinkResult(LinkDialogControls controls)
+    private LinkEditResult? CreateEditLinkResult(LinkDialogControls controls, LinkItem originalLink)
     {
         string newTitle = controls.TitleTextBox.Text.Trim();
         string newUrl = controls.UrlTextBox.Text.Trim();
@@ -1426,19 +1426,28 @@ public class LinkDialogBuilder
             }
         }
 
-        // Determine link type based on URL and IsDirectory
+        // Preserve the original link type if it was Git, otherwise determine from URL/IsDirectory
         LinkType linkType;
-        if (isDirectory)
+        if (originalLink.Type == LinkType.Git)
         {
-            linkType = LinkType.Folder;
-        }
-        else if (Uri.TryCreate(newUrl, UriKind.Absolute, out var uri) && !uri.IsFile)
-        {
-            linkType = LinkType.URL;
+            // Preserve Git type
+            linkType = LinkType.Git;
         }
         else
         {
-            linkType = LinkType.File;
+            // Determine link type based on URL and IsDirectory
+            if (isDirectory)
+            {
+                linkType = LinkType.Folder;
+            }
+            else if (Uri.TryCreate(newUrl, UriKind.Absolute, out var uri) && !uri.IsFile)
+            {
+                linkType = LinkType.URL;
+            }
+            else
+            {
+                linkType = LinkType.File;
+            }
         }
 
         return new LinkEditResult
