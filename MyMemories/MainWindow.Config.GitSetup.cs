@@ -312,7 +312,7 @@ public sealed partial class MainWindow
                     branchComboBox.Items.Add(repoConfig.DefaultBranch);
                     branchComboBox.SelectedIndex = 0;
                 }
-                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoInfo.Path) && branchComboBox.SelectedItem != null;
+                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
             }
             else
             {
