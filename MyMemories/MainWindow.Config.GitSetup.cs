@@ -287,6 +287,26 @@ public sealed partial class MainWindow
                     var selectedBranch = ExtractBranchName(selectedBranchDisplay); // Extract branch name without SHA
                     var currentCheckedOutBranch = repoConfig.CurrentCheckedOutBranch;
 
+                    // If CurrentCheckedOutBranch is not set but repository is cloned, try to read it from the local repository
+                    if (string.IsNullOrEmpty(currentCheckedOutBranch) && Directory.Exists(repoConfig.LocalClonePath))
+                    {
+                        try
+                        {
+                            using (var repo = new LibGit2Sharp.Repository(repoConfig.LocalClonePath))
+                            {
+                                currentCheckedOutBranch = repo.Head.FriendlyName;
+                                // Update the config with the current branch
+                                repoConfig.CurrentCheckedOutBranch = currentCheckedOutBranch;
+                                _gitConfigService?.AddOrUpdateRepository(selectedRepoName, repoConfig);
+                                _ = _gitConfigService?.SaveAsync(); // Fire and forget
+                            }
+                        }
+                        catch
+                        {
+                            // If we can't read the branch, leave it empty
+                        }
+                    }
+
                     // Display current branch and commit SHA
                     if (!string.IsNullOrEmpty(currentCheckedOutBranch))
                     {
