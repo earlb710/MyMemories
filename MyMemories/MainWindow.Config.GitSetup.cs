@@ -59,7 +59,6 @@ public sealed partial class MainWindow
         {
             PlaceholderText = "Select or enter repository name",
             IsEditable = true,
-            MinWidth = 600,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
 
@@ -111,7 +110,7 @@ public sealed partial class MainWindow
             PlaceholderText = "Enter local path or remote URL (e.g., https://github.com/user/repo.git)",
             IsReadOnly = false,
             Margin = new Thickness(0, 0, 0, 8),
-            MinWidth = 720
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         stackPanel.Children.Add(repoPathTextBox);
 
@@ -165,7 +164,7 @@ public sealed partial class MainWindow
             PlaceholderText = "Git username for authentication",
             IsReadOnly = false,
             Margin = new Thickness(0, 0, 0, 8),
-            MinWidth = 720
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         stackPanel.Children.Add(usernameTextBox);
 
@@ -182,7 +181,7 @@ public sealed partial class MainWindow
             PlaceholderText = "e.g., main, master, develop",
             IsReadOnly = false,
             Margin = new Thickness(0, 0, 0, 8),
-            MinWidth = 720
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         stackPanel.Children.Add(defaultBranchTextBox);
 
@@ -379,17 +378,26 @@ public sealed partial class MainWindow
             await CloneGitRepositoryAsync(repoName, repoPath, username, defaultBranch, statusBanner);
         };
 
+        // Wrap content in ScrollViewer for better layout
+        var scrollViewer = new ScrollViewer
+        {
+            Content = stackPanel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            MaxHeight = 700
+        };
+
         // Create dialog
         var dialog = new ContentDialog
         {
             Title = "Git Repository Setup",
-            Content = stackPanel,
+            Content = scrollViewer,
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = Content.XamlRoot,
-            MinWidth = 700,
-            MaxWidth = 900,
+            MinWidth = 800,
+            MaxWidth = 1000,
             MinHeight = 600
         };
 
