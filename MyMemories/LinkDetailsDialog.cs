@@ -19,10 +19,10 @@ public class LinkDetailsDialog
     private readonly CategoryDialogBuilder _categoryDialogBuilder;
     private readonly ZipDialogBuilder _zipDialogBuilder;
 
-    public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
+    public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null, GitConfigService? gitConfigService = null)
     {
         _detailsViewer = new LinkDetailsViewer(xamlRoot);
-        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot);
+        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot, configService, gitConfigService);
         _categoryDialogBuilder = new CategoryDialogBuilder(xamlRoot, configService);
         _zipDialogBuilder = new ZipDialogBuilder(parentWindow, xamlRoot);
     }
@@ -34,8 +34,16 @@ public class LinkDetailsDialog
     {
         _linkDialogBuilder.SetBookmarkLookupCategories(categories);
     }
+    
+    /// <summary>
+    /// Sets the callback to open Git configuration dialog.
+    /// </summary>
+    public void SetGitConfigCallback(Func<Task> callback)
+    {
+        _linkDialogBuilder.SetGitConfigCallback(callback);
+    }
 
-    public Task<bool> ShowAsync(LinkItem link) => 
+    public Task<bool> ShowAsync(LinkItem link) =>
         _detailsViewer.ShowAsync(link);
 
     public Task<AddLinkResult?> ShowAddAsync(IEnumerable<CategoryNode> categories, CategoryNode? selectedCategory) => 

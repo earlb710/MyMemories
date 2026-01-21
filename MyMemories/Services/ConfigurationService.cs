@@ -212,6 +212,11 @@ public class ConfigurationService
     /// </summary>
     public AuditLogService? AuditLogService => _auditLogService;
 
+    /// <summary>
+    /// Gets the Git repositories dictionary.
+    /// </summary>
+    public Dictionary<string, GitRepositoryInfo> GitRepositories => _config.GitRepositories;
+
     public void SetCategoryPassword(string categoryPath, string passwordHash)
     {
         _config.CategoryPasswords[categoryPath] = passwordHash;
@@ -448,4 +453,45 @@ public class AppConfiguration
     /// Categories not in this dictionary inherit the global AuditLoggingEnabled setting.
     /// </summary>
     public Dictionary<string, bool> CategoryAuditSettings { get; set; } = new();
+    
+    /// <summary>
+    /// Git repositories configured for synchronization. Key is repository name, value is repository info.
+    /// </summary>
+    public Dictionary<string, GitRepositoryInfo> GitRepositories { get; set; } = new();
+}
+
+/// <summary>
+/// Git repository information.
+/// </summary>
+public class GitRepositoryInfo
+{
+    /// <summary>
+    /// Repository path or URL.
+    /// </summary>
+    public string Path { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Username for authentication (optional).
+    /// </summary>
+    public string Username { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the repository is configured and connected.
+    /// </summary>
+    public bool Connected { get; set; } = false;
+    
+    /// <summary>
+    /// Default branch to use (e.g., "main", "master").
+    /// </summary>
+    public string DefaultBranch { get; set; } = "main";
+    
+    /// <summary>
+    /// Whether the repository has been cloned locally.
+    /// </summary>
+    public bool IsCloned { get; set; } = false;
+    
+    /// <summary>
+    /// Local clone path (if cloned).
+    /// </summary>
+    public string LocalClonePath { get; set; } = string.Empty;
 }

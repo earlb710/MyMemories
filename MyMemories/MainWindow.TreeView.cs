@@ -240,7 +240,7 @@ public sealed partial class MainWindow
         if (node.Content is CategoryItem category)
         {
             // Don't edit special system nodes
-            if (category.IsArchiveNode || category.IsSearchesNode || category.Name.StartsWith("���"))
+            if (category.IsArchiveNode || category.IsSearchesNode || category.Name.StartsWith("───"))
             {
                 e.Handled = true;
                 return;

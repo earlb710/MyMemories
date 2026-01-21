@@ -183,8 +183,15 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Setup line number callbacks for text viewer
             _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers, SetupScrollSynchronization);
             
+            // Initialize Git config service early so it's available when Add Link dialog is opened
+            _gitConfigService = new GitConfigService();
+            await _gitConfigService.LoadAsync();
+            
             _treeViewService = new TreeViewService(LinksTreeView, this);
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
+            
+            // Set the Git config callback
+            _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
             
             // Initialize new refactored services
             _fileLauncherService = new FileLauncherService();
@@ -517,7 +524,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add first divider (for Searches)
             var searchesDividerCategory = new CategoryItem
             {
-                Name = "———————————————————",
+                Name = "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };
@@ -534,7 +541,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             {
                 Name = "Searches (0)",
                 Description = "Saved complex searches",
-                Icon = "\U0001F50E", // ?? Right-Pointing Magnifying Glass
+                Icon = "\U0001F50E", // ðŸ”Ž Right-Pointing Magnifying Glass
                 IsSearchesNode = true
             };
             _searchesNode = new TreeViewNode
@@ -552,7 +559,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Add second divider (for Archive)
             var dividerCategory = new CategoryItem
             {
-                Name = "———————————————————",
+                Name = "â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€",
                 Description = null,
                 Icon = "" // Empty icon for divider
             };

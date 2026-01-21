@@ -17,7 +17,8 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
+            _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
         
         var result = await _linkDialog!.ShowCategoryDialogAsync(
@@ -79,7 +80,8 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
+            _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
         
         var result = await _linkDialog!.ShowCategoryDialogAsync(
@@ -157,7 +159,8 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
+            _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
 
         var result = await _linkDialog!.ShowCategoryDialogAsync(
@@ -341,11 +344,11 @@ public sealed partial class MainWindow
             deleteMessage += "\n\nThis will delete:";
             if (totalLinks > 0)
             {
-                deleteMessage += $"\n  • {totalLinks} link{(totalLinks == 1 ? "" : "s")}";
+                deleteMessage += $"\n  â€¢ {totalLinks} link{(totalLinks == 1 ? "" : "s")}";
             }
             if (totalSubcategories > 0)
             {
-                deleteMessage += $"\n  • {totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
+                deleteMessage += $"\n  â€¢ {totalSubcategories} subcategor{(totalSubcategories == 1 ? "y" : "ies")}";
                 // Count links in subcategories
                 int subcategoryLinks = 0;
                 foreach (var child in node.Children)
@@ -357,7 +360,7 @@ public sealed partial class MainWindow
                 }
                 if (subcategoryLinks > 0)
                 {
-                    deleteMessage += $"\n  • {subcategoryLinks} link{(subcategoryLinks == 1 ? "" : "s")} within subcategories";
+                    deleteMessage += $"\n  â€¢ {subcategoryLinks} link{(subcategoryLinks == 1 ? "" : "s")} within subcategories";
                 }
             }
         }

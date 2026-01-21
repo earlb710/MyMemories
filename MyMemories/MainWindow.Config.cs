@@ -38,6 +38,11 @@ public sealed partial class MainWindow
         await ShowRatingManagementDialogAsync();
     }
 
+    private async void MenuConfig_GitSetup_Click(object sender, RoutedEventArgs e)
+    {
+        await ShowGitSetupDialogAsync();
+    }
+
     private async Task ShowTagManagementDialogAsync()
     {
         // _tagService is initialized during app startup in InitializeAsync
