@@ -216,7 +216,7 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
         stackPanel.Children.Add(fetchBranchesButton);
 
-        // Clone button
+        // Clone/Pull button
         var cloneButton = new Button
         {
             Content = "Clone Repository",
@@ -225,6 +225,16 @@ public sealed partial class MainWindow
         };
         ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
         stackPanel.Children.Add(cloneButton);
+
+        // Commit SHA display (shown after clone button)
+        var commitShaTextBlock = new TextBlock
+        {
+            Text = string.Empty,
+            FontSize = 12,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray),
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        stackPanel.Children.Add(commitShaTextBlock);
 
         // Clone status banner (initially hidden, below clone button)
         var cloneStatusBanner = new InfoBar
@@ -235,13 +245,76 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(cloneStatusBanner);
 
-        // Helper method to update clone button state
+        // Helper method to update clone button state and labels
         void UpdateCloneButtonState()
         {
             cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && 
                                    !string.IsNullOrWhiteSpace(repoPathTextBox.Text) &&
                                    branchComboBox.SelectedItem != null;
             fetchBranchesButton.IsEnabled = !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
+
+            // Update fetch branches button label
+            if (branchComboBox.Items.Count > 0)
+            {
+                fetchBranchesButton.Content = "Refresh Branches";
+                ToolTipService.SetToolTip(fetchBranchesButton, "Refresh available branches from repository");
+            }
+            else
+            {
+                fetchBranchesButton.Content = "Fetch Branches";
+                ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
+            }
+
+            // Update clone/pull button label and commit SHA display
+            var selectedRepoName = repoNameComboBox.Text.Trim();
+            if (!string.IsNullOrEmpty(selectedRepoName) && _gitConfigService != null)
+            {
+                var repoConfig = _gitConfigService.GetRepository(selectedRepoName);
+                if (repoConfig != null && repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
+                {
+                    var selectedBranch = branchComboBox.SelectedItem as string;
+                    var currentBranch = repoConfig.SelectedBranch;
+
+                    // Check if branch has changed or if we need to pull
+                    if (!string.IsNullOrEmpty(selectedBranch) && selectedBranch != currentBranch)
+                    {
+                        cloneButton.Content = "Pull Changes";
+                        ToolTipService.SetToolTip(cloneButton, $"Pull changes from branch '{selectedBranch}'");
+                    }
+                    else
+                    {
+                        cloneButton.Content = "Pull Changes";
+                        ToolTipService.SetToolTip(cloneButton, "Pull latest changes from remote repository");
+                    }
+
+                    // Display commit SHA
+                    var commitSha = GetCurrentCommitSha(repoConfig.LocalClonePath);
+                    if (!string.IsNullOrEmpty(commitSha))
+                    {
+                        commitShaTextBlock.Text = $"Current commit: {commitSha}";
+                    }
+                    else if (!string.IsNullOrEmpty(repoConfig.CurrentBranchCommit))
+                    {
+                        commitShaTextBlock.Text = $"Current commit: {repoConfig.CurrentBranchCommit}";
+                    }
+                    else
+                    {
+                        commitShaTextBlock.Text = string.Empty;
+                    }
+                }
+                else
+                {
+                    cloneButton.Content = "Clone Repository";
+                    ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
+                    commitShaTextBlock.Text = string.Empty;
+                }
+            }
+            else
+            {
+                cloneButton.Content = "Clone Repository";
+                ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
+                commitShaTextBlock.Text = string.Empty;
+            }
         }
 
         // Enable/disable buttons based on input
@@ -260,6 +333,9 @@ public sealed partial class MainWindow
             cloneStatusBanner.IsOpen = false;
             
             await FetchRemoteBranchesAsync(repoPath, username, branchComboBox, cloneStatusBanner);
+            
+            // Update button state after fetching branches
+            UpdateCloneButtonState();
         };
 
         // Current status display
@@ -331,7 +407,7 @@ public sealed partial class MainWindow
                     }
                     }
                     
-                    cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
+                    UpdateCloneButtonState();
                 }
                 else
                 {
@@ -340,7 +416,7 @@ public sealed partial class MainWindow
                     usernameTextBox.Text = string.Empty;
                     passwordBox.Password = string.Empty;
                     branchComboBox.Items.Clear();
-                    cloneButton.IsEnabled = false;
+                    UpdateCloneButtonState();
                 }
             }
             else
@@ -350,7 +426,7 @@ public sealed partial class MainWindow
                 usernameTextBox.Text = string.Empty;
                 passwordBox.Password = string.Empty;
                 branchComboBox.Items.Clear();
-                cloneButton.IsEnabled = false;
+                UpdateCloneButtonState();
             }
         };
 
@@ -396,7 +472,7 @@ public sealed partial class MainWindow
                     }
                 }
                 
-                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
+                UpdateCloneButtonState();
             }
         }
 
@@ -408,8 +484,9 @@ public sealed partial class MainWindow
             repoNameComboBox.SelectedIndex = -1;
             repoPathTextBox.Text = string.Empty;
             usernameTextBox.Text = string.Empty;
+            passwordBox.Password = string.Empty;
             branchComboBox.Items.Clear();
-            cloneButton.IsEnabled = false;
+            UpdateCloneButtonState();
 
             statusBanner.Title = "New Repository";
             statusBanner.Message = "Enter repository details and click Save to create.";
@@ -473,7 +550,7 @@ public sealed partial class MainWindow
             }
         };
 
-        // Clone button click handler
+        // Clone/Pull button click handler
         cloneButton.Click += async (s, args) =>
         {
             var repoName = repoNameComboBox.Text.Trim();
@@ -503,14 +580,44 @@ public sealed partial class MainWindow
             if (string.IsNullOrEmpty(selectedBranch))
             {
                 cloneStatusBanner.Title = "Validation Error";
-                cloneStatusBanner.Message = "Please select a branch to clone.";
+                cloneStatusBanner.Message = "Please select a branch.";
                 cloneStatusBanner.Severity = InfoBarSeverity.Error;
                 cloneStatusBanner.IsOpen = true;
                 return;
             }
 
-            // Clone the repository
-            await CloneGitRepositoryAsync(repoName, repoPath, username, password, selectedBranch, cloneStatusBanner);
+            // Check if repository is already cloned
+            var repoConfig = _gitConfigService?.GetRepository(repoName);
+            if (repoConfig != null && repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
+            {
+                // Save changes first before pulling
+                // Update repository configuration with current values
+                repoConfig.Path = repoPath;
+                repoConfig.Username = username;
+                repoConfig.Password = password;
+                if (repoConfig.AvailableBranches.Count > 0)
+                {
+                    // Save available branches
+                    repoConfig.AvailableBranches = branchComboBox.Items.Cast<string>().ToList();
+                }
+                
+                _gitConfigService?.AddOrUpdateRepository(repoName, repoConfig);
+                await _gitConfigService!.SaveAsync();
+
+                // Pull changes
+                await PullChangesAsync(repoName, repoConfig.LocalClonePath, username, password, selectedBranch, cloneStatusBanner);
+                
+                // Update commit SHA display after pull
+                UpdateCloneButtonState();
+            }
+            else
+            {
+                // Clone the repository
+                await CloneGitRepositoryAsync(repoName, repoPath, username, password, selectedBranch, cloneStatusBanner);
+                
+                // Update button state after clone
+                UpdateCloneButtonState();
+            }
         };
 
         // Wrap content in ScrollViewer for better layout
@@ -801,7 +908,7 @@ public sealed partial class MainWindow
                 {
                     Repository.Clone(repoUrl, repoDirectory, cloneOptions);
 
-                    // Update configuration
+                    // Update configuration with clone info and commit SHA
                     if (_gitConfigService != null)
                     {
                         var repoConfig = _gitConfigService.GetRepository(repoName);
@@ -809,6 +916,21 @@ public sealed partial class MainWindow
                         {
                             repoConfig.IsCloned = true;
                             repoConfig.LocalClonePath = repoDirectory;
+                            repoConfig.SelectedBranch = defaultBranch;
+                            
+                            // Get and store the current commit SHA
+                            try
+                            {
+                                using (var clonedRepo = new Repository(repoDirectory))
+                                {
+                                    repoConfig.CurrentBranchCommit = clonedRepo.Head?.Tip?.Sha?.Substring(0, 8) ?? string.Empty;
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore errors getting commit SHA
+                            }
+                            
                             _gitConfigService.AddOrUpdateRepository(repoName, repoConfig);
                             await _gitConfigService.SaveAsync();
                         }
@@ -957,5 +1079,162 @@ public sealed partial class MainWindow
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         return string.Join("_", name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
+    }
+
+    /// <summary>
+    /// Get the current commit SHA from a local repository.
+    /// </summary>
+    private string? GetCurrentCommitSha(string localClonePath)
+    {
+        try
+        {
+            if (!Directory.Exists(localClonePath))
+                return null;
+
+            using var repo = new Repository(localClonePath);
+            return repo.Head?.Tip?.Sha?.Substring(0, 8); // Return short SHA (first 8 characters)
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pull changes from a remote repository.
+    /// </summary>
+    private async Task PullChangesAsync(string repoName, string localClonePath, string username, string password, string branch, InfoBar statusBanner)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Pulling Changes...";
+                    statusBanner.Message = $"Pulling changes from branch '{branch}'...";
+                    statusBanner.Severity = InfoBarSeverity.Informational;
+                    statusBanner.IsOpen = true;
+                });
+
+                if (!Directory.Exists(localClonePath))
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        statusBanner.Title = "Error";
+                        statusBanner.Message = "Local clone path does not exist. Please clone the repository first.";
+                        statusBanner.Severity = InfoBarSeverity.Error;
+                    });
+                    return;
+                }
+
+                using (var repo = new Repository(localClonePath))
+                {
+                    // Checkout the selected branch if different from current
+                    var currentBranch = repo.Head.FriendlyName;
+                    if (currentBranch != branch)
+                    {
+                        try
+                        {
+                            var localBranch = repo.Branches[branch];
+                            if (localBranch == null)
+                            {
+                                // Create local tracking branch
+                                var remoteBranch = repo.Branches[$"origin/{branch}"];
+                                if (remoteBranch != null)
+                                {
+                                    localBranch = repo.CreateBranch(branch, remoteBranch.Tip);
+                                    repo.Branches.Update(localBranch,
+                                        b => b.TrackedBranch = remoteBranch.CanonicalName);
+                                }
+                            }
+
+                            if (localBranch != null)
+                            {
+                                Commands.Checkout(repo, localBranch);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DispatcherQueue.TryEnqueue(() =>
+                            {
+                                statusBanner.Title = "Checkout Failed";
+                                statusBanner.Message = $"Failed to checkout branch '{branch}': {ex.Message}";
+                                statusBanner.Severity = InfoBarSeverity.Error;
+                            });
+                            return;
+                        }
+                    }
+
+                    // Setup pull options
+                    var pullOptions = new PullOptions
+                    {
+                        FetchOptions = new FetchOptions()
+                    };
+
+                    // Add credentials if provided
+                    if (!string.IsNullOrEmpty(username))
+                    {
+                        pullOptions.FetchOptions.CredentialsProvider = (url, usernameFromUrl, types) =>
+                        {
+                            return new UsernamePasswordCredentials
+                            {
+                                Username = username,
+                                Password = password ?? string.Empty
+                            };
+                        };
+                    }
+
+                    // Create signature for merge commit
+                    var signature = new Signature("MyMemories", "mymemories@local", DateTimeOffset.Now);
+
+                    // Pull changes
+                    try
+                    {
+                        var result = Commands.Pull(repo, signature, pullOptions);
+
+                        // Update commit SHA in config
+                        if (_gitConfigService != null)
+                        {
+                            var repoConfig = _gitConfigService.GetRepository(repoName);
+                            if (repoConfig != null)
+                            {
+                                repoConfig.CurrentBranchCommit = repo.Head?.Tip?.Sha?.Substring(0, 8) ?? string.Empty;
+                                repoConfig.SelectedBranch = branch;
+                                _gitConfigService.AddOrUpdateRepository(repoName, repoConfig);
+                                Task.Run(async () => await _gitConfigService.SaveAsync()).Wait();
+                            }
+                        }
+
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            statusBanner.Title = "Pull Successful";
+                            statusBanner.Message = result.Status == MergeStatus.UpToDate
+                                ? "Repository is already up to date."
+                                : $"Successfully pulled changes. Status: {result.Status}";
+                            statusBanner.Severity = InfoBarSeverity.Success;
+                        });
+                    }
+                    catch (LibGit2SharpException gitEx)
+                    {
+                        DispatcherQueue.TryEnqueue(() =>
+                        {
+                            statusBanner.Title = "Pull Failed";
+                            statusBanner.Message = $"Git error: {gitEx.Message}";
+                            statusBanner.Severity = InfoBarSeverity.Error;
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    statusBanner.Title = "Error";
+                    statusBanner.Message = $"Failed to pull changes: {ex.Message}";
+                    statusBanner.Severity = InfoBarSeverity.Error;
+                });
+            }
+        });
     }
 }

@@ -216,4 +216,9 @@ public class GitRepositoryConfig
     /// Local clone path (if cloned).
     /// </summary>
     public string LocalClonePath { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current branch commit SHA (latest commit on the current branch).
+    /// </summary>
+    public string CurrentBranchCommit { get; set; } = string.Empty;
 }
