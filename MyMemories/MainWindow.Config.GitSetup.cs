@@ -307,12 +307,12 @@ public sealed partial class MainWindow
                     {
                         branchComboBox.SelectedIndex = 0;
                     }
-                }
-                else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch))
-                {
-                    // If no branches fetched yet, show default branch
-                    branchComboBox.Items.Add(repoConfig.DefaultBranch);
-                    branchComboBox.SelectedIndex = 0;
+                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch))
+                    {
+                        // If no branches fetched yet, show default branch
+                        branchComboBox.Items.Add(repoConfig.DefaultBranch);
+                        branchComboBox.SelectedIndex = 0;
+                    }
                 }
                 cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
             }
