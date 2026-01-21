@@ -19,10 +19,15 @@ public sealed partial class MainWindow
         // Initialize folder picker service if needed
         _folderPickerService ??= new FolderPickerService(this);
         
-        // Initialize git config service if needed
+        // Initialize git config service if needed (it may already be loaded in MainWindow initialization)
         if (_gitConfigService == null)
         {
             _gitConfigService = new GitConfigService();
+            await _gitConfigService.LoadAsync();
+        }
+        else
+        {
+            // Reload to get latest data
             await _gitConfigService.LoadAsync();
         }
 

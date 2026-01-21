@@ -183,6 +183,10 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // Setup line number callbacks for text viewer
             _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers, SetupScrollSynchronization);
             
+            // Initialize Git config service early so it's available when Add Link dialog is opened
+            _gitConfigService = new GitConfigService();
+            await _gitConfigService.LoadAsync();
+            
             _treeViewService = new TreeViewService(LinksTreeView, this);
             _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
             

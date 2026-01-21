@@ -1283,8 +1283,26 @@ public class LinkDialogBuilder
                 var repoConfig = _gitConfigService?.GetRepository(repoName);
                 if (repoConfig != null)
                 {
-                    url = $"git://{repoName}"; // Use git:// scheme to identify Git links
-                    // Note: Description is kept as user-entered, repository info can be looked up from git:// URL
+                    // Check if repository is cloned and has a local path
+                    if (repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
+                    {
+                        // Use the local clone path as the URL so it's treated as a folder/directory catalog
+                        url = repoConfig.LocalClonePath;
+                    }
+                    else
+                    {
+                        // Repository not cloned yet - show error
+                        var errorDialog = new ContentDialog
+                        {
+                            Title = "Repository Not Cloned",
+                            Content = $"The repository '{repoName}' has not been cloned yet.\n\n" +
+                                     "Please clone the repository in Config > Git Repository before adding it as a link.",
+                            CloseButtonText = "OK",
+                            XamlRoot = _xamlRoot
+                        };
+                        _ = errorDialog.ShowAsync(); // Fire and forget - error dialogs are non-blocking UI feedback
+                        return null;
+                    }
                 }
             }
             
