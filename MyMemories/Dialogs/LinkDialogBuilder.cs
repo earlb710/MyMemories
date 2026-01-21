@@ -1300,7 +1300,7 @@ public class LinkDialogBuilder
                     }
                     else
                     {
-                        // Use the repository path/URL even if not cloned yet
+                        // Use the repository path/URL (as configured in git.json)
                         url = repoConfig.Path;
                     }
                 }
