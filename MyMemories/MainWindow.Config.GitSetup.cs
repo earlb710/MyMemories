@@ -378,15 +378,18 @@ public sealed partial class MainWindow
             pathChangeTimer?.Dispose();
             pathChangeTimer = new System.Threading.Timer(async _ =>
             {
-                var path = string.Empty;
-                var username = string.Empty;
+                string path = string.Empty;
+                string username = string.Empty;
                 
-                // Get current values from UI thread
-                await DispatcherQueue.TryEnqueue(() =>
+                // Get current values from UI thread using TaskCompletionSource
+                var tcs = new TaskCompletionSource<bool>();
+                DispatcherQueue.TryEnqueue(() =>
                 {
                     path = repoPathTextBox.Text;
                     username = usernameTextBox.Text;
+                    tcs.SetResult(true);
                 });
+                await tcs.Task;
                 
                 // Fetch branches if path is valid
                 if (!string.IsNullOrWhiteSpace(path))
