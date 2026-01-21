@@ -367,7 +367,40 @@ public sealed partial class MainWindow
         // Enable/disable buttons based on input
         repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
         repoNameComboBox.TextSubmitted += (s, args) => UpdateCloneButtonState();
-        repoPathTextBox.TextChanged += (s, args) => UpdateCloneButtonState();
+        // Add debouncing timer for path changes to avoid excessive branch fetching
+        System.Threading.Timer? pathChangeTimer = null;
+        
+        repoPathTextBox.TextChanged += (s, args) => 
+        {
+            UpdateCloneButtonState();
+            
+            // Debounce branch fetching - wait 1.5 seconds after user stops typing
+            pathChangeTimer?.Dispose();
+            pathChangeTimer = new System.Threading.Timer(async _ =>
+            {
+                var path = string.Empty;
+                var username = string.Empty;
+                
+                // Get current values from UI thread
+                await DispatcherQueue.TryEnqueue(() =>
+                {
+                    path = repoPathTextBox.Text;
+                    username = usernameTextBox.Text;
+                });
+                
+                // Fetch branches if path is valid
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    cloneStatusBanner.IsOpen = false;
+                    await FetchRemoteBranchesAsync(path, username, branchComboBox, cloneStatusBanner);
+                    DispatcherQueue.TryEnqueue(() => UpdateCloneButtonState());
+                }
+                
+                pathChangeTimer?.Dispose();
+                pathChangeTimer = null;
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        };
+        
         branchComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
 
         // Current status display
