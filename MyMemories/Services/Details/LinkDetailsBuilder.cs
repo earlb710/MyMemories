@@ -1421,7 +1421,7 @@ public class LinkDetailsBuilder
                         var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
                         try
                         {
-                            Commands.Fetch(repo, remote.Name, refSpecs, null, "");
+                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, "");
                         }
                         catch
                         {
@@ -1488,7 +1488,7 @@ public class LinkDetailsBuilder
                             var signature = new Signature("MyMemories", "mymemories@local", DateTimeOffset.Now);
                             var pullOptions = new PullOptions();
                             
-                            Commands.Pull(repo, signature, pullOptions);
+                            LibGit2Sharp.Commands.Pull(repo, signature, pullOptions);
 
                             pullButton.DispatcherQueue.TryEnqueue(() =>
                             {
