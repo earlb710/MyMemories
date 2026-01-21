@@ -208,6 +208,17 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(branchComboBox);
 
+        // Current Branch display (shown when repository is cloned)
+        var currentBranchTextBlock = new TextBlock
+        {
+            Text = string.Empty,
+            FontSize = 13,
+            Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkGreen),
+            Margin = new Thickness(0, 0, 0, 8),
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        stackPanel.Children.Add(currentBranchTextBlock);
+
         var fetchBranchesButton = new Button
         {
             Content = "Fetch Branches",
@@ -265,7 +276,7 @@ public sealed partial class MainWindow
                 ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
             }
 
-            // Update clone/pull button label and commit SHA display
+            // Update clone/pull button label, current branch display, and commit SHA display
             var selectedRepoName = repoNameComboBox.Text.Trim();
             if (!string.IsNullOrEmpty(selectedRepoName) && _gitConfigService != null)
             {
@@ -273,25 +284,56 @@ public sealed partial class MainWindow
                 if (repoConfig != null && repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
                 {
                     var selectedBranch = branchComboBox.SelectedItem as string;
-                    var currentBranch = repoConfig.SelectedBranch;
+                    var currentCheckedOutBranch = repoConfig.CurrentCheckedOutBranch;
 
-                    // Check if branch has changed or if we need to pull
-                    if (!string.IsNullOrEmpty(selectedBranch) && selectedBranch != currentBranch)
+                    // Display current branch and commit SHA
+                    if (!string.IsNullOrEmpty(currentCheckedOutBranch))
+                    {
+                        var commitSha = GetCurrentCommitSha(repoConfig.LocalClonePath);
+                        if (!string.IsNullOrEmpty(commitSha))
+                        {
+                            currentBranchTextBlock.Text = $"Current Branch: {currentCheckedOutBranch} ({commitSha})";
+                        }
+                        else if (!string.IsNullOrEmpty(repoConfig.CurrentBranchCommit))
+                        {
+                            currentBranchTextBlock.Text = $"Current Branch: {currentCheckedOutBranch} ({repoConfig.CurrentBranchCommit})";
+                        }
+                        else
+                        {
+                            currentBranchTextBlock.Text = $"Current Branch: {currentCheckedOutBranch}";
+                        }
+                    }
+                    else
+                    {
+                        currentBranchTextBlock.Text = string.Empty;
+                    }
+
+                    // Only enable pull button if selected branch is different from current checked-out branch
+                    if (!string.IsNullOrEmpty(selectedBranch) && !string.IsNullOrEmpty(currentCheckedOutBranch) && selectedBranch != currentCheckedOutBranch)
                     {
                         cloneButton.Content = "Pull Changes";
                         ToolTipService.SetToolTip(cloneButton, $"Pull changes from branch '{selectedBranch}'");
+                        cloneButton.IsEnabled = true;
+                    }
+                    else if (!string.IsNullOrEmpty(selectedBranch) && selectedBranch == currentCheckedOutBranch)
+                    {
+                        // Same branch selected as current - disable pull button
+                        cloneButton.Content = "Pull Changes";
+                        ToolTipService.SetToolTip(cloneButton, "Already on this branch");
+                        cloneButton.IsEnabled = false;
                     }
                     else
                     {
                         cloneButton.Content = "Pull Changes";
-                        ToolTipService.SetToolTip(cloneButton, "Pull latest changes from remote repository");
+                        ToolTipService.SetToolTip(cloneButton, "Select a different branch to pull");
+                        cloneButton.IsEnabled = false;
                     }
 
-                    // Display commit SHA
-                    var commitSha = GetCurrentCommitSha(repoConfig.LocalClonePath);
-                    if (!string.IsNullOrEmpty(commitSha))
+                    // Display commit SHA below button
+                    var commitShaForDisplay = GetCurrentCommitSha(repoConfig.LocalClonePath);
+                    if (!string.IsNullOrEmpty(commitShaForDisplay))
                     {
-                        commitShaTextBlock.Text = $"Current commit: {commitSha}";
+                        commitShaTextBlock.Text = $"Current commit: {commitShaForDisplay}";
                     }
                     else if (!string.IsNullOrEmpty(repoConfig.CurrentBranchCommit))
                     {
@@ -306,13 +348,18 @@ public sealed partial class MainWindow
                 {
                     cloneButton.Content = "Clone Repository";
                     ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
+                    currentBranchTextBlock.Text = string.Empty;
                     commitShaTextBlock.Text = string.Empty;
+                    cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && 
+                                           !string.IsNullOrWhiteSpace(repoPathTextBox.Text) &&
+                                           branchComboBox.SelectedItem != null;
                 }
             }
             else
             {
                 cloneButton.Content = "Clone Repository";
                 ToolTipService.SetToolTip(cloneButton, "Clone the repository to local git directory");
+                currentBranchTextBlock.Text = string.Empty;
                 commitShaTextBlock.Text = string.Empty;
             }
         }
@@ -913,6 +960,7 @@ public sealed partial class MainWindow
                             repoConfig.IsCloned = true;
                             repoConfig.LocalClonePath = repoDirectory;
                             repoConfig.SelectedBranch = defaultBranch;
+                            repoConfig.CurrentCheckedOutBranch = defaultBranch; // Set current checked-out branch
                             
                             // Get and store the current commit SHA
                             try
@@ -1256,6 +1304,7 @@ public sealed partial class MainWindow
                             {
                                 repoConfig.CurrentBranchCommit = repo.Head?.Tip?.Sha?.Substring(0, 8) ?? string.Empty;
                                 repoConfig.SelectedBranch = branch;
+                                repoConfig.CurrentCheckedOutBranch = branch; // Update current checked-out branch after pull
                                 _gitConfigService.AddOrUpdateRepository(repoName, repoConfig);
                                 Task.Run(async () => await _gitConfigService.SaveAsync()).Wait();
                             }

@@ -221,4 +221,10 @@ public class GitRepositoryConfig
     /// Current branch commit SHA (latest commit on the current branch).
     /// </summary>
     public string CurrentBranchCommit { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Currently checked-out branch in the local clone.
+    /// This is the actual branch the repository is on, updated after pull/clone operations.
+    /// </summary>
+    public string CurrentCheckedOutBranch { get; set; } = string.Empty;
 }
