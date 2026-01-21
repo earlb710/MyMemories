@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -80,14 +81,20 @@ public class GitConfigService
     /// <summary>
     /// Get all configured repositories.
     /// </summary>
-    public Dictionary<string, GitRepositoryConfig> Repositories => _gitConfig.Repositories;
+    public List<GitRepositoryConfig> Repositories => _gitConfig.Repositories;
 
     /// <summary>
     /// Add or update a repository.
     /// </summary>
     public void AddOrUpdateRepository(string name, GitRepositoryConfig config)
     {
-        _gitConfig.Repositories[name] = config;
+        config.Name = name;
+        var existing = _gitConfig.Repositories.FirstOrDefault(r => r.Name == name);
+        if (existing != null)
+        {
+            _gitConfig.Repositories.Remove(existing);
+        }
+        _gitConfig.Repositories.Add(config);
     }
 
     /// <summary>
@@ -95,7 +102,13 @@ public class GitConfigService
     /// </summary>
     public bool RemoveRepository(string name)
     {
-        return _gitConfig.Repositories.Remove(name);
+        var repo = _gitConfig.Repositories.FirstOrDefault(r => r.Name == name);
+        if (repo != null)
+        {
+            _gitConfig.Repositories.Remove(repo);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -103,7 +116,7 @@ public class GitConfigService
     /// </summary>
     public GitRepositoryConfig? GetRepository(string name)
     {
-        return _gitConfig.Repositories.TryGetValue(name, out var config) ? config : null;
+        return _gitConfig.Repositories.FirstOrDefault(r => r.Name == name);
     }
 }
 
@@ -112,7 +125,7 @@ public class GitConfigService
 /// </summary>
 public class GitConfiguration
 {
-    public Dictionary<string, GitRepositoryConfig> Repositories { get; set; } = new();
+    public List<GitRepositoryConfig> Repositories { get; set; } = new();
 }
 
 /// <summary>
@@ -120,6 +133,11 @@ public class GitConfiguration
 /// </summary>
 public class GitRepositoryConfig
 {
+    /// <summary>
+    /// Repository name.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
     /// <summary>
     /// Repository path or URL.
     /// </summary>

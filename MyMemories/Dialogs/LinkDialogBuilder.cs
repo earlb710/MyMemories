@@ -271,9 +271,9 @@ public class LinkDialogBuilder
         // Load Git repositories from configuration
         if (_gitConfigService?.Repositories != null)
         {
-            foreach (var repoName in _gitConfigService.Repositories.Keys)
+            foreach (var repo in _gitConfigService.Repositories)
             {
-                gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+                gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repo.Name, Tag = repo.Name });
             }
         }
         
@@ -337,9 +337,9 @@ public class LinkDialogBuilder
                 gitRepoComboBox.Items.Clear();
                 if (_gitConfigService?.Repositories != null)
                 {
-                    foreach (var repoName in _gitConfigService.Repositories.Keys)
+                    foreach (var repo in _gitConfigService.Repositories)
                     {
-                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repo.Name, Tag = repo.Name });
                     }
                     
                     // Try to reselect the previously selected repository
@@ -377,9 +377,9 @@ public class LinkDialogBuilder
                 gitRepoComboBox.Items.Clear();
                 if (_gitConfigService?.Repositories != null)
                 {
-                    foreach (var repoName in _gitConfigService.Repositories.Keys)
+                    foreach (var repo in _gitConfigService.Repositories)
                     {
-                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
+                        gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repo.Name, Tag = repo.Name });
                     }
                     
                     // Try to reselect the previously selected repository
@@ -1280,7 +1280,8 @@ public class LinkDialogBuilder
             if (controls.GitRepoComboBox?.SelectedItem is ComboBoxItem gitRepoItem &&
                 gitRepoItem.Tag is string repoName)
             {
-                if (_gitConfigService?.Repositories?.TryGetValue(repoName, out var repoConfig) == true)
+                var repoConfig = _gitConfigService?.GetRepository(repoName);
+                if (repoConfig != null)
                 {
                     url = $"git://{repoName}"; // Use git:// scheme to identify Git links
                     // Note: Description is kept as user-entered, repository info can be looked up from git:// URL

@@ -74,9 +74,9 @@ public sealed partial class MainWindow
         // Load existing repository names
         if (_gitConfigService?.Repositories != null)
         {
-            foreach (var repoName in _gitConfigService.Repositories.Keys)
+            foreach (var repo in _gitConfigService.Repositories)
             {
-                repoNameComboBox.Items.Add(repoName);
+                repoNameComboBox.Items.Add(repo.Name);
             }
             if (repoNameComboBox.Items.Count > 0)
             {
@@ -275,24 +275,26 @@ public sealed partial class MainWindow
         // Event handler for repository selection change
         repoNameComboBox.SelectionChanged += (s, args) =>
         {
-            if (repoNameComboBox.SelectedItem is string selectedName &&
-                _gitConfigService?.Repositories?.TryGetValue(selectedName, out var repoConfig) == true)
+            if (repoNameComboBox.SelectedItem is string selectedName)
             {
-                repoPathTextBox.Text = repoConfig.Path;
-                usernameTextBox.Text = repoConfig.Username;
-                
-                // Load available branches if they were fetched
-                branchComboBox.Items.Clear();
-                if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
+                var repoConfig = _gitConfigService?.GetRepository(selectedName);
+                if (repoConfig != null)
                 {
-                    foreach (var branch in repoConfig.AvailableBranches)
-                    {
-                        branchComboBox.Items.Add(branch);
-                    }
+                    repoPathTextBox.Text = repoConfig.Path;
+                    usernameTextBox.Text = repoConfig.Username;
                     
-                    // Select the previously selected branch if available
-                    if (!string.IsNullOrEmpty(repoConfig.SelectedBranch) && 
-                        branchComboBox.Items.Contains(repoConfig.SelectedBranch))
+                    // Load available branches if they were fetched
+                    branchComboBox.Items.Clear();
+                    if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
+                    {
+                        foreach (var branch in repoConfig.AvailableBranches)
+                        {
+                            branchComboBox.Items.Add(branch);
+                        }
+                        
+                        // Select the previously selected branch if available
+                        if (!string.IsNullOrEmpty(repoConfig.SelectedBranch) && 
+                            branchComboBox.Items.Contains(repoConfig.SelectedBranch))
                     {
                         branchComboBox.SelectedItem = repoConfig.SelectedBranch;
                     }
@@ -724,11 +726,16 @@ public sealed partial class MainWindow
                     Repository.Clone(repoUrl, repoDirectory, cloneOptions);
 
                     // Update configuration
-                    if (_gitConfigService != null && _gitConfigService.Repositories.ContainsKey(repoName))
+                    if (_gitConfigService != null)
                     {
-                        _gitConfigService.Repositories[repoName].IsCloned = true;
-                        _gitConfigService.Repositories[repoName].LocalClonePath = repoDirectory;
-                        await _gitConfigService.SaveAsync();
+                        var repoConfig = _gitConfigService.GetRepository(repoName);
+                        if (repoConfig != null)
+                        {
+                            repoConfig.IsCloned = true;
+                            repoConfig.LocalClonePath = repoDirectory;
+                            _gitConfigService.AddOrUpdateRepository(repoName, repoConfig);
+                            await _gitConfigService.SaveAsync();
+                        }
                     }
 
                     DispatcherQueue.TryEnqueue(() =>
