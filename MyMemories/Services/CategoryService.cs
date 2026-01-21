@@ -834,8 +834,12 @@ public class CategoryService : ICategoryService
                     CatalogSortOrder = linkData.CatalogSortOrder,
                     UrlStatus = linkData.UrlStatus,
                     UrlLastChecked = linkData.UrlLastChecked,
-                    UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty
+                    UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty,
+                    Type = linkData.Type ?? LinkType.Unknown
                 };
+                
+                // Ensure link type is set (for backward compatibility with old data)
+                linkItem.EnsureLinkType();
                 
                 // Copy TagIds if present
                 if (linkData.TagIds != null && linkData.TagIds.Count > 0)

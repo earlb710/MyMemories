@@ -159,7 +159,8 @@ public sealed partial class MainWindow
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
                     FolderType = result.FolderType,
-                    FileFilters = result.FileFilters
+                    FileFilters = result.FileFilters,
+                    Type = result.LinkType
                 }
             };
 
@@ -205,6 +206,7 @@ public sealed partial class MainWindow
             link.ModifiedDate = DateTime.Now;
             link.FolderType = editResult.FolderType;
             link.FileFilters = editResult.FileFilters;
+            link.Type = editResult.LinkType;
 
             var newNode = _treeViewService!.RefreshLinkNode(node, link);
 

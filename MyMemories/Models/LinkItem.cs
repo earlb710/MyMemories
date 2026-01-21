@@ -107,6 +107,12 @@ public class LinkItem : INotifyPropertyChanged
     public string CategoryPath { get; set; } = string.Empty;
     public DateTime CreatedDate { get; set; } = DateTime.Now;
     public DateTime ModifiedDate { get; set; } = DateTime.Now;
+    
+    /// <summary>
+    /// Type of link (URL, File, Folder, Git). If Unknown, it will be guessed based on URL and IsDirectory.
+    /// </summary>
+    public LinkType Type { get; set; } = LinkType.Unknown;
+    
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
     public bool IsCatalogEntry { get; set; }
@@ -652,6 +658,30 @@ public class LinkItem : INotifyPropertyChanged
     public string GetIcon()
     {
         return GetIconWithoutBadge();
+    }
+    
+    /// <summary>
+    /// Guesses the link type based on URL and IsDirectory if Type is Unknown.
+    /// This method should be called after loading from JSON for backward compatibility.
+    /// </summary>
+    public void EnsureLinkType()
+    {
+        if (Type != LinkType.Unknown)
+            return;
+            
+        // Guess the type based on existing properties
+        if (IsDirectory)
+        {
+            Type = LinkType.Folder;
+        }
+        else if (Uri.TryCreate(Url, UriKind.Absolute, out var uri) && !uri.IsFile)
+        {
+            Type = LinkType.URL;
+        }
+        else if (!string.IsNullOrEmpty(Url))
+        {
+            Type = LinkType.File;
+        }
     }
 
     public void NotifyTagsChanged()

@@ -157,6 +157,12 @@ public class LinkData
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? UrlStatusMessage { get; set; }
+    
+    /// <summary>
+    /// Type of link (URL, File, Folder, Git). If not specified, will be guessed on load.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public LinkType? Type { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<LinkData>? CatalogEntries { get; set; }

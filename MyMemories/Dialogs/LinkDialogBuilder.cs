@@ -1386,7 +1386,15 @@ public class LinkDialogBuilder
             IsDirectory = isDirectory,
             CategoryNode = targetCategory,
             FolderType = folderType,
-            FileFilters = fileFilters
+            FileFilters = fileFilters,
+            LinkType = linkType switch
+            {
+                "URL" => LinkType.URL,
+                "File" => LinkType.File,
+                "Folder" => LinkType.Folder,
+                "Git" => LinkType.Git,
+                _ => LinkType.Unknown
+            }
         };
     }
 
@@ -1418,6 +1426,21 @@ public class LinkDialogBuilder
             }
         }
 
+        // Determine link type based on URL and IsDirectory
+        LinkType linkType;
+        if (isDirectory)
+        {
+            linkType = LinkType.Folder;
+        }
+        else if (Uri.TryCreate(newUrl, UriKind.Absolute, out var uri) && !uri.IsFile)
+        {
+            linkType = LinkType.URL;
+        }
+        else
+        {
+            linkType = LinkType.File;
+        }
+
         return new LinkEditResult
         {
             Title = newTitle,
@@ -1426,7 +1449,8 @@ public class LinkDialogBuilder
             Keywords = newKeywords,
             IsDirectory = isDirectory,
             FolderType = folderType,
-            FileFilters = fileFilters
+            FileFilters = fileFilters,
+            LinkType = linkType
         };
     }
 

@@ -15,6 +15,7 @@ public class AddLinkResult
     public TreeViewNode? CategoryNode { get; set; }
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
+    public LinkType LinkType { get; set; } = LinkType.Unknown;
 }
 
 /// <summary>
@@ -29,6 +30,7 @@ public class LinkEditResult
     public bool IsDirectory { get; set; }
     public FolderLinkType FolderType { get; set; } = FolderLinkType.LinkOnly;
     public string FileFilters { get; set; } = string.Empty;
+    public LinkType LinkType { get; set; } = LinkType.Unknown;
 }
 
 /// <summary>
