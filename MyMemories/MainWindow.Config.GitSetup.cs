@@ -315,6 +315,7 @@ public sealed partial class MainWindow
                     }
                 }
                 cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
+                }
             }
             else
             {
