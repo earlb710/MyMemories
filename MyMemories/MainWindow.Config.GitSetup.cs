@@ -1151,7 +1151,7 @@ public sealed partial class MainWindow
 
                             if (localBranch != null)
                             {
-                                Commands.Checkout(repo, localBranch);
+                                LibGit2Sharp.Commands.Checkout(repo, localBranch);
                             }
                         }
                         catch (Exception ex)
@@ -1191,7 +1191,7 @@ public sealed partial class MainWindow
                     // Pull changes
                     try
                     {
-                        var result = Commands.Pull(repo, signature, pullOptions);
+                        var result = LibGit2Sharp.Commands.Pull(repo, signature, pullOptions);
 
                         // Update commit SHA in config
                         if (_gitConfigService != null)
