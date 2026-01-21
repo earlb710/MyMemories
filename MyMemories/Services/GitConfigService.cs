@@ -42,7 +42,33 @@ public class GitConfigService
                     PropertyNameCaseInsensitive = true,
                     WriteIndented = true
                 };
-                _gitConfig = JsonSerializer.Deserialize<GitConfiguration>(json, options) ?? new GitConfiguration();
+                
+                // Try to deserialize as new array format first
+                try
+                {
+                    _gitConfig = JsonSerializer.Deserialize<GitConfiguration>(json, options) ?? new GitConfiguration();
+                }
+                catch (JsonException)
+                {
+                    // If that fails, try to migrate from old dictionary format
+                    var oldConfig = JsonSerializer.Deserialize<OldGitConfiguration>(json, options);
+                    if (oldConfig?.Repositories != null)
+                    {
+                        _gitConfig = new GitConfiguration();
+                        foreach (var kvp in oldConfig.Repositories)
+                        {
+                            var config = kvp.Value;
+                            config.Name = kvp.Key;
+                            _gitConfig.Repositories.Add(config);
+                        }
+                        // Save the migrated configuration in the new format
+                        await SaveAsync();
+                    }
+                    else
+                    {
+                        _gitConfig = new GitConfiguration();
+                    }
+                }
             }
             catch (Exception)
             {
@@ -126,6 +152,14 @@ public class GitConfigService
 public class GitConfiguration
 {
     public List<GitRepositoryConfig> Repositories { get; set; } = new();
+}
+
+/// <summary>
+/// Old Git configuration format (dictionary-based) for migration.
+/// </summary>
+internal class OldGitConfiguration
+{
+    public Dictionary<string, GitRepositoryConfig> Repositories { get; set; } = new();
 }
 
 /// <summary>
