@@ -283,7 +283,8 @@ public sealed partial class MainWindow
                 var repoConfig = _gitConfigService.GetRepository(selectedRepoName);
                 if (repoConfig != null && repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
                 {
-                    var selectedBranch = branchComboBox.SelectedItem as string;
+                    var selectedBranchDisplay = branchComboBox.SelectedItem as string;
+                    var selectedBranch = ExtractBranchName(selectedBranchDisplay); // Extract branch name without SHA
                     var currentCheckedOutBranch = repoConfig.CurrentCheckedOutBranch;
 
                     // Display current branch and commit SHA
@@ -604,7 +605,8 @@ public sealed partial class MainWindow
             var repoPath = repoPathTextBox.Text.Trim();
             var username = usernameTextBox.Text.Trim();
             var password = passwordBox.Password.Trim();
-            var selectedBranch = branchComboBox.SelectedItem as string;
+            var selectedBranchDisplay = branchComboBox.SelectedItem as string;
+            var selectedBranch = ExtractBranchName(selectedBranchDisplay); // Extract branch name without SHA
 
             if (string.IsNullOrEmpty(repoName))
             {
@@ -644,8 +646,8 @@ public sealed partial class MainWindow
                 repoConfig.Password = password;
                 if (repoConfig.AvailableBranches.Count > 0)
                 {
-                    // Save available branches
-                    repoConfig.AvailableBranches = branchComboBox.Items.Cast<string>().ToList();
+                    // Save available branches (extract branch names without SHA)
+                    repoConfig.AvailableBranches = branchComboBox.Items.Cast<string>().Select(b => ExtractBranchName(b)).ToList();
                 }
                 
                 _gitConfigService?.AddOrUpdateRepository(repoName, repoConfig);
@@ -699,7 +701,10 @@ public sealed partial class MainWindow
                 var repoPath = repoPathTextBox.Text.Trim();
                 var username = usernameTextBox.Text.Trim();
                 var password = passwordBox.Password.Trim();
-                var selectedBranch = branchComboBox.SelectedItem as string;
+                var selectedBranchDisplay = branchComboBox.SelectedItem as string;
+                
+                // Extract branch name without SHA
+                var selectedBranch = ExtractBranchName(selectedBranchDisplay);
                 
                 if (string.IsNullOrEmpty(selectedBranch))
                 {
@@ -731,13 +736,13 @@ public sealed partial class MainWindow
                 
                 if (isConnected && _gitConfigService != null)
                 {
-                    // Get all fetched branches from the ComboBox
+                    // Get all fetched branches from the ComboBox (extract branch names without SHA)
                     var availableBranches = new List<string>();
                     foreach (var item in branchComboBox.Items)
                     {
-                        if (item is string branch)
+                        if (item is string branchDisplay)
                         {
-                            availableBranches.Add(branch);
+                            availableBranches.Add(ExtractBranchName(branchDisplay));
                         }
                     }
                     
@@ -1024,6 +1029,7 @@ public sealed partial class MainWindow
                 });
 
                 var branches = new List<string>();
+                var branchDisplayTexts = new List<string>(); // Display text with SHA
 
                 // For local repositories
                 if (Directory.Exists(repoUrl) && Repository.IsValid(repoUrl))
@@ -1034,6 +1040,8 @@ public sealed partial class MainWindow
                         if (!branch.IsRemote)
                         {
                             branches.Add(branch.FriendlyName);
+                            var commitSha = branch.Tip?.Sha?.Substring(0, 8) ?? "unknown";
+                            branchDisplayTexts.Add($"{branch.FriendlyName} ({commitSha})");
                         }
                     }
                 }
@@ -1051,6 +1059,8 @@ public sealed partial class MainWindow
                             {
                                 var branchName = reference.CanonicalName.Substring("refs/heads/".Length);
                                 branches.Add(branchName);
+                                var commitSha = reference.TargetIdentifier?.Substring(0, 8) ?? "unknown";
+                                branchDisplayTexts.Add($"{branchName} ({commitSha})");
                             }
                         }
                     }
@@ -1076,13 +1086,13 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                // Update UI with branches
+                // Update UI with branches (display with SHA)
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     branchComboBox.Items.Clear();
-                    foreach (var branch in branches)
+                    foreach (var displayText in branchDisplayTexts)
                     {
-                        branchComboBox.Items.Add(branch);
+                        branchComboBox.Items.Add(displayText);
                     }
 
                     if (branches.Count > 0)
@@ -1340,5 +1350,23 @@ public sealed partial class MainWindow
                 });
             }
         });
+    }
+
+    /// <summary>
+    /// Extracts the branch name from a display text that may contain commit SHA in format "branchName (commitSHA)"
+    /// </summary>
+    private string ExtractBranchName(string displayText)
+    {
+        if (string.IsNullOrEmpty(displayText))
+            return displayText;
+
+        // Check if the text contains " (" which indicates SHA is appended
+        var parenIndex = displayText.LastIndexOf(" (");
+        if (parenIndex > 0 && displayText.EndsWith(")"))
+        {
+            return displayText.Substring(0, parenIndex);
+        }
+
+        return displayText;
     }
 }
