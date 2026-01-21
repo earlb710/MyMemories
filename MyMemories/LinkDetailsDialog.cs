@@ -19,10 +19,10 @@ public class LinkDetailsDialog
     private readonly CategoryDialogBuilder _categoryDialogBuilder;
     private readonly ZipDialogBuilder _zipDialogBuilder;
 
-    public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
+    public LinkDetailsDialog(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null, GitConfigService? gitConfigService = null)
     {
         _detailsViewer = new LinkDetailsViewer(xamlRoot);
-        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot, configService);
+        _linkDialogBuilder = new LinkDialogBuilder(parentWindow, xamlRoot, configService, gitConfigService);
         _categoryDialogBuilder = new CategoryDialogBuilder(xamlRoot, configService);
         _zipDialogBuilder = new ZipDialogBuilder(parentWindow, xamlRoot);
     }

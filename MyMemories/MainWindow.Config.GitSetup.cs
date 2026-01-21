@@ -12,10 +12,19 @@ namespace MyMemories;
 
 public sealed partial class MainWindow
 {
+    private GitConfigService? _gitConfigService;
+    
     private async Task ShowGitSetupDialogAsync()
     {
         // Initialize folder picker service if needed
         _folderPickerService ??= new FolderPickerService(this);
+        
+        // Initialize git config service if needed
+        if (_gitConfigService == null)
+        {
+            _gitConfigService = new GitConfigService();
+            await _gitConfigService.LoadAsync();
+        }
 
         // Create UI for Git repository setup
         var stackPanel = new StackPanel { Spacing = 16 };
@@ -63,9 +72,9 @@ public sealed partial class MainWindow
         };
 
         // Load existing repository names
-        if (_configService?.GitRepositories != null)
+        if (_gitConfigService?.Repositories != null)
         {
-            foreach (var repoName in _configService.GitRepositories.Keys)
+            foreach (var repoName in _gitConfigService.Repositories.Keys)
             {
                 repoNameComboBox.Items.Add(repoName);
             }
@@ -253,10 +262,10 @@ public sealed partial class MainWindow
 
         var statusTextBlock = new TextBlock
         {
-            Text = _configService?.GitRepositories?.Count > 0
-                ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+            Text = _gitConfigService?.Repositories?.Count > 0
+                ? $"{_gitConfigService.Repositories.Count} repository(ies) configured"
                 : "No repositories configured",
-            Foreground = _configService?.GitRepositories?.Count > 0
+            Foreground = _gitConfigService?.Repositories?.Count > 0
                 ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green)
                 : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
         };
@@ -267,16 +276,40 @@ public sealed partial class MainWindow
         repoNameComboBox.SelectionChanged += (s, args) =>
         {
             if (repoNameComboBox.SelectedItem is string selectedName &&
-                _configService?.GitRepositories?.TryGetValue(selectedName, out var repoInfo) == true)
+                _gitConfigService?.Repositories?.TryGetValue(selectedName, out var repoConfig) == true)
             {
-                repoPathTextBox.Text = repoInfo.Path;
-                usernameTextBox.Text = repoInfo.Username;
+                repoPathTextBox.Text = repoConfig.Path;
+                usernameTextBox.Text = repoConfig.Username;
                 
-                // Set branch if available
+                // Load available branches if they were fetched
                 branchComboBox.Items.Clear();
-                if (!string.IsNullOrEmpty(repoInfo.DefaultBranch))
+                if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
                 {
-                    branchComboBox.Items.Add(repoInfo.DefaultBranch);
+                    foreach (var branch in repoConfig.AvailableBranches)
+                    {
+                        branchComboBox.Items.Add(branch);
+                    }
+                    
+                    // Select the previously selected branch if available
+                    if (!string.IsNullOrEmpty(repoConfig.SelectedBranch) && 
+                        branchComboBox.Items.Contains(repoConfig.SelectedBranch))
+                    {
+                        branchComboBox.SelectedItem = repoConfig.SelectedBranch;
+                    }
+                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch) &&
+                             branchComboBox.Items.Contains(repoConfig.DefaultBranch))
+                    {
+                        branchComboBox.SelectedItem = repoConfig.DefaultBranch;
+                    }
+                    else if (branchComboBox.Items.Count > 0)
+                    {
+                        branchComboBox.SelectedIndex = 0;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch))
+                {
+                    // If no branches fetched yet, show default branch
+                    branchComboBox.Items.Add(repoConfig.DefaultBranch);
                     branchComboBox.SelectedIndex = 0;
                 }
                 cloneButton.IsEnabled = !string.IsNullOrEmpty(repoInfo.Path) && branchComboBox.SelectedItem != null;
@@ -334,10 +367,10 @@ public sealed partial class MainWindow
             var result = await confirmDialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
-                if (_configService?.GitRepositories != null)
+                if (_gitConfigService?.Repositories != null)
                 {
-                    _configService.GitRepositories.Remove(selectedName);
-                    await _configService.SaveConfigurationAsync();
+                    _gitConfigService.RemoveRepository(selectedName);
+                    await _gitConfigService.SaveAsync();
 
                     repoNameComboBox.Items.Remove(selectedName);
                     if (repoNameComboBox.Items.Count > 0)
@@ -352,8 +385,8 @@ public sealed partial class MainWindow
                         removeButton.IsEnabled = false;
                     }
 
-                    statusTextBlock.Text = _configService.GitRepositories.Count > 0
-                        ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                    statusTextBlock.Text = _gitConfigService.Repositories.Count > 0
+                        ? $"{_gitConfigService.Repositories.Count} repository(ies) configured"
                         : "No repositories configured";
 
                     statusBanner.Title = "Repository Removed";
@@ -464,33 +497,48 @@ public sealed partial class MainWindow
                 // Validate and save configuration
                 var isConnected = await ValidateAndConnectGitRepositoryAsync(repoPath, username, statusBanner);
                 
-                if (isConnected && _configService != null)
+                if (isConnected && _gitConfigService != null)
                 {
+                    // Get all fetched branches from the ComboBox
+                    var availableBranches = new List<string>();
+                    foreach (var item in branchComboBox.Items)
+                    {
+                        if (item is string branch)
+                        {
+                            availableBranches.Add(branch);
+                        }
+                    }
+                    
                     // Check if repository already exists to preserve clone info
-                    GitRepositoryInfo repoInfo;
-                    if (_configService.GitRepositories.TryGetValue(repoName, out var existingRepo))
+                    GitRepositoryConfig repoConfig;
+                    var existingRepo = _gitConfigService.GetRepository(repoName);
+                    if (existingRepo != null)
                     {
                         // Update existing repository, preserving clone status
-                        repoInfo = existingRepo;
-                        repoInfo.Path = repoPath;
-                        repoInfo.Username = username;
-                        repoInfo.Connected = true;
-                        repoInfo.DefaultBranch = selectedBranch;
+                        repoConfig = existingRepo;
+                        repoConfig.Path = repoPath;
+                        repoConfig.Username = username;
+                        repoConfig.Connected = true;
+                        repoConfig.DefaultBranch = selectedBranch;
+                        repoConfig.SelectedBranch = selectedBranch;
+                        repoConfig.AvailableBranches = availableBranches;
                     }
                     else
                     {
                         // Create new repository
-                        repoInfo = new GitRepositoryInfo
+                        repoConfig = new GitRepositoryConfig
                         {
                             Path = repoPath,
                             Username = username,
                             Connected = true,
-                            DefaultBranch = selectedBranch
+                            DefaultBranch = selectedBranch,
+                            SelectedBranch = selectedBranch,
+                            AvailableBranches = availableBranches
                         };
                     }
                     
-                    _configService.GitRepositories[repoName] = repoInfo;
-                    await _configService.SaveConfigurationAsync();
+                    _gitConfigService.AddOrUpdateRepository(repoName, repoConfig);
+                    await _gitConfigService.SaveAsync();
 
                     // Add to ComboBox if it's a new repository
                     if (!repoNameComboBox.Items.Contains(repoName))
@@ -501,8 +549,8 @@ public sealed partial class MainWindow
                     removeButton.IsEnabled = true;
 
                     // Update status display
-                    statusTextBlock.Text = _configService.GitRepositories.Count > 0
-                        ? $"{_configService.GitRepositories.Count} repository(ies) configured"
+                    statusTextBlock.Text = _gitConfigService.Repositories.Count > 0
+                        ? $"{_gitConfigService.Repositories.Count} repository(ies) configured"
                         : "No repositories configured";
                     statusTextBlock.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Green);
 
@@ -676,11 +724,11 @@ public sealed partial class MainWindow
                     Repository.Clone(repoUrl, repoDirectory, cloneOptions);
 
                     // Update configuration
-                    if (_configService != null && _configService.GitRepositories.ContainsKey(repoName))
+                    if (_gitConfigService != null && _gitConfigService.Repositories.ContainsKey(repoName))
                     {
-                        _configService.GitRepositories[repoName].IsCloned = true;
-                        _configService.GitRepositories[repoName].LocalClonePath = repoDirectory;
-                        await _configService.SaveConfigurationAsync();
+                        _gitConfigService.Repositories[repoName].IsCloned = true;
+                        _gitConfigService.Repositories[repoName].LocalClonePath = repoDirectory;
+                        await _gitConfigService.SaveAsync();
                     }
 
                     DispatcherQueue.TryEnqueue(() =>

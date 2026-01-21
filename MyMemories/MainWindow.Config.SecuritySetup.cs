@@ -359,7 +359,7 @@ public sealed partial class MainWindow
             // This ensures CategoryDialogBuilder has the updated ConfigurationService
             if (globalPasswordChanged && _linkDialog != null)
             {
-                _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+                _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
                 _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
             }
             

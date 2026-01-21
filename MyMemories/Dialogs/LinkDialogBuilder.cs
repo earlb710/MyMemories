@@ -25,17 +25,19 @@ public class LinkDialogBuilder
     private readonly FolderPickerService _folderPickerService;
     private readonly WebSummaryService _webSummaryService;
     private readonly ConfigurationService? _configService;
+    private readonly GitConfigService? _gitConfigService;
     private List<TreeViewNode>? _bookmarkLookupCategories;
     private CancellationTokenSource? _summarizeCts;
     private Func<Task>? _openGitConfigCallback;
 
-    public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null)
+    public LinkDialogBuilder(Window parentWindow, XamlRoot xamlRoot, ConfigurationService? configService = null, GitConfigService? gitConfigService = null)
     {
         _parentWindow = parentWindow;
         _xamlRoot = xamlRoot;
         _folderPickerService = new FolderPickerService(parentWindow);
         _webSummaryService = new WebSummaryService();
         _configService = configService;
+        _gitConfigService = gitConfigService;
     }
     
     /// <summary>
@@ -267,9 +269,9 @@ public class LinkDialogBuilder
         };
 
         // Load Git repositories from configuration
-        if (_configService?.GitRepositories != null)
+        if (_gitConfigService?.Repositories != null)
         {
-            foreach (var repoName in _configService.GitRepositories.Keys)
+            foreach (var repoName in _gitConfigService.Repositories.Keys)
             {
                 gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
             }
@@ -333,9 +335,9 @@ public class LinkDialogBuilder
                 var selectedName = selectedRepo?.Tag as string;
                 
                 gitRepoComboBox.Items.Clear();
-                if (_configService?.GitRepositories != null)
+                if (_gitConfigService?.Repositories != null)
                 {
-                    foreach (var repoName in _configService.GitRepositories.Keys)
+                    foreach (var repoName in _gitConfigService.Repositories.Keys)
                     {
                         gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
                     }
@@ -373,9 +375,9 @@ public class LinkDialogBuilder
                 var selectedName = selectedRepo?.Tag as string;
                 
                 gitRepoComboBox.Items.Clear();
-                if (_configService?.GitRepositories != null)
+                if (_gitConfigService?.Repositories != null)
                 {
-                    foreach (var repoName in _configService.GitRepositories.Keys)
+                    foreach (var repoName in _gitConfigService.Repositories.Keys)
                     {
                         gitRepoComboBox.Items.Add(new ComboBoxItem { Content = repoName, Tag = repoName });
                     }
@@ -1278,7 +1280,7 @@ public class LinkDialogBuilder
             if (controls.GitRepoComboBox?.SelectedItem is ComboBoxItem gitRepoItem &&
                 gitRepoItem.Tag is string repoName)
             {
-                if (_configService?.GitRepositories?.TryGetValue(repoName, out var repoInfo) == true)
+                if (_gitConfigService?.Repositories?.TryGetValue(repoName, out var repoConfig) == true)
                 {
                     url = $"git://{repoName}"; // Use git:// scheme to identify Git links
                     // Note: Description is kept as user-entered, repository info can be looked up from git:// URL

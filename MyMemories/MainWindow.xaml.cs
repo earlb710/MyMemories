@@ -184,7 +184,7 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             _detailsViewService.SetLineNumberCallbacks(ShowLineNumbers, HideLineNumbers, SetupScrollSynchronization);
             
             _treeViewService = new TreeViewService(LinksTreeView, this);
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
             
             // Set the Git config callback
             _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);

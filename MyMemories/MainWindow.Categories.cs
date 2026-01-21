@@ -17,7 +17,7 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
             _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
         
@@ -80,7 +80,7 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
             _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
         
@@ -159,7 +159,7 @@ public sealed partial class MainWindow
         // Ensure _linkDialog has the latest _configService reference
         if (_linkDialog != null && _configService != null)
         {
-            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService);
+            _linkDialog = new LinkDetailsDialog(this, Content.XamlRoot, _configService, _gitConfigService);
             _linkDialog.SetGitConfigCallback(ShowGitSetupDialogAsync);
         }
 
