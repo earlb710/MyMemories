@@ -308,10 +308,18 @@ public class LinkDialogBuilder
         gitRepoPanel.Children.Add(gitConfigButton);
         gitRepoPanel.Children.Add(gitEditButton);
         
-        // Update edit button visibility when selection changes
+        // Update edit button visibility and auto-populate title when selection changes
         gitRepoComboBox.SelectionChanged += (s, args) =>
         {
             gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
+            
+            // Auto-populate title with repository name when a git repository is selected
+            if (gitRepoComboBox.SelectedItem is ComboBoxItem selectedItem && 
+                selectedItem.Tag is string repoName &&
+                string.IsNullOrWhiteSpace(titleTextBox.Text))
+            {
+                titleTextBox.Text = repoName;
+            }
         };
         
         // Wrapper to hold the close action - will be set after dialog creation via controls object
@@ -1283,7 +1291,8 @@ public class LinkDialogBuilder
                 var repoConfig = _gitConfigService?.GetRepository(repoName);
                 if (repoConfig != null)
                 {
-                    // Check if repository is cloned and has a local path
+                    // Use the local clone path if available, otherwise use the repository path
+                    // Note: Cloning can be done from the button on the summary view
                     if (repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
                     {
                         // Use the local clone path as the URL so it's treated as a folder/directory catalog
@@ -1291,17 +1300,8 @@ public class LinkDialogBuilder
                     }
                     else
                     {
-                        // Repository not cloned yet - show error
-                        var errorDialog = new ContentDialog
-                        {
-                            Title = "Repository Not Cloned",
-                            Content = $"The repository '{repoName}' has not been cloned yet.\n\n" +
-                                     "Please clone the repository in Config > Git Repository before adding it as a link.",
-                            CloseButtonText = "OK",
-                            XamlRoot = _xamlRoot
-                        };
-                        _ = errorDialog.ShowAsync(); // Fire and forget - error dialogs are non-blocking UI feedback
-                        return null;
+                        // Use the repository path/URL even if not cloned yet
+                        url = repoConfig.Path;
                     }
                 }
             }
