@@ -219,14 +219,6 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(currentBranchTextBlock);
 
-        var fetchBranchesButton = new Button
-        {
-            Content = "Fetch Branches",
-            Margin = new Thickness(0, 0, 0, 16)
-        };
-        ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
-        stackPanel.Children.Add(fetchBranchesButton);
-
         // Clone/Pull button
         var cloneButton = new Button
         {
@@ -262,19 +254,6 @@ public sealed partial class MainWindow
             cloneButton.IsEnabled = !string.IsNullOrWhiteSpace(repoNameComboBox.Text) && 
                                    !string.IsNullOrWhiteSpace(repoPathTextBox.Text) &&
                                    branchComboBox.SelectedItem != null;
-            fetchBranchesButton.IsEnabled = !string.IsNullOrWhiteSpace(repoPathTextBox.Text);
-
-            // Update fetch branches button label
-            if (branchComboBox.Items.Count > 0)
-            {
-                fetchBranchesButton.Content = "Refresh Branches";
-                ToolTipService.SetToolTip(fetchBranchesButton, "Refresh available branches from repository");
-            }
-            else
-            {
-                fetchBranchesButton.Content = "Fetch Branches";
-                ToolTipService.SetToolTip(fetchBranchesButton, "Fetch available branches from repository");
-            }
 
             // Update clone/pull button label, current branch display, and commit SHA display
             var selectedRepoName = repoNameComboBox.Text.Trim();
@@ -391,21 +370,6 @@ public sealed partial class MainWindow
         repoPathTextBox.TextChanged += (s, args) => UpdateCloneButtonState();
         branchComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
 
-        // Fetch branches button click handler
-        fetchBranchesButton.Click += async (s, args) =>
-        {
-            var repoPath = repoPathTextBox.Text.Trim();
-            var username = usernameTextBox.Text.Trim();
-            
-            branchComboBox.Items.Clear();
-            cloneStatusBanner.IsOpen = false;
-            
-            await FetchRemoteBranchesAsync(repoPath, username, branchComboBox, cloneStatusBanner);
-            
-            // Update button state after fetching branches
-            UpdateCloneButtonState();
-        };
-
         // Current status display
         var currentStatusPanel = new StackPanel
         {
@@ -432,7 +396,7 @@ public sealed partial class MainWindow
         stackPanel.Children.Add(currentStatusPanel);
 
         // Event handler for repository selection change
-        repoNameComboBox.SelectionChanged += (s, args) =>
+        repoNameComboBox.SelectionChanged += async (s, args) =>
         {
             if (repoNameComboBox.SelectedItem is string selectedName)
             {
@@ -443,8 +407,10 @@ public sealed partial class MainWindow
                     usernameTextBox.Text = repoConfig.Username;
                     passwordBox.Password = repoConfig.Password;
                     
-                    // Load available branches if they were fetched
+                    // Clear branches first
                     branchComboBox.Items.Clear();
+                    
+                    // Load available branches if they were fetched
                     if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
                     {
                         foreach (var branch in repoConfig.AvailableBranches)
@@ -475,6 +441,13 @@ public sealed partial class MainWindow
                     }
                     }
                     
+                    // Automatically fetch branches from repository if path is valid
+                    if (!string.IsNullOrWhiteSpace(repoConfig.Path))
+                    {
+                        cloneStatusBanner.IsOpen = false;
+                        await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
+                    }
+                    
                     UpdateCloneButtonState();
                 }
                 else
@@ -498,7 +471,7 @@ public sealed partial class MainWindow
             }
         };
 
-        // Manually trigger field population for initially selected repository
+        // Manually trigger field population and branch fetching for initially selected repository
         if (repoNameComboBox.SelectedIndex >= 0 && repoNameComboBox.SelectedItem is string initialSelectedName)
         {
             var repoConfig = _gitConfigService?.GetRepository(initialSelectedName);
@@ -508,39 +481,20 @@ public sealed partial class MainWindow
                 usernameTextBox.Text = repoConfig.Username;
                 passwordBox.Password = repoConfig.Password;
                 
-                // Load available branches if they were fetched
-                branchComboBox.Items.Clear();
-                if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
+                // Automatically fetch branches from repository if path is valid
+                if (!string.IsNullOrWhiteSpace(repoConfig.Path))
                 {
-                    foreach (var branch in repoConfig.AvailableBranches)
+                    _ = Task.Run(async () =>
                     {
-                        branchComboBox.Items.Add(branch);
-                    }
-                    
-                    // Select the previously selected branch if available
-                    if (!string.IsNullOrEmpty(repoConfig.SelectedBranch) && 
-                        branchComboBox.Items.Contains(repoConfig.SelectedBranch))
-                    {
-                        branchComboBox.SelectedItem = repoConfig.SelectedBranch;
-                    }
-                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch) &&
-                             branchComboBox.Items.Contains(repoConfig.DefaultBranch))
-                    {
-                        branchComboBox.SelectedItem = repoConfig.DefaultBranch;
-                    }
-                    else if (branchComboBox.Items.Count > 0)
-                    {
-                        branchComboBox.SelectedIndex = 0;
-                    }
-                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch))
-                    {
-                        // If no branches fetched yet, show default branch
-                        branchComboBox.Items.Add(repoConfig.DefaultBranch);
-                        branchComboBox.SelectedIndex = 0;
-                    }
+                        cloneStatusBanner.IsOpen = false;
+                        await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
+                        DispatcherQueue.TryEnqueue(() => UpdateCloneButtonState());
+                    });
                 }
-                
-                UpdateCloneButtonState();
+                else
+                {
+                    UpdateCloneButtonState();
+                }
             }
         }
 
