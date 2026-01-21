@@ -62,9 +62,9 @@ public enum FolderLinkType
 /// </summary>
 public enum LinkType
 {
-    Unknown = 0,  // Not set or needs to be guessed
-    URL = 1,      // Web URL (http:// or https://)
-    File = 2,     // File path
-    Folder = 3,   // Directory/folder path
-    Git = 4       // Git repository
+    Unknown,  // Not set or needs to be guessed
+    URL,      // Web URL (http:// or https://)
+    File,     // File path
+    Folder,   // Directory/folder path
+    Git       // Git repository
 }
