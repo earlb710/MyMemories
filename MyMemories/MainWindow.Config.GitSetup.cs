@@ -541,17 +541,21 @@ public sealed partial class MainWindow
                 // Automatically fetch branches from repository if path is valid
                 if (!string.IsNullOrWhiteSpace(repoConfig.Path))
                 {
+                    // Fire and forget - fetch branches in background
                     _ = Task.Run(async () =>
                     {
-                        cloneStatusBanner.IsOpen = false;
-                        await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
-                        DispatcherQueue.TryEnqueue(() => UpdateCloneButtonState());
+                        try
+                        {
+                            await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
+                        }
+                        catch
+                        {
+                            // Silently ignore errors during startup fetch
+                        }
                     });
                 }
-                else
-                {
-                    UpdateCloneButtonState();
-                }
+                
+                UpdateCloneButtonState();
             }
         }
 
