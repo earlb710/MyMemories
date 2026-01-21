@@ -868,16 +868,12 @@ public sealed partial class MainWindow
                 // If directory already exists, delete it first
                 if (Directory.Exists(repoDirectory))
                 {
-                    try
-                    {
-                        Directory.Delete(repoDirectory, true);
-                    }
-                    catch (Exception ex)
+                    if (!TryDeleteDirectory(repoDirectory, out string deleteError))
                     {
                         DispatcherQueue.TryEnqueue(() =>
                         {
                             statusBanner.Title = "Error";
-                            statusBanner.Message = $"Failed to delete existing clone directory: {ex.Message}";
+                            statusBanner.Message = deleteError;
                             statusBanner.Severity = InfoBarSeverity.Error;
                         });
                         return;
@@ -1079,6 +1075,65 @@ public sealed partial class MainWindow
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         return string.Join("_", name.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries)).TrimEnd('.');
+    }
+
+    /// <summary>
+    /// Safely delete a directory by removing read-only attributes first.
+    /// </summary>
+    private bool TryDeleteDirectory(string directoryPath, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+        try
+        {
+            if (!Directory.Exists(directoryPath))
+                return true;
+
+            // Remove read-only attributes from all files
+            var directoryInfo = new DirectoryInfo(directoryPath);
+            foreach (var file in directoryInfo.GetFiles("*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    file.Attributes = FileAttributes.Normal;
+                }
+                catch
+                {
+                    // Ignore individual file attribute errors
+                }
+            }
+
+            // Remove read-only attribute from directories
+            foreach (var dir in directoryInfo.GetDirectories("*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    dir.Attributes = FileAttributes.Normal;
+                }
+                catch
+                {
+                    // Ignore individual directory attribute errors
+                }
+            }
+
+            // Now attempt to delete the directory
+            Directory.Delete(directoryPath, true);
+            return true;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            errorMessage = $"Access denied: {ex.Message}. The directory may be in use by another process. Please close any applications that may be accessing the repository and try again.";
+            return false;
+        }
+        catch (IOException ex)
+        {
+            errorMessage = $"I/O error: {ex.Message}. The directory may be in use. Please close any applications accessing the repository.";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to delete directory: {ex.Message}";
+            return false;
+        }
     }
 
     /// <summary>
