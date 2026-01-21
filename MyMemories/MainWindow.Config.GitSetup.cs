@@ -336,6 +336,51 @@ public sealed partial class MainWindow
             }
         };
 
+        // Manually trigger field population for initially selected repository
+        if (repoNameComboBox.SelectedIndex >= 0 && repoNameComboBox.SelectedItem is string initialSelectedName)
+        {
+            var repoConfig = _gitConfigService?.GetRepository(initialSelectedName);
+            if (repoConfig != null)
+            {
+                repoPathTextBox.Text = repoConfig.Path;
+                usernameTextBox.Text = repoConfig.Username;
+                
+                // Load available branches if they were fetched
+                branchComboBox.Items.Clear();
+                if (repoConfig.AvailableBranches != null && repoConfig.AvailableBranches.Count > 0)
+                {
+                    foreach (var branch in repoConfig.AvailableBranches)
+                    {
+                        branchComboBox.Items.Add(branch);
+                    }
+                    
+                    // Select the previously selected branch if available
+                    if (!string.IsNullOrEmpty(repoConfig.SelectedBranch) && 
+                        branchComboBox.Items.Contains(repoConfig.SelectedBranch))
+                    {
+                        branchComboBox.SelectedItem = repoConfig.SelectedBranch;
+                    }
+                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch) &&
+                             branchComboBox.Items.Contains(repoConfig.DefaultBranch))
+                    {
+                        branchComboBox.SelectedItem = repoConfig.DefaultBranch;
+                    }
+                    else if (branchComboBox.Items.Count > 0)
+                    {
+                        branchComboBox.SelectedIndex = 0;
+                    }
+                    else if (!string.IsNullOrEmpty(repoConfig.DefaultBranch))
+                    {
+                        // If no branches fetched yet, show default branch
+                        branchComboBox.Items.Add(repoConfig.DefaultBranch);
+                        branchComboBox.SelectedIndex = 0;
+                    }
+                }
+                
+                cloneButton.IsEnabled = !string.IsNullOrEmpty(repoConfig.Path) && branchComboBox.SelectedItem != null;
+            }
+        }
+
         // Add button click handler - clears all fields for new repository entry
         addButton.Click += (s, args) =>
         {
