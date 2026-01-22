@@ -1519,7 +1519,7 @@ public class LinkDetailsBuilder
                     }
                     else if (!string.IsNullOrEmpty(fetchError))
                     {
-                        // Fetch failed, show error but still try to compare with cached info
+                        // Fetch failed and no cached remote tracking info available
                         pullButton.DispatcherQueue.TryEnqueue(() =>
                         {
                             pullButton.IsEnabled = false;
