@@ -1093,7 +1093,7 @@ public sealed partial class MainWindow
                     // List remote references
                     try
                     {
-                        // Use credentials if provided, otherwise use DefaultCredentials
+                        // Use credentials if provided, otherwise allow anonymous access
                         var refs = !string.IsNullOrEmpty(username)
                             ? Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
                                 new UsernamePasswordCredentials
@@ -1101,7 +1101,12 @@ public sealed partial class MainWindow
                                     Username = username,
                                     Password = password ?? string.Empty
                                 })
-                            : Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) => new DefaultCredentials());
+                            : Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
+                                new UsernamePasswordCredentials
+                                {
+                                    Username = string.Empty,
+                                    Password = string.Empty
+                                });
                         foreach (var reference in refs)
                         {
                             // Only include branch references (heads)
