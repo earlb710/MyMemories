@@ -46,15 +46,6 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(infoBanner);
 
-        // Status banner (initially hidden)
-        var statusBanner = new InfoBar
-        {
-            IsOpen = false,
-            IsClosable = true,
-            Margin = new Thickness(0, 0, 0, 16)
-        };
-        stackPanel.Children.Add(statusBanner);
-
         // Repository Name ComboBox with + and - icons
         var repoNamePanel = new StackPanel
         {
@@ -147,6 +138,14 @@ public sealed partial class MainWindow
         };
         ToolTipService.SetToolTip(testConnectionButton, "Test if repository is valid");
 
+        // Status banner (initially hidden) - positioned below Test Connection button
+        var statusBanner = new InfoBar
+        {
+            IsOpen = false,
+            IsClosable = true,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
         browseRepoButton.Click += (s, args) =>
         {
             var selectedPath = _folderPickerService?.BrowseForFolder(repoPathTextBox.Text, "Select Git Repository");
@@ -164,6 +163,7 @@ public sealed partial class MainWindow
         repoButtonPanel.Children.Add(browseRepoButton);
         repoButtonPanel.Children.Add(testConnectionButton);
         stackPanel.Children.Add(repoButtonPanel);
+        stackPanel.Children.Add(statusBanner);
 
         // Username (optional for remote repos)
         stackPanel.Children.Add(new TextBlock
