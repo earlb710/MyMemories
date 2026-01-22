@@ -1114,33 +1114,32 @@ public sealed partial class MainWindow
 
             foreach (var categoryNode in categories)
             {
-                if (categoryNode.Tag is not LinkItem categoryItem)
+                if (categoryNode.Content is not CategoryItem categoryItem)
                     continue;
 
-                var categoryData = await _categoryService.LoadCategoryAsync(categoryItem.Title);
-                if (categoryData?.Links == null)
+                if (categoryItem.Links == null || categoryItem.Links.Count == 0)
                     continue;
 
                 bool categoryModified = false;
 
                 // Check all links in this category
-                foreach (var linkData in categoryData.Links)
+                foreach (var linkItem in categoryItem.Links)
                 {
                     // Check if this is a Git link pointing to the repository we just cloned
                     // Match by URL (exact match or normalized comparison) to avoid false positives
-                    if (linkData.Type == LinkType.Git)
+                    if (linkItem.Type == LinkType.Git)
                     {
                         bool isMatch = false;
                         
                         // Primary match: exact URL match
-                        if (linkData.Url == originalUrl)
+                        if (linkItem.Url == originalUrl)
                         {
                             isMatch = true;
                         }
                         // Secondary match: normalized URL comparison (handle trailing slashes, .git extension)
                         else
                         {
-                            var normalizedLinkUrl = linkData.Url.TrimEnd('/').TrimEnd('\\');
+                            var normalizedLinkUrl = linkItem.Url.TrimEnd('/').TrimEnd('\\');
                             var normalizedOriginalUrl = originalUrl.TrimEnd('/').TrimEnd('\\');
                             
                             // Remove .git extension for comparison
@@ -1155,10 +1154,10 @@ public sealed partial class MainWindow
                         if (isMatch)
                         {
                             // Update the URL to point to the local clone path
-                            linkData.Url = localClonePath;
+                            linkItem.Url = localClonePath;
                             categoryModified = true;
                             anyUpdated = true;
-                            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkData.Title}' from '{originalUrl}' to '{localClonePath}'");
+                            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkItem.Title}' from '{originalUrl}' to '{localClonePath}'");
                         }
                     }
                 }
@@ -1166,7 +1165,7 @@ public sealed partial class MainWindow
                 // Save the category if any links were updated
                 if (categoryModified)
                 {
-                    await _categoryService.SaveCategoryAsync(categoryData);
+                    await _categoryService.SaveCategoryAsync(categoryNode);
                 }
             }
 
