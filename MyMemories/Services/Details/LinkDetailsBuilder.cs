@@ -1497,6 +1497,10 @@ public class LinkDetailsBuilder
                                 {
                                     statusText.Text = "Already up to date";
                                 }
+                                else if (!string.IsNullOrEmpty(fetchError))
+                                {
+                                    statusText.Text = $"Up to date (fetch failed: {fetchError})";
+                                }
                                 else
                                 {
                                     statusText.Text = "Up to date (based on last fetch)";
@@ -1517,6 +1521,10 @@ public class LinkDetailsBuilder
                                     if (fetchSucceeded)
                                     {
                                         statusText.Text = "Local is ahead of remote";
+                                    }
+                                    else if (!string.IsNullOrEmpty(fetchError))
+                                    {
+                                        statusText.Text = $"Local is ahead (fetch failed: {fetchError})";
                                     }
                                     else
                                     {
@@ -1539,6 +1547,10 @@ public class LinkDetailsBuilder
                                     if (fetchSucceeded)
                                     {
                                         statusText.Text = $"{commitsBehind} commit(s) available";
+                                    }
+                                    else if (!string.IsNullOrEmpty(fetchError))
+                                    {
+                                        statusText.Text = $"{commitsBehind} commit(s) available (fetch failed: {fetchError})";
                                     }
                                     else
                                     {
