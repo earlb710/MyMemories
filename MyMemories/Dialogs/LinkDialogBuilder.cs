@@ -788,12 +788,28 @@ public class LinkDialogBuilder
             }
 
             bool isDirectory = false;
-            try
+            
+            // Get selected link type
+            string linkType = "URL";
+            if (controls.LinkTypeComboBox?.SelectedItem is ComboBoxItem linkTypeItem)
             {
-                var url = controls.UrlTextBox.Text.Trim();
-                isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                linkType = linkTypeItem.Tag?.ToString() ?? "URL";
             }
-            catch { }
+            
+            // For Git repositories, always treat as directory (even if not cloned yet)
+            if (linkType == "Git")
+            {
+                isDirectory = true;
+            }
+            else
+            {
+                try
+                {
+                    var url = controls.UrlTextBox.Text.Trim();
+                    isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                }
+                catch { }
+            }
 
             controls.FolderTypeLabel.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
             controls.FolderTypeComboBox.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
@@ -880,12 +896,28 @@ public class LinkDialogBuilder
         void CheckDirectoryAndUpdateUI()
         {
             bool isDirectory = false;
-            try
+            
+            var url = controls.UrlTextBox.Text.Trim();
+            
+            // Treat as directory if it's a Git repository URL (contains .git)
+            // or if the path exists as a directory
+            if (!string.IsNullOrWhiteSpace(url))
             {
-                var url = controls.UrlTextBox.Text.Trim();
-                isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase) || 
+                    url.Contains("/.git/") || 
+                    url.Contains("\\.git\\"))
+                {
+                    isDirectory = true;
+                }
+                else
+                {
+                    try
+                    {
+                        isDirectory = Directory.Exists(url);
+                    }
+                    catch { }
+                }
             }
-            catch { }
 
             controls.FolderTypeLabel.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
             controls.FolderTypeComboBox.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
