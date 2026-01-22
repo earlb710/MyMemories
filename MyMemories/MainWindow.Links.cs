@@ -172,6 +172,8 @@ public sealed partial class MainWindow
             // Create catalog immediately for Git repositories or folders with CatalogueFiles/FilteredCatalogue types
             // Only if the directory actually exists (e.g., cloned Git repos or existing folders)
             var link = (LinkItem)linkNode.Content;
+            System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Link created - Title: '{link.Title}', IsDirectory: {link.IsDirectory}, FolderType: {link.FolderType}, Type: {link.Type}, Url: '{link.Url}'");
+            
             if (link.IsDirectory && 
                 (link.FolderType == FolderLinkType.CatalogueFiles || 
                  link.FolderType == FolderLinkType.FilteredCatalogue))

@@ -1410,13 +1410,7 @@ public class LinkDialogBuilder
         var folderType = FolderLinkType.LinkOnly;
         string fileFilters = string.Empty;
 
-        // For Git repositories, default to CatalogueFiles instead of LinkOnly
-        if (linkType == "Git" && isDirectory)
-        {
-            folderType = FolderLinkType.CatalogueFiles;
-        }
-
-        // Read from combo box (respects user's choice, or the default we set in UpdateUIForCategoryAndLinkType)
+        // Read from combo box first (respects user's choice, or the default we set in UpdateUIForCategoryAndLinkType)
         if (isDirectory && controls.FolderTypeComboBox.SelectedItem is ComboBoxItem selectedItem &&
             selectedItem.Tag is FolderLinkType selectedFolderType)
         {
@@ -1425,6 +1419,14 @@ public class LinkDialogBuilder
             {
                 fileFilters = controls.FileFiltersTextBox.Text.Trim();
             }
+        }
+
+        // For Git repositories, always ensure CatalogueFiles is set (override combo box if needed)
+        // This ensures Git repos are always cataloged
+        if (linkType == "Git" && isDirectory)
+        {
+            folderType = FolderLinkType.CatalogueFiles;
+            System.Diagnostics.Debug.WriteLine($"[BuildAddLinkResult] Git link type detected - forcing folderType to CatalogueFiles for '{title}'");
         }
 
         return new AddLinkResult
