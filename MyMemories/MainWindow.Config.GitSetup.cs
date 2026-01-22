@@ -432,6 +432,122 @@ public sealed partial class MainWindow
             }, null, 1500, System.Threading.Timeout.Infinite);
         };
         
+        // Add debouncing timer for username changes to fetch branches when credentials change
+        System.Threading.Timer? usernameChangeTimer = null;
+        
+        usernameTextBox.TextChanged += (s, args) =>
+        {
+            // Debounce branch fetching - wait 1.5 seconds after user stops typing
+            usernameChangeTimer?.Dispose();
+            usernameChangeTimer = new System.Threading.Timer(async _ =>
+            {
+                string path = string.Empty;
+                string username = string.Empty;
+                string password = string.Empty;
+                
+                // Get current values from UI thread using TaskCompletionSource
+                var tcs = new TaskCompletionSource<bool>();
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    path = repoPathTextBox.Text;
+                    username = usernameTextBox.Text;
+                    password = passwordBox.Password;
+                    tcs.SetResult(true);
+                });
+                await tcs.Task;
+                
+                // Fetch branches if path is valid - ALL UI access must happen on UI thread
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    var fetchTcs = new TaskCompletionSource<bool>();
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        try
+                        {
+                            cloneStatusBanner.IsOpen = false;
+                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
+                            UpdateCloneButtonState();
+                            fetchTcs.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            fetchTcs.SetException(ex);
+                        }
+                    });
+                    
+                    try
+                    {
+                        await fetchTcs.Task;
+                    }
+                    catch
+                    {
+                        // Fetch failed, ignore
+                    }
+                }
+                
+                usernameChangeTimer?.Dispose();
+                usernameChangeTimer = null;
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        };
+
+        // Add debouncing timer for password changes to fetch branches when credentials change
+        System.Threading.Timer? passwordChangeTimer = null;
+        
+        passwordBox.PasswordChanged += (s, args) =>
+        {
+            // Debounce branch fetching - wait 1.5 seconds after user stops typing
+            passwordChangeTimer?.Dispose();
+            passwordChangeTimer = new System.Threading.Timer(async _ =>
+            {
+                string path = string.Empty;
+                string username = string.Empty;
+                string password = string.Empty;
+                
+                // Get current values from UI thread using TaskCompletionSource
+                var tcs = new TaskCompletionSource<bool>();
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    path = repoPathTextBox.Text;
+                    username = usernameTextBox.Text;
+                    password = passwordBox.Password;
+                    tcs.SetResult(true);
+                });
+                await tcs.Task;
+                
+                // Fetch branches if path is valid - ALL UI access must happen on UI thread
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    var fetchTcs = new TaskCompletionSource<bool>();
+                    DispatcherQueue.TryEnqueue(async () =>
+                    {
+                        try
+                        {
+                            cloneStatusBanner.IsOpen = false;
+                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
+                            UpdateCloneButtonState();
+                            fetchTcs.SetResult(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            fetchTcs.SetException(ex);
+                        }
+                    });
+                    
+                    try
+                    {
+                        await fetchTcs.Task;
+                    }
+                    catch
+                    {
+                        // Fetch failed, ignore
+                    }
+                }
+                
+                passwordChangeTimer?.Dispose();
+                passwordChangeTimer = null;
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        };
+        
         branchComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
 
         // Current status display
