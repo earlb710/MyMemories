@@ -369,9 +369,58 @@ public sealed partial class MainWindow
             }
         }
 
+        // Helper method to fetch branches with debouncing
+        async Task FetchBranchesWithCurrentCredentialsAsync()
+        {
+            string path = string.Empty;
+            string username = string.Empty;
+            string password = string.Empty;
+            
+            // Get current values from UI thread using TaskCompletionSource
+            var tcs = new TaskCompletionSource<bool>();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                path = repoPathTextBox.Text;
+                username = usernameTextBox.Text;
+                password = passwordBox.Password;
+                tcs.SetResult(true);
+            });
+            await tcs.Task;
+            
+            // Fetch branches if path is valid - ALL UI access must happen on UI thread
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                var fetchTcs = new TaskCompletionSource<bool>();
+                DispatcherQueue.TryEnqueue(async () =>
+                {
+                    try
+                    {
+                        cloneStatusBanner.IsOpen = false;
+                        await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
+                        UpdateCloneButtonState();
+                        fetchTcs.SetResult(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        fetchTcs.SetException(ex);
+                    }
+                });
+                
+                try
+                {
+                    await fetchTcs.Task;
+                }
+                catch
+                {
+                    // Fetch failed, ignore
+                }
+            }
+        }
+
         // Enable/disable buttons based on input
         repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
         repoNameComboBox.TextSubmitted += (s, args) => UpdateCloneButtonState();
+        
         // Add debouncing timer for path changes to avoid excessive branch fetching
         System.Threading.Timer? pathChangeTimer = null;
         
@@ -383,50 +432,7 @@ public sealed partial class MainWindow
             pathChangeTimer?.Dispose();
             pathChangeTimer = new System.Threading.Timer(async _ =>
             {
-                string path = string.Empty;
-                string username = string.Empty;
-                string password = string.Empty;
-                
-                // Get current values from UI thread using TaskCompletionSource
-                var tcs = new TaskCompletionSource<bool>();
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    path = repoPathTextBox.Text;
-                    username = usernameTextBox.Text;
-                    password = passwordBox.Password;
-                    tcs.SetResult(true);
-                });
-                await tcs.Task;
-                
-                // Fetch branches if path is valid - ALL UI access must happen on UI thread
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    var fetchTcs = new TaskCompletionSource<bool>();
-                    DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            cloneStatusBanner.IsOpen = false;
-                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
-                            UpdateCloneButtonState();
-                            fetchTcs.SetResult(true);
-                        }
-                        catch (Exception ex)
-                        {
-                            fetchTcs.SetException(ex);
-                        }
-                    });
-                    
-                    try
-                    {
-                        await fetchTcs.Task;
-                    }
-                    catch
-                    {
-                        // Fetch failed, ignore
-                    }
-                }
-                
+                await FetchBranchesWithCurrentCredentialsAsync();
                 pathChangeTimer?.Dispose();
                 pathChangeTimer = null;
             }, null, 1500, System.Threading.Timeout.Infinite);
@@ -441,50 +447,7 @@ public sealed partial class MainWindow
             usernameChangeTimer?.Dispose();
             usernameChangeTimer = new System.Threading.Timer(async _ =>
             {
-                string path = string.Empty;
-                string username = string.Empty;
-                string password = string.Empty;
-                
-                // Get current values from UI thread using TaskCompletionSource
-                var tcs = new TaskCompletionSource<bool>();
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    path = repoPathTextBox.Text;
-                    username = usernameTextBox.Text;
-                    password = passwordBox.Password;
-                    tcs.SetResult(true);
-                });
-                await tcs.Task;
-                
-                // Fetch branches if path is valid - ALL UI access must happen on UI thread
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    var fetchTcs = new TaskCompletionSource<bool>();
-                    DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            cloneStatusBanner.IsOpen = false;
-                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
-                            UpdateCloneButtonState();
-                            fetchTcs.SetResult(true);
-                        }
-                        catch (Exception ex)
-                        {
-                            fetchTcs.SetException(ex);
-                        }
-                    });
-                    
-                    try
-                    {
-                        await fetchTcs.Task;
-                    }
-                    catch
-                    {
-                        // Fetch failed, ignore
-                    }
-                }
-                
+                await FetchBranchesWithCurrentCredentialsAsync();
                 usernameChangeTimer?.Dispose();
                 usernameChangeTimer = null;
             }, null, 1500, System.Threading.Timeout.Infinite);
@@ -499,50 +462,7 @@ public sealed partial class MainWindow
             passwordChangeTimer?.Dispose();
             passwordChangeTimer = new System.Threading.Timer(async _ =>
             {
-                string path = string.Empty;
-                string username = string.Empty;
-                string password = string.Empty;
-                
-                // Get current values from UI thread using TaskCompletionSource
-                var tcs = new TaskCompletionSource<bool>();
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    path = repoPathTextBox.Text;
-                    username = usernameTextBox.Text;
-                    password = passwordBox.Password;
-                    tcs.SetResult(true);
-                });
-                await tcs.Task;
-                
-                // Fetch branches if path is valid - ALL UI access must happen on UI thread
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    var fetchTcs = new TaskCompletionSource<bool>();
-                    DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            cloneStatusBanner.IsOpen = false;
-                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
-                            UpdateCloneButtonState();
-                            fetchTcs.SetResult(true);
-                        }
-                        catch (Exception ex)
-                        {
-                            fetchTcs.SetException(ex);
-                        }
-                    });
-                    
-                    try
-                    {
-                        await fetchTcs.Task;
-                    }
-                    catch
-                    {
-                        // Fetch failed, ignore
-                    }
-                }
-                
+                await FetchBranchesWithCurrentCredentialsAsync();
                 passwordChangeTimer?.Dispose();
                 passwordChangeTimer = null;
             }, null, 1500, System.Threading.Timeout.Infinite);
