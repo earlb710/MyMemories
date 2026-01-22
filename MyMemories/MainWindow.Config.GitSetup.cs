@@ -1063,6 +1063,9 @@ public sealed partial class MainWindow
                         }
                     }
 
+                    // Update any existing Git links to point to the local clone path
+                    await UpdateGitRepositoryLinksAsync(repoName, repoDirectory, repoUrl);
+
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         statusBanner.Title = "Clone Successful";
@@ -1090,6 +1093,75 @@ public sealed partial class MainWindow
                 });
             }
         });
+    }
+
+    /// <summary>
+    /// Updates all Git repository links to use the local clone path instead of remote URL.
+    /// This ensures cloned repositories are properly linked to their local directories.
+    /// </summary>
+    private async Task UpdateGitRepositoryLinksAsync(string repoName, string localClonePath, string originalUrl)
+    {
+        if (_categoryService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Load all categories to search for Git links
+            var categories = await _categoryService.LoadAllCategoriesAsync();
+            bool anyUpdated = false;
+
+            foreach (var categoryNode in categories)
+            {
+                if (categoryNode.Tag is not LinkItem categoryItem)
+                    continue;
+
+                var categoryData = await _categoryService.LoadCategoryAsync(categoryItem.Title);
+                if (categoryData?.Links == null)
+                    continue;
+
+                bool categoryModified = false;
+
+                // Check all links in this category
+                foreach (var linkData in categoryData.Links)
+                {
+                    // Check if this is a Git link pointing to the repository we just cloned
+                    if (linkData.Type == LinkType.Git && 
+                        (linkData.Url == originalUrl || 
+                         linkData.Title.Equals(repoName, StringComparison.OrdinalIgnoreCase) ||
+                         linkData.Title.Equals($"{repoName}.git", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        // Update the URL to point to the local clone path
+                        linkData.Url = localClonePath;
+                        categoryModified = true;
+                        anyUpdated = true;
+                        System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkData.Title}' from '{originalUrl}' to '{localClonePath}'");
+                    }
+                }
+
+                // Save the category if any links were updated
+                if (categoryModified)
+                {
+                    await _categoryService.SaveCategoryAsync(categoryData);
+                }
+            }
+
+            if (anyUpdated)
+            {
+                // Refresh the UI to show updated links
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    // Trigger a reload of categories to reflect the updated URLs
+                    _ = LoadCategoriesAsync();
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Error updating Git links: {ex.Message}");
+            // Don't throw - this is a non-critical operation
+        }
     }
 
     private async Task FetchRemoteBranchesAsync(string repoUrl, string username, string password, ComboBox branchComboBox, InfoBar statusBanner)
