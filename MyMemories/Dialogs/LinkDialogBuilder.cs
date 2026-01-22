@@ -1364,7 +1364,16 @@ public class LinkDialogBuilder
         }
 
         bool isDirectory = false;
-        try { isDirectory = Directory.Exists(url); } catch { }
+        
+        // For Git repositories, always treat as directory (even if not cloned yet)
+        if (linkType == "Git")
+        {
+            isDirectory = true;
+        }
+        else
+        {
+            try { isDirectory = Directory.Exists(url); } catch { }
+        }
 
         var folderType = FolderLinkType.LinkOnly;
         string fileFilters = string.Empty;
@@ -1375,6 +1384,7 @@ public class LinkDialogBuilder
             folderType = FolderLinkType.CatalogueFiles;
         }
 
+        // Read from combo box (respects user's choice, or the default we set in UpdateUIForCategoryAndLinkType)
         if (isDirectory && controls.FolderTypeComboBox.SelectedItem is ComboBoxItem selectedItem &&
             selectedItem.Tag is FolderLinkType selectedFolderType)
         {
