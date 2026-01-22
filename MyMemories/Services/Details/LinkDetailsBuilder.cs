@@ -1414,18 +1414,30 @@ public class LinkDetailsBuilder
                         return;
                     }
 
-                    // Fetch to get latest remote info
+                    // Fetch to get latest remote info (if possible)
                     var remote = repo.Network.Remotes["origin"];
+                    bool fetchSucceeded = false;
                     if (remote != null)
                     {
-                        var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
                         try
                         {
-                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, null, "");
+                            var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                            var fetchOptions = new FetchOptions
+                            {
+                                CredentialsProvider = (_url, _user, _cred) => new DefaultCredentials()
+                            };
+                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
+                            fetchSucceeded = true;
                         }
-                        catch
+                        catch (LibGit2SharpException)
                         {
-                            // Fetch may fail if no credentials or network issues
+                            // Fetch may fail if credentials are required, network issues, etc.
+                            // We'll work with the existing remote branch information
+                            System.Diagnostics.Debug.WriteLine("[AddPullButtonAsync] Fetch failed - using cached remote info");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch error: {ex.Message}");
                         }
                     }
 
@@ -1443,7 +1455,14 @@ public class LinkDetailsBuilder
                             pullButton.DispatcherQueue.TryEnqueue(() =>
                             {
                                 pullButton.IsEnabled = false;
-                                statusText.Text = "Already up to date";
+                                if (fetchSucceeded)
+                                {
+                                    statusText.Text = "Already up to date";
+                                }
+                                else
+                                {
+                                    statusText.Text = "Already up to date (using cached info)";
+                                }
                             });
                         }
                         else
@@ -1458,7 +1477,8 @@ public class LinkDetailsBuilder
                             pullButton.DispatcherQueue.TryEnqueue(() =>
                             {
                                 pullButton.IsEnabled = true;
-                                statusText.Text = $"{commitsBehind} commit(s) available to pull";
+                                var cacheNote = fetchSucceeded ? "" : " (using cached info)";
+                                statusText.Text = $"{commitsBehind} commit(s) available to pull{cacheNote}";
                             });
                         }
                     }
