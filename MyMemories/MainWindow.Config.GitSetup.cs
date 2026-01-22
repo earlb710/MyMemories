@@ -1091,7 +1091,7 @@ public sealed partial class MainWindow
                     // List remote references
                     try
                     {
-                        var refs = Repository.ListRemoteReferences(repoUrl);
+                        var refs = Repository.ListRemoteReferences(repoUrl, (_url, _user, _cred) => new DefaultCredentials());
                         foreach (var reference in refs)
                         {
                             // Only include branch references (heads)
