@@ -1445,8 +1445,8 @@ public class LinkDetailsBuilder
                                         return null;
                                     }
                                     
-                                    // For HTTPS, provide empty credentials for anonymous access
-                                    if (types == SupportedCredentialTypes.UsernamePassword)
+                                    // For username/password authentication (HTTPS), provide empty credentials for anonymous access
+                                    if ((types & SupportedCredentialTypes.UsernamePassword) != 0)
                                     {
                                         return new UsernamePasswordCredentials
                                         {

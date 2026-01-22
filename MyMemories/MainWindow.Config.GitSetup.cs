@@ -1119,7 +1119,8 @@ public sealed partial class MainWindow
                             
                             // For anonymous HTTPS access, provide empty credentials
                             // Returning null causes "no callback set" error
-                            if (types == SupportedCredentialTypes.UsernamePassword)
+                            // Use bitwise check to handle cases where multiple credential types might be requested
+                            if ((types & SupportedCredentialTypes.UsernamePassword) != 0)
                             {
                                 return new UsernamePasswordCredentials
                                 {
