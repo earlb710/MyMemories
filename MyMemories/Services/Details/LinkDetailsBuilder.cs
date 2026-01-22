@@ -1436,22 +1436,31 @@ public class LinkDetailsBuilder
                             {
                                 CredentialsProvider = (url, usernameFromUrl, types) =>
                                 {
-                                    fetchCredentialAttempts++;
-                                    
-                                    // Only provide credentials on the first attempt
-                                    // Return null on subsequent attempts to signal authentication failure
-                                    if (fetchCredentialAttempts > 1)
+                                    try
                                     {
+                                        fetchCredentialAttempts++;
+                                        
+                                        // Only provide credentials on the first attempt
+                                        // Return null on subsequent attempts to signal authentication failure
+                                        if (fetchCredentialAttempts > 1)
+                                        {
+                                            return null;
+                                        }
+                                        
+                                        // Always provide empty username/password credentials on first attempt
+                                        // This works for anonymous HTTPS access
+                                        return new UsernamePasswordCredentials
+                                        {
+                                            Username = string.Empty,
+                                            Password = string.Empty
+                                        };
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        // If credentials provider fails, log and return null
+                                        System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Credentials provider error: {ex.Message}");
                                         return null;
                                     }
-                                    
-                                    // Always provide empty username/password credentials on first attempt
-                                    // This works for anonymous HTTPS access
-                                    return new UsernamePasswordCredentials
-                                    {
-                                        Username = string.Empty,
-                                        Password = string.Empty
-                                    };
                                 }
                             };
                             LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");

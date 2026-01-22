@@ -1098,32 +1098,41 @@ public sealed partial class MainWindow
                         
                         var refs = Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
                         {
-                            credentialAttempts++;
-                            
-                            // Only provide credentials on the first attempt
-                            // Return null on subsequent attempts to signal authentication failure
-                            if (credentialAttempts > 1)
+                            try
                             {
-                                return null;
-                            }
-                            
-                            // Use provided credentials if available
-                            if (!string.IsNullOrEmpty(username))
-                            {
+                                credentialAttempts++;
+                                
+                                // Only provide credentials on the first attempt
+                                // Return null on subsequent attempts to signal authentication failure
+                                if (credentialAttempts > 1)
+                                {
+                                    return null;
+                                }
+                                
+                                // Use provided credentials if available
+                                if (!string.IsNullOrEmpty(username))
+                                {
+                                    return new UsernamePasswordCredentials
+                                    {
+                                        Username = username,
+                                        Password = password ?? string.Empty
+                                    };
+                                }
+                                
+                                // For anonymous access, always provide empty credentials
+                                // Returning null causes "no callback set" error
                                 return new UsernamePasswordCredentials
                                 {
-                                    Username = username,
-                                    Password = password ?? string.Empty
+                                    Username = string.Empty,
+                                    Password = string.Empty
                                 };
                             }
-                            
-                            // For anonymous access, always provide empty credentials
-                            // Returning null causes "no callback set" error
-                            return new UsernamePasswordCredentials
+                            catch (Exception ex)
                             {
-                                Username = string.Empty,
-                                Password = string.Empty
-                            };
+                                // If credentials provider fails, log and return null
+                                System.Diagnostics.Debug.WriteLine($"[FetchRemoteBranchesAsync] Credentials provider error: {ex.Message}");
+                                return null;
+                            }
                         });
                         foreach (var reference in refs)
                         {
