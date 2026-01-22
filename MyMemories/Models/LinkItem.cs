@@ -584,9 +584,9 @@ public class LinkItem : INotifyPropertyChanged
             if (isZipArchive)
                 return "\U0001F4E6"; // 📦 Package
 
-            // Git repository icon
+            // Git repository icon - matches the icon in Link Type combo box
             if (Type == LinkType.Git)
-                return "\U0001F5C2"; // 🗂️ Card File Box (represents version control/Git)
+                return "\U0001F4E6"; // 📦 Package (represents repository)
 
             if (IsCatalogEntry)
                 return "\U0001F4C1"; // 📁 Folder
