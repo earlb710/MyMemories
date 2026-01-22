@@ -1428,9 +1428,36 @@ public class LinkDetailsBuilder
                         try
                         {
                             var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                            
+                            // Track credential attempts to avoid infinite retry loops
+                            int fetchCredentialAttempts = 0;
+                            
                             var fetchOptions = new FetchOptions
                             {
-                                CredentialsProvider = (_url, _user, _cred) => new DefaultCredentials()
+                                CredentialsProvider = (url, usernameFromUrl, types) =>
+                                {
+                                    fetchCredentialAttempts++;
+                                    
+                                    // Only provide credentials on the first attempt
+                                    // Return null on subsequent attempts to signal authentication failure
+                                    if (fetchCredentialAttempts > 1)
+                                    {
+                                        return null;
+                                    }
+                                    
+                                    // For HTTPS, provide empty credentials for anonymous access
+                                    if (types == SupportedCredentialTypes.UsernamePassword)
+                                    {
+                                        return new UsernamePasswordCredentials
+                                        {
+                                            Username = string.Empty,
+                                            Password = string.Empty
+                                        };
+                                    }
+                                    
+                                    // For other types (SSH, etc.), return null
+                                    return null;
+                                }
                             };
                             LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
                             fetchSucceeded = true;
