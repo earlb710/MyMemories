@@ -1117,7 +1117,18 @@ public sealed partial class MainWindow
                                 };
                             }
                             
-                            // For anonymous access, return null to let LibGit2Sharp handle it
+                            // For anonymous HTTPS access, provide empty credentials
+                            // Returning null causes "no callback set" error
+                            if (types == SupportedCredentialTypes.UsernamePassword)
+                            {
+                                return new UsernamePasswordCredentials
+                                {
+                                    Username = string.Empty,
+                                    Password = string.Empty
+                                };
+                            }
+                            
+                            // For SSH or other types, return null (not supported without configuration)
                             return null;
                         });
                         foreach (var reference in refs)
