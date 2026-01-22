@@ -1445,18 +1445,13 @@ public class LinkDetailsBuilder
                                         return null;
                                     }
                                     
-                                    // For username/password authentication (HTTPS), provide empty credentials for anonymous access
-                                    if ((types & SupportedCredentialTypes.UsernamePassword) != 0)
+                                    // Always provide empty username/password credentials on first attempt
+                                    // This works for anonymous HTTPS access
+                                    return new UsernamePasswordCredentials
                                     {
-                                        return new UsernamePasswordCredentials
-                                        {
-                                            Username = string.Empty,
-                                            Password = string.Empty
-                                        };
-                                    }
-                                    
-                                    // For other types (SSH, etc.), return null
-                                    return null;
+                                        Username = string.Empty,
+                                        Password = string.Empty
+                                    };
                                 }
                             };
                             LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");

@@ -1117,20 +1117,13 @@ public sealed partial class MainWindow
                                 };
                             }
                             
-                            // For anonymous HTTPS access, provide empty credentials
+                            // For anonymous access, always provide empty credentials
                             // Returning null causes "no callback set" error
-                            // Use bitwise check to handle cases where multiple credential types might be requested
-                            if ((types & SupportedCredentialTypes.UsernamePassword) != 0)
+                            return new UsernamePasswordCredentials
                             {
-                                return new UsernamePasswordCredentials
-                                {
-                                    Username = string.Empty,
-                                    Password = string.Empty
-                                };
-                            }
-                            
-                            // For SSH or other types, return null (not supported without configuration)
-                            return null;
+                                Username = string.Empty,
+                                Password = string.Empty
+                            };
                         });
                         foreach (var reference in refs)
                         {
