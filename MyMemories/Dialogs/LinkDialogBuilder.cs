@@ -1367,6 +1367,12 @@ public class LinkDialogBuilder
         var folderType = FolderLinkType.LinkOnly;
         string fileFilters = string.Empty;
 
+        // For Git repositories, default to CatalogueFiles instead of LinkOnly
+        if (linkType == "Git" && isDirectory)
+        {
+            folderType = FolderLinkType.CatalogueFiles;
+        }
+
         if (isDirectory && controls.FolderTypeComboBox.SelectedItem is ComboBoxItem selectedItem &&
             selectedItem.Tag is FolderLinkType selectedFolderType)
         {
