@@ -194,6 +194,7 @@ public sealed partial class MainWindow
                 {
                     System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Directory does not exist yet for '{link.Title}' at '{link.Url}'. Catalog will be created when directory becomes available.");
                 }
+            }
 
             // Update parent categories' ModifiedDate and save
             await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
