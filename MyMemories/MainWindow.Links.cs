@@ -168,6 +168,23 @@ public sealed partial class MainWindow
             result.CategoryNode.IsExpanded = true;
             _lastUsedCategory = result.CategoryNode;
 
+            // Create catalog immediately for Git repositories or folders with CatalogueFiles/FilteredCatalogue types
+            var link = (LinkItem)linkNode.Content;
+            if (link.IsDirectory && 
+                (link.FolderType == FolderLinkType.CatalogueFiles || 
+                 link.FolderType == FolderLinkType.FilteredCatalogue))
+            {
+                try
+                {
+                    await _catalogService!.CreateCatalogAsync(link, linkNode);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Failed to create catalog: {ex.Message}");
+                    // Continue even if catalog creation fails - user can refresh it later
+                }
+            }
+
             // Update parent categories' ModifiedDate and save
             await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
 
