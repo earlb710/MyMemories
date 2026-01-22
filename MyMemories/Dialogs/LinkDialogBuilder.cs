@@ -757,6 +757,8 @@ public class LinkDialogBuilder
                         controls.BrowseButton.Visibility = Visibility.Collapsed;
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Visible;
                         if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Visible;
+                        // Set folder type to CatalogueFiles for Git repositories
+                        controls.FolderTypeComboBox.SelectedIndex = (int)FolderLinkType.CatalogueFiles;
                         break;
                 }
             }
