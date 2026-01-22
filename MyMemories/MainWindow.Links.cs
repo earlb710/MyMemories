@@ -169,21 +169,31 @@ public sealed partial class MainWindow
             _lastUsedCategory = result.CategoryNode;
 
             // Create catalog immediately for Git repositories or folders with CatalogueFiles/FilteredCatalogue types
+            // Only if the directory actually exists (e.g., cloned Git repos or existing folders)
             var link = (LinkItem)linkNode.Content;
             if (link.IsDirectory && 
                 (link.FolderType == FolderLinkType.CatalogueFiles || 
                  link.FolderType == FolderLinkType.FilteredCatalogue))
             {
-                try
+                // Check if the directory exists before attempting to catalog
+                // For Git repositories, this will be false until they're cloned
+                if (Directory.Exists(link.Url))
                 {
-                    await _catalogService!.CreateCatalogAsync(link, linkNode);
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Creating catalog for '{link.Title}' at '{link.Url}'");
+                        await _catalogService!.CreateCatalogAsync(link, linkNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Failed to create catalog: {ex.Message}");
+                        // Continue even if catalog creation fails - user can refresh it later
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Failed to create catalog: {ex.Message}");
-                    // Continue even if catalog creation fails - user can refresh it later
+                    System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Directory does not exist yet for '{link.Title}' at '{link.Url}'. Catalog will be created when directory becomes available.");
                 }
-            }
 
             // Update parent categories' ModifiedDate and save
             await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
