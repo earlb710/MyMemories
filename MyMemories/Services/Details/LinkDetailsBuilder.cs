@@ -1379,6 +1379,7 @@ public class LinkDetailsBuilder
 
     /// <summary>
     /// Adds a pull button that checks for remote changes and is only enabled if there are changes to pull.
+    /// Fetches from remote to compare current branch hash with repository.
     /// </summary>
     private async Task AddPullButtonAsync(Repository repo, string repoPath)
     {
@@ -1398,6 +1399,9 @@ public class LinkDetailsBuilder
                 Foreground = new SolidColorBrush(Colors.Gray)
             };
 
+            // Initially show checking status
+            statusText.Text = "Checking for remote changes...";
+
             // Check if there are changes to pull
             await Task.Run(() =>
             {
@@ -1414,24 +1418,50 @@ public class LinkDetailsBuilder
                         return;
                     }
 
-                    // Note: We skip fetching to avoid credential/authentication issues
-                    // The pull button status is based on cached remote tracking branch info
-                    // Users should manually fetch/pull if they want the latest remote status
+                    // Attempt to fetch from remote to get the latest commit hashes
                     var remote = repo.Network.Remotes["origin"];
                     bool fetchSucceeded = false;
+                    string fetchError = string.Empty;
                     
-                    // Optionally attempt fetch if credentials might be available
-                    // This is disabled by default to avoid authentication errors
-                    bool attemptFetch = false; // Set to true to enable fetch attempt
-                    
-                    if (attemptFetch && remote != null)
+                    if (remote != null)
                     {
                         try
                         {
                             var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                            
+                            // Track credential attempts to avoid infinite retry loops
+                            int fetchCredentialAttempts = 0;
+                            
                             var fetchOptions = new FetchOptions
                             {
-                                CredentialsProvider = (_url, _user, _cred) => new DefaultCredentials()
+                                CredentialsProvider = (url, usernameFromUrl, types) =>
+                                {
+                                    try
+                                    {
+                                        fetchCredentialAttempts++;
+                                        
+                                        // Only provide credentials on the first attempt
+                                        // Return null on subsequent attempts to signal authentication failure
+                                        if (fetchCredentialAttempts > 1)
+                                        {
+                                            return null;
+                                        }
+                                        
+                                        // Always provide empty username/password credentials on first attempt
+                                        // This works for anonymous HTTPS access
+                                        return new UsernamePasswordCredentials
+                                        {
+                                            Username = string.Empty,
+                                            Password = string.Empty
+                                        };
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        // If credentials provider fails, log and return null
+                                        System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Credentials provider error: {ex.Message}");
+                                        return null;
+                                    }
+                                }
                             };
                             LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
                             fetchSucceeded = true;
@@ -1440,31 +1470,36 @@ public class LinkDetailsBuilder
                         {
                             // Fetch may fail if credentials are required, network issues, etc.
                             // We'll work with the existing remote branch information
+                            fetchError = ex.Message;
                             System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch failed: {ex.Message}");
                         }
                         catch (Exception ex)
                         {
+                            fetchError = ex.Message;
                             System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch error: {ex.Message}");
                         }
                     }
 
-                    // Compare local and remote commits using cached info
+                    // Compare local and remote branch hashes
                     var localCommit = repo.Head?.Tip;
                     var remoteCommit = remoteBranch.Tip;
 
                     if (localCommit != null && remoteCommit != null)
                     {
-                        var mergeBase = repo.ObjectDatabase.FindMergeBase(localCommit, remoteCommit);
-                        
-                        if (mergeBase?.Sha == remoteCommit.Sha)
+                        // Compare the commit SHAs directly
+                        if (localCommit.Sha == remoteCommit.Sha)
                         {
-                            // Local is ahead or up to date
+                            // Current branch hash matches remote - no changes to pull
                             pullButton.DispatcherQueue.TryEnqueue(() =>
                             {
                                 pullButton.IsEnabled = false;
                                 if (fetchSucceeded)
                                 {
                                     statusText.Text = "Already up to date";
+                                }
+                                else if (!string.IsNullOrEmpty(fetchError))
+                                {
+                                    statusText.Text = $"Up to date (fetch failed: {fetchError})";
                                 }
                                 else
                                 {
@@ -1474,20 +1509,65 @@ public class LinkDetailsBuilder
                         }
                         else
                         {
-                            // There are changes to pull
-                            var commitsBehind = repo.Commits.QueryBy(new CommitFilter
+                            // Branch hashes differ - check if we need to pull
+                            var mergeBase = repo.ObjectDatabase.FindMergeBase(localCommit, remoteCommit);
+                            
+                            if (mergeBase?.Sha == remoteCommit.Sha)
                             {
-                                IncludeReachableFrom = remoteCommit,
-                                ExcludeReachableFrom = localCommit
-                            }).Count();
+                                // Local is ahead - no changes to pull
+                                pullButton.DispatcherQueue.TryEnqueue(() =>
+                                {
+                                    pullButton.IsEnabled = false;
+                                    if (fetchSucceeded)
+                                    {
+                                        statusText.Text = "Local is ahead of remote";
+                                    }
+                                    else if (!string.IsNullOrEmpty(fetchError))
+                                    {
+                                        statusText.Text = $"Local is ahead (fetch failed: {fetchError})";
+                                    }
+                                    else
+                                    {
+                                        statusText.Text = "Local is ahead (based on last fetch)";
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                // There are changes to pull
+                                var commitsBehind = repo.Commits.QueryBy(new CommitFilter
+                                {
+                                    IncludeReachableFrom = remoteCommit,
+                                    ExcludeReachableFrom = localCommit
+                                }).Count();
 
-                            pullButton.DispatcherQueue.TryEnqueue(() =>
-                            {
-                                pullButton.IsEnabled = true;
-                                var cacheNote = fetchSucceeded ? "" : " (based on last fetch)";
-                                statusText.Text = $"{commitsBehind} commit(s) available{cacheNote}";
-                            });
+                                pullButton.DispatcherQueue.TryEnqueue(() =>
+                                {
+                                    pullButton.IsEnabled = true;
+                                    if (fetchSucceeded)
+                                    {
+                                        statusText.Text = $"{commitsBehind} commit(s) available";
+                                    }
+                                    else if (!string.IsNullOrEmpty(fetchError))
+                                    {
+                                        statusText.Text = $"{commitsBehind} commit(s) available (fetch failed: {fetchError})";
+                                    }
+                                    else
+                                    {
+                                        statusText.Text = $"{commitsBehind} commit(s) available (based on last fetch)";
+                                    }
+                                });
+                            }
                         }
+                    }
+                    else if (!string.IsNullOrEmpty(fetchError))
+                    {
+                        // Fetch failed and no cached remote tracking info available
+                        pullButton.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            pullButton.IsEnabled = false;
+                            statusText.Text = $"Unable to fetch: {fetchError}";
+                        });
                     }
                 }
                 catch (Exception ex)
