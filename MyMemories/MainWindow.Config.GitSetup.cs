@@ -1127,16 +1127,39 @@ public sealed partial class MainWindow
                 foreach (var linkData in categoryData.Links)
                 {
                     // Check if this is a Git link pointing to the repository we just cloned
-                    if (linkData.Type == LinkType.Git && 
-                        (linkData.Url == originalUrl || 
-                         linkData.Title.Equals(repoName, StringComparison.OrdinalIgnoreCase) ||
-                         linkData.Title.Equals($"{repoName}.git", StringComparison.OrdinalIgnoreCase)))
+                    // Match by URL (exact match or normalized comparison) to avoid false positives
+                    if (linkData.Type == LinkType.Git)
                     {
-                        // Update the URL to point to the local clone path
-                        linkData.Url = localClonePath;
-                        categoryModified = true;
-                        anyUpdated = true;
-                        System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkData.Title}' from '{originalUrl}' to '{localClonePath}'");
+                        bool isMatch = false;
+                        
+                        // Primary match: exact URL match
+                        if (linkData.Url == originalUrl)
+                        {
+                            isMatch = true;
+                        }
+                        // Secondary match: normalized URL comparison (handle trailing slashes, .git extension)
+                        else
+                        {
+                            var normalizedLinkUrl = linkData.Url.TrimEnd('/').TrimEnd('\\');
+                            var normalizedOriginalUrl = originalUrl.TrimEnd('/').TrimEnd('\\');
+                            
+                            // Remove .git extension for comparison
+                            if (normalizedLinkUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                                normalizedLinkUrl = normalizedLinkUrl.Substring(0, normalizedLinkUrl.Length - 4);
+                            if (normalizedOriginalUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                                normalizedOriginalUrl = normalizedOriginalUrl.Substring(0, normalizedOriginalUrl.Length - 4);
+                            
+                            isMatch = normalizedLinkUrl.Equals(normalizedOriginalUrl, StringComparison.OrdinalIgnoreCase);
+                        }
+                        
+                        if (isMatch)
+                        {
+                            // Update the URL to point to the local clone path
+                            linkData.Url = localClonePath;
+                            categoryModified = true;
+                            anyUpdated = true;
+                            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkData.Title}' from '{originalUrl}' to '{localClonePath}'");
+                        }
                     }
                 }
 
@@ -1153,7 +1176,7 @@ public sealed partial class MainWindow
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     // Trigger a reload of categories to reflect the updated URLs
-                    _ = LoadCategoriesAsync();
+                    _ = LoadAllCategoriesAsync();
                 });
             }
         }
