@@ -582,17 +582,21 @@ public class LinkItem : INotifyPropertyChanged
         if (IsDirectory)
         {
             if (isZipArchive)
-                return "\U0001F4E6"; // ?? Package
+                return "\U0001F4E6"; // 📦 Package
+
+            // Git repository icon
+            if (Type == LinkType.Git)
+                return "\U0001F5C2"; // 🗂️ Card File Box (represents version control/Git)
 
             if (IsCatalogEntry)
-                return "\U0001F4C1"; // ?? Folder
+                return "\U0001F4C1"; // 📁 Folder
 
             return FolderType switch
             {
-                FolderLinkType.LinkOnly => "\U0001F4C2", // ?? Open Folder
-                FolderLinkType.CatalogueFiles => "\U0001F4C1", // ?? Folder
-                FolderLinkType.FilteredCatalogue => "\U0001F50D", // ?? Magnifying Glass
-                _ => "\U0001F4C1" // ?? Folder
+                FolderLinkType.LinkOnly => "\U0001F4C2", // 📂 Open Folder
+                FolderLinkType.CatalogueFiles => "\U0001F4C1", // 📁 Folder
+                FolderLinkType.FilteredCatalogue => "\U0001F50D", // 🔍 Magnifying Glass
+                _ => "\U0001F4C1" // 📁 Folder
             };
         }
 
