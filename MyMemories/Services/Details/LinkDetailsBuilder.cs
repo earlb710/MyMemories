@@ -1414,10 +1414,17 @@ public class LinkDetailsBuilder
                         return;
                     }
 
-                    // Fetch to get latest remote info (if possible)
+                    // Note: We skip fetching to avoid credential/authentication issues
+                    // The pull button status is based on cached remote tracking branch info
+                    // Users should manually fetch/pull if they want the latest remote status
                     var remote = repo.Network.Remotes["origin"];
                     bool fetchSucceeded = false;
-                    if (remote != null)
+                    
+                    // Optionally attempt fetch if credentials might be available
+                    // This is disabled by default to avoid authentication errors
+                    bool attemptFetch = false; // Set to true to enable fetch attempt
+                    
+                    if (attemptFetch && remote != null)
                     {
                         try
                         {
@@ -1429,11 +1436,11 @@ public class LinkDetailsBuilder
                             LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
                             fetchSucceeded = true;
                         }
-                        catch (LibGit2SharpException)
+                        catch (LibGit2SharpException ex)
                         {
                             // Fetch may fail if credentials are required, network issues, etc.
                             // We'll work with the existing remote branch information
-                            System.Diagnostics.Debug.WriteLine("[AddPullButtonAsync] Fetch failed - using cached remote info");
+                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch failed: {ex.Message}");
                         }
                         catch (Exception ex)
                         {
@@ -1441,7 +1448,7 @@ public class LinkDetailsBuilder
                         }
                     }
 
-                    // Compare local and remote commits
+                    // Compare local and remote commits using cached info
                     var localCommit = repo.Head?.Tip;
                     var remoteCommit = remoteBranch.Tip;
 
@@ -1461,7 +1468,7 @@ public class LinkDetailsBuilder
                                 }
                                 else
                                 {
-                                    statusText.Text = "Already up to date (using cached info)";
+                                    statusText.Text = "Up to date (based on last fetch)";
                                 }
                             });
                         }
@@ -1477,8 +1484,8 @@ public class LinkDetailsBuilder
                             pullButton.DispatcherQueue.TryEnqueue(() =>
                             {
                                 pullButton.IsEnabled = true;
-                                var cacheNote = fetchSucceeded ? "" : " (using cached info)";
-                                statusText.Text = $"{commitsBehind} commit(s) available to pull{cacheNote}";
+                                var cacheNote = fetchSucceeded ? "" : " (based on last fetch)";
+                                statusText.Text = $"{commitsBehind} commit(s) available{cacheNote}";
                             });
                         }
                     }
