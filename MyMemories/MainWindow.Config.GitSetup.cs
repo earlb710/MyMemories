@@ -385,6 +385,7 @@ public sealed partial class MainWindow
             {
                 string path = string.Empty;
                 string username = string.Empty;
+                string password = string.Empty;
                 
                 // Get current values from UI thread using TaskCompletionSource
                 var tcs = new TaskCompletionSource<bool>();
@@ -392,6 +393,7 @@ public sealed partial class MainWindow
                 {
                     path = repoPathTextBox.Text;
                     username = usernameTextBox.Text;
+                    password = passwordBox.Password;
                     tcs.SetResult(true);
                 });
                 await tcs.Task;
@@ -405,7 +407,7 @@ public sealed partial class MainWindow
                         try
                         {
                             cloneStatusBanner.IsOpen = false;
-                            await FetchRemoteBranchesAsync(path, username, branchComboBox, cloneStatusBanner);
+                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
                             UpdateCloneButtonState();
                             fetchTcs.SetResult(true);
                         }
@@ -507,7 +509,7 @@ public sealed partial class MainWindow
                     if (!string.IsNullOrWhiteSpace(repoConfig.Path))
                     {
                         cloneStatusBanner.IsOpen = false;
-                        await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
+                        await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, repoConfig.Password, branchComboBox, cloneStatusBanner);
                     }
                     
                     UpdateCloneButtonState();
@@ -551,7 +553,7 @@ public sealed partial class MainWindow
                     {
                         try
                         {
-                            await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, branchComboBox, cloneStatusBanner);
+                            await FetchRemoteBranchesAsync(repoConfig.Path, repoConfig.Username, repoConfig.Password, branchComboBox, cloneStatusBanner);
                         }
                         catch
                         {
@@ -1054,7 +1056,7 @@ public sealed partial class MainWindow
         });
     }
 
-    private async Task FetchRemoteBranchesAsync(string repoUrl, string username, ComboBox branchComboBox, InfoBar statusBanner)
+    private async Task FetchRemoteBranchesAsync(string repoUrl, string username, string password, ComboBox branchComboBox, InfoBar statusBanner)
     {
         await Task.Run(() =>
         {
@@ -1091,7 +1093,15 @@ public sealed partial class MainWindow
                     // List remote references
                     try
                     {
-                        var refs = Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) => new DefaultCredentials());
+                        // Use credentials if provided, otherwise use DefaultCredentials
+                        var refs = !string.IsNullOrEmpty(username)
+                            ? Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
+                                new UsernamePasswordCredentials
+                                {
+                                    Username = username,
+                                    Password = password ?? string.Empty
+                                })
+                            : Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) => new DefaultCredentials());
                         foreach (var reference in refs)
                         {
                             // Only include branch references (heads)
