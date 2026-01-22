@@ -1093,20 +1093,33 @@ public sealed partial class MainWindow
                     // List remote references
                     try
                     {
-                        // Use credentials if provided, otherwise allow anonymous access
-                        var refs = !string.IsNullOrEmpty(username)
-                            ? Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
-                                new UsernamePasswordCredentials
+                        // Track credential attempts to avoid infinite retry loops
+                        int credentialAttempts = 0;
+                        
+                        var refs = Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
+                        {
+                            credentialAttempts++;
+                            
+                            // Only provide credentials on the first attempt
+                            // Return null on subsequent attempts to signal authentication failure
+                            if (credentialAttempts > 1)
+                            {
+                                return null;
+                            }
+                            
+                            // Use provided credentials if available
+                            if (!string.IsNullOrEmpty(username))
+                            {
+                                return new UsernamePasswordCredentials
                                 {
                                     Username = username,
                                     Password = password ?? string.Empty
-                                })
-                            : Repository.ListRemoteReferences(repoUrl, (url, usernameFromUrl, types) =>
-                                new UsernamePasswordCredentials
-                                {
-                                    Username = string.Empty,
-                                    Password = string.Empty
-                                });
+                                };
+                            }
+                            
+                            // For anonymous access, return null to let LibGit2Sharp handle it
+                            return null;
+                        });
                         foreach (var reference in refs)
                         {
                             // Only include branch references (heads)
