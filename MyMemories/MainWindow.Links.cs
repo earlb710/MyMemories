@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -159,13 +160,44 @@ public sealed partial class MainWindow
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
                     FolderType = result.FolderType,
-                    FileFilters = result.FileFilters
+                    FileFilters = result.FileFilters,
+                    Type = result.LinkType
                 }
             };
 
             result.CategoryNode.Children.Add(linkNode);
             result.CategoryNode.IsExpanded = true;
             _lastUsedCategory = result.CategoryNode;
+
+            // Create catalog immediately for Git repositories or folders with CatalogueFiles/FilteredCatalogue types
+            // Only if the directory actually exists (e.g., cloned Git repos or existing folders)
+            var link = (LinkItem)linkNode.Content;
+            System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Link created - Title: '{link.Title}', IsDirectory: {link.IsDirectory}, FolderType: {link.FolderType}, Type: {link.Type}, Url: '{link.Url}'");
+            
+            if (link.IsDirectory && 
+                (link.FolderType == FolderLinkType.CatalogueFiles || 
+                 link.FolderType == FolderLinkType.FilteredCatalogue))
+            {
+                // Check if the directory exists before attempting to catalog
+                // For Git repositories, this will be false until they're cloned
+                if (Directory.Exists(link.Url))
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Creating catalog for '{link.Title}' at '{link.Url}'");
+                        await _catalogService!.CreateCatalogAsync(link, linkNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Failed to create catalog: {ex.Message}");
+                        // Continue even if catalog creation fails - user can refresh it later
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AddLinkAsync] Directory does not exist yet for '{link.Title}' at '{link.Url}'. Catalog will be created when directory becomes available.");
+                }
+            }
 
             // Update parent categories' ModifiedDate and save
             await UpdateParentCategoriesAndSaveAsync(result.CategoryNode);
@@ -205,6 +237,7 @@ public sealed partial class MainWindow
             link.ModifiedDate = DateTime.Now;
             link.FolderType = editResult.FolderType;
             link.FileFilters = editResult.FileFilters;
+            link.Type = editResult.LinkType;
 
             var newNode = _treeViewService!.RefreshLinkNode(node, link);
 

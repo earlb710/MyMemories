@@ -140,7 +140,7 @@ public class LinkDialogBuilder
 
         if (result == ContentDialogResult.Primary)
         {
-            return CreateEditLinkResult(controls);
+            return CreateEditLinkResult(controls, link);
         }
 
         return null;
@@ -308,10 +308,18 @@ public class LinkDialogBuilder
         gitRepoPanel.Children.Add(gitConfigButton);
         gitRepoPanel.Children.Add(gitEditButton);
         
-        // Update edit button visibility when selection changes
+        // Update edit button visibility and auto-populate title when selection changes
         gitRepoComboBox.SelectionChanged += (s, args) =>
         {
             gitEditButton.Visibility = gitRepoComboBox.SelectedIndex >= 0 ? Visibility.Visible : Visibility.Collapsed;
+            
+            // Auto-populate title with repository name when a git repository is selected
+            if (gitRepoComboBox.SelectedItem is ComboBoxItem selectedItem && 
+                selectedItem.Tag is string repoName &&
+                string.IsNullOrWhiteSpace(titleTextBox.Text))
+            {
+                titleTextBox.Text = repoName;
+            }
         };
         
         // Wrapper to hold the close action - will be set after dialog creation via controls object
@@ -749,6 +757,8 @@ public class LinkDialogBuilder
                         controls.BrowseButton.Visibility = Visibility.Collapsed;
                         if (controls.GitRepoLabel != null) controls.GitRepoLabel.Visibility = Visibility.Visible;
                         if (controls.GitRepoPanel != null) controls.GitRepoPanel.Visibility = Visibility.Visible;
+                        // Set folder type to CatalogueFiles for Git repositories
+                        controls.FolderTypeComboBox.SelectedIndex = (int)FolderLinkType.CatalogueFiles;
                         break;
                 }
             }
@@ -778,12 +788,28 @@ public class LinkDialogBuilder
             }
 
             bool isDirectory = false;
-            try
+            
+            // Get selected link type
+            string linkType = "URL";
+            if (controls.LinkTypeComboBox?.SelectedItem is ComboBoxItem linkTypeItem)
             {
-                var url = controls.UrlTextBox.Text.Trim();
-                isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                linkType = linkTypeItem.Tag?.ToString() ?? "URL";
             }
-            catch { }
+            
+            // For Git repositories, always treat as directory (even if not cloned yet)
+            if (linkType == "Git")
+            {
+                isDirectory = true;
+            }
+            else
+            {
+                try
+                {
+                    var url = controls.UrlTextBox.Text.Trim();
+                    isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                }
+                catch { }
+            }
 
             controls.FolderTypeLabel.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
             controls.FolderTypeComboBox.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
@@ -870,12 +896,28 @@ public class LinkDialogBuilder
         void CheckDirectoryAndUpdateUI()
         {
             bool isDirectory = false;
-            try
+            
+            var url = controls.UrlTextBox.Text.Trim();
+            
+            // Treat as directory if it's a Git repository URL (contains .git)
+            // or if the path exists as a directory
+            if (!string.IsNullOrWhiteSpace(url))
             {
-                var url = controls.UrlTextBox.Text.Trim();
-                isDirectory = !string.IsNullOrWhiteSpace(url) && Directory.Exists(url);
+                if (url.EndsWith(".git", StringComparison.OrdinalIgnoreCase) || 
+                    url.Contains("/.git/") || 
+                    url.Contains("\\.git\\"))
+                {
+                    isDirectory = true;
+                }
+                else
+                {
+                    try
+                    {
+                        isDirectory = Directory.Exists(url);
+                    }
+                    catch { }
+                }
             }
-            catch { }
 
             controls.FolderTypeLabel.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
             controls.FolderTypeComboBox.Visibility = isDirectory ? Visibility.Visible : Visibility.Collapsed;
@@ -1283,7 +1325,8 @@ public class LinkDialogBuilder
                 var repoConfig = _gitConfigService?.GetRepository(repoName);
                 if (repoConfig != null)
                 {
-                    // Check if repository is cloned and has a local path
+                    // Use the local clone path if available, otherwise use the repository path
+                    // Note: Cloning can be done from the button on the summary view
                     if (repoConfig.IsCloned && !string.IsNullOrEmpty(repoConfig.LocalClonePath))
                     {
                         // Use the local clone path as the URL so it's treated as a folder/directory catalog
@@ -1291,17 +1334,8 @@ public class LinkDialogBuilder
                     }
                     else
                     {
-                        // Repository not cloned yet - show error
-                        var errorDialog = new ContentDialog
-                        {
-                            Title = "Repository Not Cloned",
-                            Content = $"The repository '{repoName}' has not been cloned yet.\n\n" +
-                                     "Please clone the repository in Config > Git Repository before adding it as a link.",
-                            CloseButtonText = "OK",
-                            XamlRoot = _xamlRoot
-                        };
-                        _ = errorDialog.ShowAsync(); // Fire and forget - error dialogs are non-blocking UI feedback
-                        return null;
+                        // Use the repository path/URL (as configured in git.json)
+                        url = repoConfig.Path;
                     }
                 }
             }
@@ -1362,11 +1396,21 @@ public class LinkDialogBuilder
         }
 
         bool isDirectory = false;
-        try { isDirectory = Directory.Exists(url); } catch { }
+        
+        // For Git repositories, always treat as directory (even if not cloned yet)
+        if (linkType == "Git")
+        {
+            isDirectory = true;
+        }
+        else
+        {
+            try { isDirectory = Directory.Exists(url); } catch { }
+        }
 
         var folderType = FolderLinkType.LinkOnly;
         string fileFilters = string.Empty;
 
+        // Read from combo box first (respects user's choice, or the default we set in UpdateUIForCategoryAndLinkType)
         if (isDirectory && controls.FolderTypeComboBox.SelectedItem is ComboBoxItem selectedItem &&
             selectedItem.Tag is FolderLinkType selectedFolderType)
         {
@@ -1375,6 +1419,14 @@ public class LinkDialogBuilder
             {
                 fileFilters = controls.FileFiltersTextBox.Text.Trim();
             }
+        }
+
+        // For Git repositories, always ensure CatalogueFiles is set (override combo box if needed)
+        // This ensures Git repos are always cataloged
+        if (linkType == "Git" && isDirectory)
+        {
+            folderType = FolderLinkType.CatalogueFiles;
+            System.Diagnostics.Debug.WriteLine($"[BuildAddLinkResult] Git link type detected - forcing folderType to CatalogueFiles for '{title}'");
         }
 
         return new AddLinkResult
@@ -1386,11 +1438,19 @@ public class LinkDialogBuilder
             IsDirectory = isDirectory,
             CategoryNode = targetCategory,
             FolderType = folderType,
-            FileFilters = fileFilters
+            FileFilters = fileFilters,
+            LinkType = linkType switch
+            {
+                "URL" => LinkType.URL,
+                "File" => LinkType.File,
+                "Folder" => LinkType.Folder,
+                "Git" => LinkType.Git,
+                _ => LinkType.Unknown
+            }
         };
     }
 
-    private LinkEditResult? CreateEditLinkResult(LinkDialogControls controls)
+    private LinkEditResult? CreateEditLinkResult(LinkDialogControls controls, LinkItem originalLink)
     {
         string newTitle = controls.TitleTextBox.Text.Trim();
         string newUrl = controls.UrlTextBox.Text.Trim();
@@ -1418,6 +1478,30 @@ public class LinkDialogBuilder
             }
         }
 
+        // Preserve the original link type if it was Git, otherwise determine from URL/IsDirectory
+        LinkType linkType;
+        if (originalLink.Type == LinkType.Git)
+        {
+            // Preserve Git type
+            linkType = LinkType.Git;
+        }
+        else
+        {
+            // Determine link type based on URL and IsDirectory
+            if (isDirectory)
+            {
+                linkType = LinkType.Folder;
+            }
+            else if (Uri.TryCreate(newUrl, UriKind.Absolute, out var uri) && !uri.IsFile)
+            {
+                linkType = LinkType.URL;
+            }
+            else
+            {
+                linkType = LinkType.File;
+            }
+        }
+
         return new LinkEditResult
         {
             Title = newTitle,
@@ -1426,7 +1510,8 @@ public class LinkDialogBuilder
             Keywords = newKeywords,
             IsDirectory = isDirectory,
             FolderType = folderType,
-            FileFilters = fileFilters
+            FileFilters = fileFilters,
+            LinkType = linkType
         };
     }
 

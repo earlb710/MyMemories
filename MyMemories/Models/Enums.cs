@@ -56,3 +56,15 @@ public enum FolderLinkType
     CatalogueFiles,
     FilteredCatalogue
 }
+
+/// <summary>
+/// Type of link (URL, File, Folder, Git repository).
+/// </summary>
+public enum LinkType
+{
+    Unknown,  // Not set or needs to be guessed
+    URL,      // Web URL (http:// or https://)
+    File,     // File path
+    Folder,   // Directory/folder path
+    Git       // Git repository
+}

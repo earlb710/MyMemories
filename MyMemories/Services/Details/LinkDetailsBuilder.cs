@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Windows.Storage;
+using LibGit2Sharp;
 
 namespace MyMemories.Services.Details;
 
@@ -72,6 +73,12 @@ public class LinkDetailsBuilder
                 Margin = new Thickness(0, 0, 0, 16),
                 IsTextSelectionEnabled = true
             });
+        }
+
+        // Add Git repository information if this is a Git link
+        if (linkItem.Type == LinkType.Git && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
+        {
+            await AddGitRepositoryInfoAsync(linkItem);
         }
 
         bool isZipEntryUrl = !string.IsNullOrEmpty(linkItem.Url) && linkItem.Url.Contains("::");
@@ -1255,5 +1262,292 @@ public class LinkDetailsBuilder
             return openButton;
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// Adds Git repository information including branch, commit info, and pull button.
+    /// </summary>
+    private async Task AddGitRepositoryInfoAsync(LinkItem linkItem)
+    {
+        try
+        {
+            string gitDir = Path.Combine(linkItem.Url, ".git");
+            if (!Directory.Exists(gitDir))
+                return;
+
+            using var repo = new Repository(linkItem.Url);
+
+            // Create Git info section
+            _detailsPanel.Children.Add(new TextBlock
+            {
+                Text = "Git Repository",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8),
+                IsTextSelectionEnabled = true
+            });
+
+            var gitInfoPanel = new StackPanel
+            {
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+
+            // Current branch
+            if (!repo.Info.IsHeadDetached && repo.Head != null)
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Branch:", repo.Head.FriendlyName));
+            }
+            else if (repo.Info.IsHeadDetached)
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Branch:", "HEAD detached"));
+            }
+
+            // Latest commit info
+            var latestCommit = repo.Head?.Tip;
+            if (latestCommit != null)
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Latest Commit:", latestCommit.MessageShort));
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Commit SHA:", latestCommit.Sha.Substring(0, 8)));
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Author:", $"{latestCommit.Author.Name} <{latestCommit.Author.Email}>"));
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Date:", latestCommit.Author.When.DateTime.ToString("yyyy-MM-dd HH:mm:ss")));
+            }
+
+            // Remote info
+            var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin");
+            if (remote != null)
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Remote URL:", remote.Url));
+            }
+
+            // Repository status
+            var status = repo.RetrieveStatus();
+            int modifiedCount = status.Modified.Count() + status.Added.Count() + status.Removed.Count();
+            if (modifiedCount > 0)
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Local Changes:", $"{modifiedCount} file(s) modified"));
+            }
+            else
+            {
+                gitInfoPanel.Children.Add(CreateGitInfoLine("Status:", "Working tree clean"));
+            }
+
+            _detailsPanel.Children.Add(gitInfoPanel);
+
+            // Add pull button if there's a remote
+            if (remote != null && repo.Head?.TrackedBranch != null)
+            {
+                await AddPullButtonAsync(repo, linkItem.Url);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AddGitRepositoryInfoAsync] Error: {ex.Message}");
+            DetailsUIHelpers.AddWarning(_detailsPanel, $"Unable to read Git repository information: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Creates a Git info line with label and value.
+    /// </summary>
+    private StackPanel CreateGitInfoLine(string label, string value)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Width = 120,
+            IsTextSelectionEnabled = true
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = value,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Colors.Gray),
+            IsTextSelectionEnabled = true
+        });
+
+        return panel;
+    }
+
+    /// <summary>
+    /// Adds a pull button that checks for remote changes and is only enabled if there are changes to pull.
+    /// </summary>
+    private async Task AddPullButtonAsync(Repository repo, string repoPath)
+    {
+        try
+        {
+            var pullButton = new Button
+            {
+                Content = "Pull Changes",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+
+            var statusText = new TextBlock
+            {
+                Margin = new Thickness(0, 8, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Colors.Gray)
+            };
+
+            // Check if there are changes to pull
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var remoteBranch = repo.Head?.TrackedBranch;
+                    if (remoteBranch == null)
+                    {
+                        pullButton.DispatcherQueue.TryEnqueue(() =>
+                        {
+                            pullButton.IsEnabled = false;
+                            statusText.Text = "No tracking branch configured";
+                        });
+                        return;
+                    }
+
+                    // Note: We skip fetching to avoid credential/authentication issues
+                    // The pull button status is based on cached remote tracking branch info
+                    // Users should manually fetch/pull if they want the latest remote status
+                    var remote = repo.Network.Remotes["origin"];
+                    bool fetchSucceeded = false;
+                    
+                    // Optionally attempt fetch if credentials might be available
+                    // This is disabled by default to avoid authentication errors
+                    bool attemptFetch = false; // Set to true to enable fetch attempt
+                    
+                    if (attemptFetch && remote != null)
+                    {
+                        try
+                        {
+                            var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
+                            var fetchOptions = new FetchOptions
+                            {
+                                CredentialsProvider = (_url, _user, _cred) => new DefaultCredentials()
+                            };
+                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
+                            fetchSucceeded = true;
+                        }
+                        catch (LibGit2SharpException ex)
+                        {
+                            // Fetch may fail if credentials are required, network issues, etc.
+                            // We'll work with the existing remote branch information
+                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch failed: {ex.Message}");
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch error: {ex.Message}");
+                        }
+                    }
+
+                    // Compare local and remote commits using cached info
+                    var localCommit = repo.Head?.Tip;
+                    var remoteCommit = remoteBranch.Tip;
+
+                    if (localCommit != null && remoteCommit != null)
+                    {
+                        var mergeBase = repo.ObjectDatabase.FindMergeBase(localCommit, remoteCommit);
+                        
+                        if (mergeBase?.Sha == remoteCommit.Sha)
+                        {
+                            // Local is ahead or up to date
+                            pullButton.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                pullButton.IsEnabled = false;
+                                if (fetchSucceeded)
+                                {
+                                    statusText.Text = "Already up to date";
+                                }
+                                else
+                                {
+                                    statusText.Text = "Up to date (based on last fetch)";
+                                }
+                            });
+                        }
+                        else
+                        {
+                            // There are changes to pull
+                            var commitsBehind = repo.Commits.QueryBy(new CommitFilter
+                            {
+                                IncludeReachableFrom = remoteCommit,
+                                ExcludeReachableFrom = localCommit
+                            }).Count();
+
+                            pullButton.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                pullButton.IsEnabled = true;
+                                var cacheNote = fetchSucceeded ? "" : " (based on last fetch)";
+                                statusText.Text = $"{commitsBehind} commit(s) available{cacheNote}";
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Error checking for changes: {ex.Message}");
+                    pullButton.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        pullButton.IsEnabled = false;
+                        statusText.Text = "Unable to check for remote changes";
+                    });
+                }
+            });
+
+            pullButton.Click += async (s, e) =>
+            {
+                try
+                {
+                    pullButton.IsEnabled = false;
+                    statusText.Text = "Pulling changes...";
+
+                    await Task.Run(() =>
+                    {
+                        try
+                        {
+                            var signature = new Signature("MyMemories", "mymemories@local", DateTimeOffset.Now);
+                            var pullOptions = new PullOptions();
+                            
+                            LibGit2Sharp.Commands.Pull(repo, signature, pullOptions);
+
+                            pullButton.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                statusText.Text = "Pull completed successfully";
+                                statusText.Foreground = new SolidColorBrush(Colors.Green);
+                            });
+                        }
+                        catch (Exception pullEx)
+                        {
+                            pullButton.DispatcherQueue.TryEnqueue(() =>
+                            {
+                                statusText.Text = $"Pull failed: {pullEx.Message}";
+                                statusText.Foreground = new SolidColorBrush(Colors.Red);
+                                pullButton.IsEnabled = true;
+                            });
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    statusText.Text = $"Error: {ex.Message}";
+                    statusText.Foreground = new SolidColorBrush(Colors.Red);
+                    pullButton.IsEnabled = true;
+                }
+            };
+
+            _detailsPanel.Children.Add(pullButton);
+            _detailsPanel.Children.Add(statusText);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Error: {ex.Message}");
+        }
     }
 }

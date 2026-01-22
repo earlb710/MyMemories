@@ -78,12 +78,43 @@ public sealed partial class MainWindow
                     CreatedDate = DateTime.Now,
                     ModifiedDate = DateTime.Now,
                     FolderType = result.FolderType,
-                    FileFilters = result.FileFilters
+                    FileFilters = result.FileFilters,
+                    Type = result.LinkType
                 }
             };
 
             result.CategoryNode.Children.Add(linkNode);
             result.CategoryNode.IsExpanded = true;
+
+            // Create catalog immediately for Git repositories or folders with CatalogueFiles/FilteredCatalogue types
+            // Only if the directory actually exists (e.g., cloned Git repos or existing folders)
+            var link = (LinkItem)linkNode.Content;
+            System.Diagnostics.Debug.WriteLine($"[CategoryMenu_AddLink] Link created - Title: '{link.Title}', IsDirectory: {link.IsDirectory}, FolderType: {link.FolderType}, Type: {link.Type}, Url: '{link.Url}'");
+            
+            if (link.IsDirectory && 
+                (link.FolderType == FolderLinkType.CatalogueFiles || 
+                 link.FolderType == FolderLinkType.FilteredCatalogue))
+            {
+                // Check if the directory exists before attempting to catalog
+                // For Git repositories, this will be false until they're cloned
+                if (System.IO.Directory.Exists(link.Url))
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_AddLink] Creating catalog for '{link.Title}' at '{link.Url}'");
+                        await _catalogService!.CreateCatalogAsync(link, linkNode);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[CategoryMenu_AddLink] Failed to create catalog: {ex.Message}");
+                        // Continue even if catalog creation fails - user can refresh it later
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CategoryMenu_AddLink] Directory does not exist yet for '{link.Title}' at '{link.Url}'. Catalog will be created when directory becomes available.");
+                }
+            }
 
             var rootNode = GetRootCategoryNode(result.CategoryNode);
             await _categoryService!.SaveCategoryAsync(rootNode);
@@ -492,10 +523,10 @@ public sealed partial class MainWindow
                 Title = "Zip Created Successfully",
                 Content = $"The category folders have been successfully zipped to:\n\n{zipFilePath}\n\n" +
                          $"?? Statistics:\n" +
-                         $"   • Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
-                         $"   • Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
-                         $"   • Compression: {compressionRatio:F1}% reduction\n" +
-                         $"   • Time Taken: {duration.TotalSeconds:F1} seconds" +
+                         $"   ï¿½ Original Size: {FileViewerService.FormatFileSize(originalSize)}\n" +
+                         $"   ï¿½ Compressed Size: {FileViewerService.FormatFileSize(compressedSize)}\n" +
+                         $"   ï¿½ Compression: {compressionRatio:F1}% reduction\n" +
+                         $"   ï¿½ Time Taken: {duration.TotalSeconds:F1} seconds" +
                          (result.UsePassword ? "\n\n?? Zip file is password-protected" : ""),
                 CloseButtonText = "OK",
                 XamlRoot = Content.XamlRoot
@@ -588,10 +619,10 @@ public sealed partial class MainWindow
         else
         {
             statsTextBlock.Text = $"?? Category Statistics:\n" +
-                                 $"   • Folders: {stats.FolderCount:N0}\n" +
-                                 $"   • Subdirectories: {stats.SubdirectoryCount:N0}\n" +
-                                 $"   • Files: {stats.FileCount:N0}\n" +
-                                 $"   • Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
+                                 $"   ï¿½ Folders: {stats.FolderCount:N0}\n" +
+                                 $"   ï¿½ Subdirectories: {stats.SubdirectoryCount:N0}\n" +
+                                 $"   ï¿½ Files: {stats.FileCount:N0}\n" +
+                                 $"   ï¿½ Total Size: {FileUtilities.FormatFileSize(stats.TotalSize)}";
         }
 
         stackPanel.Children.Add(statsTextBlock);

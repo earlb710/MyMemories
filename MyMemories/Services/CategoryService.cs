@@ -567,6 +567,9 @@ public class CategoryService : ICategoryService
                     continue;
                 }
 
+                // Ensure link type is set before saving
+                link.EnsureLinkType();
+
                 var linkData = new LinkData
                 {
                     Title = link.Title,
@@ -574,10 +577,12 @@ public class CategoryService : ICategoryService
                     Description = string.IsNullOrWhiteSpace(link.Description) ? null : link.Description,
                     Keywords = string.IsNullOrWhiteSpace(link.Keywords) ? null : link.Keywords,
                     TagIds = link.TagIds.Count > 0 ? link.TagIds : null,
+                    Ratings = link.Ratings.Count > 0 ? link.Ratings : null,
                     IsDirectory = link.IsDirectory ? true : null,
                     CategoryPath = link.CategoryPath,
                     CreatedDate = link.CreatedDate,
                     ModifiedDate = link.ModifiedDate,
+                    Type = link.Type != LinkType.Unknown ? link.Type : null,
                     FolderType = link.IsDirectory && link.FolderType != FolderLinkType.LinkOnly ? link.FolderType : null,
                     FileFilters = !string.IsNullOrWhiteSpace(link.FileFilters) ? link.FileFilters : null,
                     IsCatalogEntry = link.IsCatalogEntry ? true : null,
@@ -834,8 +839,12 @@ public class CategoryService : ICategoryService
                     CatalogSortOrder = linkData.CatalogSortOrder,
                     UrlStatus = linkData.UrlStatus,
                     UrlLastChecked = linkData.UrlLastChecked,
-                    UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty
+                    UrlStatusMessage = linkData.UrlStatusMessage ?? string.Empty,
+                    Type = linkData.Type ?? LinkType.Unknown
                 };
+                
+                // Ensure link type is set (for backward compatibility with old data)
+                linkItem.EnsureLinkType();
                 
                 // Copy TagIds if present
                 if (linkData.TagIds != null && linkData.TagIds.Count > 0)
@@ -847,6 +856,12 @@ public class CategoryService : ICategoryService
                 if (linkData.BackupDirectories != null && linkData.BackupDirectories.Count > 0)
                 {
                     linkItem.BackupDirectories = new List<string>(linkData.BackupDirectories);
+                }
+
+                // Copy Ratings if present
+                if (linkData.Ratings != null && linkData.Ratings.Count > 0)
+                {
+                    linkItem.Ratings = new List<RatingValue>(linkData.Ratings);
                 }
 
                 if (linkData.CatalogEntries != null)
