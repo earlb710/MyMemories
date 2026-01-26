@@ -19,6 +19,9 @@ namespace MyMemories.Services.Details;
 public class LinkDetailsBuilder
 {
     private readonly StackPanel _detailsPanel;
+    private readonly GitDetailsBuilder _gitDetailsBuilder;
+    private readonly ZipDetailsBuilder _zipDetailsBuilder;
+    private readonly FileTypeDetailsBuilder _fileTypeDetailsBuilder;
 
     // Segoe MDL2 Assets glyphs
     private const string FileGlyph = "\uE8A5";        // Document
@@ -35,6 +38,9 @@ public class LinkDetailsBuilder
     public LinkDetailsBuilder(StackPanel detailsPanel)
     {
         _detailsPanel = detailsPanel;
+        _gitDetailsBuilder = new GitDetailsBuilder(detailsPanel);
+        _zipDetailsBuilder = new ZipDetailsBuilder(detailsPanel);
+        _fileTypeDetailsBuilder = new FileTypeDetailsBuilder(detailsPanel);
     }
 
     /// <summary>
@@ -78,14 +84,14 @@ public class LinkDetailsBuilder
         // Add Git repository information if this is a Git link
         if (linkItem.Type == LinkType.Git && linkItem.IsDirectory && Directory.Exists(linkItem.Url))
         {
-            await AddGitRepositoryInfoAsync(linkItem);
+            await _gitDetailsBuilder.AddGitRepositoryInfoAsync(linkItem);
         }
 
         bool isZipEntryUrl = !string.IsNullOrEmpty(linkItem.Url) && linkItem.Url.Contains("::");
 
         if (isZipEntryUrl)
         {
-            await AddZipEntryInfoAsync(linkItem);
+            await _zipDetailsBuilder.AddZipEntryInfoAsync(linkItem);
             return (null, null);
         }
 
@@ -130,7 +136,7 @@ public class LinkDetailsBuilder
 
                 if (isZipFile && onRefreshArchive != null)
                 {
-                    var hasManifest = await CheckZipHasManifestAsync(linkItem.Url);
+                    var hasManifest = await _zipDetailsBuilder.CheckZipHasManifestAsync(linkItem.Url);
 
                     if (hasManifest)
                     {
@@ -149,7 +155,7 @@ public class LinkDetailsBuilder
 
             if (isZipFile && hasCatalog)
             {
-                await AddManifestInfoAsync(linkItem.Url);
+                await _zipDetailsBuilder.AddManifestInfoAsync(linkItem.Url);
             }
         }
 
@@ -329,48 +335,6 @@ public class LinkDetailsBuilder
         _detailsPanel.Children.Add(autoRefreshCheckBox);
     }
 
-    private async Task AddManifestInfoAsync(string zipPath)
-    {
-        var hasManifest = await CheckZipHasManifestAsync(zipPath);
-
-        if (hasManifest)
-        {
-            var manifestRootCategory = await GetManifestRootCategoryAsync(zipPath);
-
-            var manifestInfo = new Border
-            {
-                Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(40, 0, 180, 0)),
-                BorderBrush = new SolidColorBrush(Colors.Green),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(12, 8, 12, 8),
-                Margin = new Thickness(0, 0, 0, 16),
-                Child = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    Children =
-                    {
-                        new FontIcon
-                        {
-                            Glyph = "\uE8A5",
-                            FontSize = 16,
-                            Foreground = new SolidColorBrush(Colors.LightGreen)
-                        },
-                        new TextBlock
-                        {
-                            Text = $"This archive contains a manifest. Source category: {manifestRootCategory ?? "Unknown"}",
-                            TextWrapping = TextWrapping.Wrap,
-                            Foreground = new SolidColorBrush(Colors.White),
-                            VerticalAlignment = VerticalAlignment.Center
-                        }
-                    }
-                }
-            };
-            _detailsPanel.Children.Add(manifestInfo);
-        }
-    }
-
     private void AddLinkOnlyBanner()
     {
         var infoBanner = new Border
@@ -490,106 +454,13 @@ public class LinkDetailsBuilder
         _detailsPanel.Children.Add(timestampsPanel);
     }
 
-    private async Task AddZipEntryInfoAsync(LinkItem linkItem)
-    {
-        try
-        {
-            var parts = linkItem.Url.Split(new[] { "::" }, 2, StringSplitOptions.None);
-            if (parts.Length != 2)
-            {
-                DetailsUIHelpers.AddWarning(_detailsPanel, "Invalid zip entry URL format");
-                return;
-            }
-
-            var zipPath = parts[0];
-            var entryPath = parts[1];
-
-            string fileName;
-            string extension;
-            try
-            {
-                fileName = Path.GetFileName(entryPath.Replace('/', Path.DirectorySeparatorChar));
-                extension = Path.GetExtension(entryPath);
-            }
-            catch
-            {
-                fileName = entryPath;
-                extension = string.Empty;
-            }
-
-            _detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "Zip Entry Information",
-                FontSize = 18,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-            infoPanel.Children.Add(CreateIconStatLine(FileGlyph, $"File Name: {fileName}"));
-
-            if (!string.IsNullOrEmpty(extension))
-            {
-                infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {extension}"));
-            }
-
-            infoPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Path in Archive: {entryPath}"));
-
-            if (linkItem.FileSize.HasValue)
-            {
-                infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize(linkItem.FileSize.Value)}"));
-            }
-            else
-            {
-                try
-                {
-                    if (File.Exists(zipPath))
-                    {
-                        var entryInfo = await Task.Run(() =>
-                        {
-                            try
-                            {
-                                using var archive = ZipFile.OpenRead(zipPath);
-                                var normalizedPath = entryPath.Replace('\\', '/');
-                                var entry = archive.GetEntry(normalizedPath) ?? archive.GetEntry(entryPath);
-                                if (entry != null)
-                                {
-                                    return (found: true, size: (ulong)entry.Length, modified: entry.LastWriteTime.DateTime);
-                                }
-                            }
-                            catch { }
-                            return (found: false, size: 0UL, modified: DateTime.MinValue);
-                        });
-
-                        if (entryInfo.found)
-                        {
-                            infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Size: {FileViewerService.FormatFileSize(entryInfo.size)}"));
-                            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {entryInfo.modified:yyyy-MM-dd HH:mm:ss}"));
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            _detailsPanel.Children.Add(infoPanel);
-            DetailsUIHelpers.AddSection(_detailsPanel, "Source Archive", zipPath, isSelectable: true);
-            AddTimestamps(linkItem);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AddZipEntryInfoAsync] Error: {ex.Message}");
-            DetailsUIHelpers.AddWarning(_detailsPanel, $"Error displaying zip entry information: {ex.Message}");
-        }
-    }
-
     private async Task AddFileSystemInfoAsync(LinkItem linkItem, bool isZipFile)
     {
         try
         {
             if (isZipFile && File.Exists(linkItem.Url))
             {
-                AddZipFileInfo(linkItem.Url);
+                _zipDetailsBuilder.AddZipFileInfo(linkItem.Url);
             }
             else if (linkItem.IsDirectory && Directory.Exists(linkItem.Url))
             {
@@ -604,85 +475,6 @@ public class LinkDetailsBuilder
         {
             DetailsUIHelpers.AddWarning(_detailsPanel, $"Unable to access file/directory information: {ex.Message}");
         }
-    }
-
-    private void AddZipFileInfo(string path)
-    {
-        var fileInfo = new FileInfo(path);
-
-        _detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "Zip Archive Information",
-            FontSize = 18,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8),
-            IsTextSelectionEnabled = true
-        });
-
-        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-
-        try
-        {
-            int fileCount = 0;
-            int dirCount = 0;
-            bool isPasswordProtected = false;
-
-            try
-            {
-                using (var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var archive = new ZipArchive(fileStream, ZipArchiveMode.Read, false))
-                {
-                    foreach (var entry in archive.Entries)
-                    {
-                        if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
-                            dirCount++;
-                        else if (!string.IsNullOrEmpty(entry.Name))
-                            fileCount++;
-                    }
-                }
-            }
-            catch (InvalidDataException)
-            {
-                try
-                {
-                    using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(path))
-                    {
-                        isPasswordProtected = true;
-                        foreach (ICSharpCode.SharpZipLib.Zip.ZipEntry entry in zipFile)
-                        {
-                            if (entry.IsDirectory)
-                                dirCount++;
-                            else
-                                fileCount++;
-                        }
-                    }
-                }
-                catch { throw; }
-            }
-
-            if (isPasswordProtected)
-            {
-                infoPanel.Children.Add(CreateIconWarningLine(LockGlyph, "This archive is password-protected"));
-            }
-
-            infoPanel.Children.Add(CreateIconStatLine(FileGlyph, $"Files in Archive: {fileCount}"));
-            if (dirCount > 0)
-            {
-                infoPanel.Children.Add(CreateIconStatLine(FolderGlyph, $"Folders in Archive: {dirCount}"));
-            }
-        }
-        catch (Exception ex)
-        {
-            infoPanel.Children.Add(CreateWarningLine($"Could not read archive contents: {ex.Message}"));
-        }
-
-        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"Archive Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Extension: {fileInfo.Extension}"));
-        infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Last Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Last Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
-
-        _detailsPanel.Children.Add(infoPanel);
     }
 
     private async Task AddDirectoryInfoAsync(string path)
@@ -729,7 +521,7 @@ public class LinkDetailsBuilder
         {
             try
             {
-                await AddImageFileInfoAsync(path, fileInfo);
+                await _fileTypeDetailsBuilder.AddImageFileInfoAsync(path, fileInfo);
             }
             catch (Exception ex)
             {
@@ -740,7 +532,7 @@ public class LinkDetailsBuilder
         }
         else if (isPdf)
         {
-            await AddPdfFileInfoAsync(path, fileInfo);
+            await _fileTypeDetailsBuilder.AddPdfFileInfoAsync(path, fileInfo);
         }
         else
         {
@@ -776,325 +568,6 @@ public class LinkDetailsBuilder
     /// <summary>
     /// Adds detailed information panel for image files with EXIF metadata.
     /// </summary>
-    private async Task AddImageFileInfoAsync(string path, FileInfo fileInfo)
-    {
-        _detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "Image Information",
-            FontSize = 18,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8),
-            IsTextSelectionEnabled = true
-        });
-
-        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        
-        // Basic file info
-        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"File Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-        infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Format: {fileInfo.Extension.ToUpperInvariant().TrimStart('.')}"));
-
-        // Try to extract image metadata
-        var metadata = await ImageMetadataService.ExtractMetadataAsync(path);
-        
-        if (metadata != null)
-        {
-            // Dimensions & Technical Info
-            if (metadata.PixelWidth > 0 && metadata.PixelHeight > 0)
-            {
-                infoPanel.Children.Add(CreateIconStatLine("\uE91B", $"Dimensions: {metadata.PixelWidth} � {metadata.PixelHeight} pixels"));
-                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Megapixels: {metadata.Megapixels}"));
-                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aspect Ratio: {metadata.AspectRatio}"));
-            }
-
-            if (metadata.DpiX > 0 && metadata.DpiY > 0)
-            {
-                var dpiText = metadata.DpiX == metadata.DpiY 
-                    ? $"Resolution: {metadata.DpiX:F0} DPI" 
-                    : $"Resolution: {metadata.DpiX:F0} � {metadata.DpiY:F0} DPI";
-                infoPanel.Children.Add(CreateIconStatLine("\uE7C5", dpiText));
-            }
-
-            // Camera Information
-            if (!string.IsNullOrEmpty(metadata.CameraManufacturer) || !string.IsNullOrEmpty(metadata.CameraModel))
-            {
-                _detailsPanel.Children.Add(infoPanel);
-                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Camera Information",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-
-                if (!string.IsNullOrEmpty(metadata.CameraManufacturer))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE7F4", $"Manufacturer: {metadata.CameraManufacturer}"));
-                
-                if (!string.IsNullOrEmpty(metadata.CameraModel))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE960", $"Model: {metadata.CameraModel}"));
-            }
-
-            // Camera Settings (EXIF)
-            if (metadata.IsoSpeed.HasValue || !string.IsNullOrEmpty(metadata.ExposureTime) || 
-                !string.IsNullOrEmpty(metadata.FNumber) || !string.IsNullOrEmpty(metadata.FocalLength))
-            {
-                if (infoPanel.Children.Count > 0)
-                {
-                    _detailsPanel.Children.Add(infoPanel);
-                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                }
-
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Camera Settings",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-
-                if (metadata.IsoSpeed.HasValue)
-                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"ISO: {metadata.IsoSpeed.Value}"));
-                
-                if (!string.IsNullOrEmpty(metadata.ExposureTime))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE916", $"Shutter Speed: {metadata.ExposureTime}"));
-                
-                if (!string.IsNullOrEmpty(metadata.FNumber))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Aperture: {metadata.FNumber}"));
-                
-                if (!string.IsNullOrEmpty(metadata.FocalLength))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE714", $"Focal Length: {metadata.FocalLength}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Flash))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE793", $"Flash: {metadata.Flash}"));
-            }
-
-            // GPS Location
-            if (!string.IsNullOrEmpty(metadata.GpsLocation))
-            {
-                if (infoPanel.Children.Count > 0)
-                {
-                    _detailsPanel.Children.Add(infoPanel);
-                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                }
-
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Location",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-
-                infoPanel.Children.Add(CreateIconStatLine("\uE707", $"GPS: {metadata.GpsLocation}"));
-            }
-
-            // Author & Copyright
-            if (!string.IsNullOrEmpty(metadata.Artist) || !string.IsNullOrEmpty(metadata.Copyright) || 
-                !string.IsNullOrEmpty(metadata.Software) || !string.IsNullOrEmpty(metadata.ImageDescription))
-            {
-                if (infoPanel.Children.Count > 0)
-                {
-                    _detailsPanel.Children.Add(infoPanel);
-                    infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                }
-
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Author & Details",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-
-                if (!string.IsNullOrEmpty(metadata.Artist))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE77B", $"Artist: {metadata.Artist}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Copyright))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE72E", $"Copyright: {metadata.Copyright}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Software))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Software: {metadata.Software}"));
-                
-                if (!string.IsNullOrEmpty(metadata.ImageDescription))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Description: {metadata.ImageDescription}"));
-            }
-
-            // Dates
-            if (infoPanel.Children.Count > 0)
-            {
-                _detailsPanel.Children.Add(infoPanel);
-                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-            }
-
-            _detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "Timestamps",
-                FontSize = 16,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 8)
-            });
-
-            if (metadata.DateTaken.HasValue)
-                infoPanel.Children.Add(CreateIconStatLine("\uE787", $"Photo Taken: {metadata.DateTaken.Value:yyyy-MM-dd HH:mm:ss}"));
-            
-            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"File Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"File Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        }
-        else
-        {
-            // Fallback if metadata extraction fails - show basic file info
-            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
-        }
-
-        _detailsPanel.Children.Add(infoPanel);
-    }
-
-    /// <summary>
-    /// Adds detailed information panel for PDF files with document metadata.
-    /// </summary>
-    private async Task AddPdfFileInfoAsync(string path, FileInfo fileInfo)
-    {
-        _detailsPanel.Children.Add(new TextBlock
-        {
-            Text = "PDF Document Information",
-            FontSize = 18,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
-        
-        // Basic file info
-        infoPanel.Children.Add(CreateIconStatLine(SizeGlyph, $"File Size: {FileViewerService.FormatFileSize((ulong)fileInfo.Length)}"));
-
-        // Try to extract PDF metadata
-        var metadata = await PdfMetadataService.ExtractMetadataAsync(path);
-        
-        if (metadata != null)
-        {
-            // Page Count & Version
-            infoPanel.Children.Add(CreateIconStatLine("\uE8A4", $"Pages: {metadata.PageCount}"));
-            
-            if (!string.IsNullOrEmpty(metadata.PdfVersion))
-                infoPanel.Children.Add(CreateIconStatLine("\uE8E5", $"PDF Version: {metadata.PdfVersion}"));
-            
-            if (metadata.IsPasswordProtected)
-                infoPanel.Children.Add(CreateIconStatLine(LockGlyph, "Password Protected: Yes"));
-            
-            // Page Dimensions
-            if (metadata.PageWidth > 0 && metadata.PageHeight > 0)
-            {
-                _detailsPanel.Children.Add(infoPanel);
-                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Page Layout",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
-                });
-
-                if (!string.IsNullOrEmpty(metadata.PageSizeDescription))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8A1", $"Page Size: {metadata.PageSizeDescription}"));
-                else
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8A1", $"Page Size: {metadata.PageDimensions}"));
-                
-                if (!string.IsNullOrEmpty(metadata.PageOrientation))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE7C5", $"Orientation: {metadata.PageOrientation}"));
-            }
-
-            // Document Title & Subject
-            if (!string.IsNullOrEmpty(metadata.Title) || !string.IsNullOrEmpty(metadata.Subject))
-            {
-                _detailsPanel.Children.Add(infoPanel);
-                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Document Details",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8)
-                });
-
-                if (!string.IsNullOrEmpty(metadata.Title))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Title: {metadata.Title}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Subject))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8C8", $"Subject: {metadata.Subject}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Keywords))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE8EC", $"Keywords: {metadata.Keywords}"));
-            }
-
-            // Author Information
-            if (!string.IsNullOrEmpty(metadata.Author) || !string.IsNullOrEmpty(metadata.Creator) || 
-                !string.IsNullOrEmpty(metadata.Producer))
-            {
-                _detailsPanel.Children.Add(infoPanel);
-                infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-                
-                _detailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "Author & Creation",
-                    FontSize = 16,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Margin = new Thickness(0, 8, 0, 8),
-                    IsTextSelectionEnabled = true
-                });
-
-                if (!string.IsNullOrEmpty(metadata.Author))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE77B", $"Author: {metadata.Author}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Creator))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Creator: {metadata.Creator}"));
-                
-                if (!string.IsNullOrEmpty(metadata.Producer))
-                    infoPanel.Children.Add(CreateIconStatLine("\uE90F", $"Producer: {metadata.Producer}"));
-            }
-
-            // PDF Timestamps
-            _detailsPanel.Children.Add(infoPanel);
-            infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 16) };
-            
-            _detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "Timestamps",
-                FontSize = 16,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 8, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            if (metadata.PdfCreationDate.HasValue)
-                infoPanel.Children.Add(CreateIconStatLine("\uE787", $"PDF Created: {metadata.PdfCreationDate.Value:yyyy-MM-dd HH:mm:ss}"));
-            
-            if (metadata.PdfModificationDate.HasValue)
-                infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"PDF Modified: {metadata.PdfModificationDate.Value:yyyy-MM-dd HH:mm:ss}"));
-            
-            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"File Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"File Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-        }
-        else
-        {
-            // Fallback if metadata extraction fails - show basic file info
-            infoPanel.Children.Add(CreateIconStatLine(ExtensionGlyph, $"Format: PDF"));
-            infoPanel.Children.Add(CreateIconStatLine(CalendarGlyph, $"Created: {fileInfo.CreationTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(EditGlyph, $"Modified: {fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}"));
-            infoPanel.Children.Add(CreateIconStatLine(ViewGlyph, $"Accessed: {fileInfo.LastAccessTime:yyyy-MM-dd HH:mm:ss}"));
-        }
-
-        _detailsPanel.Children.Add(infoPanel);
-    }
-
     /// <summary>
     /// Creates a stat line with an icon and text.
     /// </summary>
@@ -1164,79 +637,6 @@ public class LinkDetailsBuilder
         return false;
     }
 
-    private async Task<bool> CheckZipHasManifestAsync(string zipFilePath)
-    {
-        if (!File.Exists(zipFilePath))
-            return false;
-
-        try
-        {
-            return await Task.Run(() =>
-            {
-                try
-                {
-                    using (var archive = ZipFile.OpenRead(zipFilePath))
-                    {
-                        return archive.GetEntry("_MANIFEST.txt") != null;
-                    }
-                }
-                catch (InvalidDataException)
-                {
-                    try
-                    {
-                        using (var zipFile = new ICSharpCode.SharpZipLib.Zip.ZipFile(zipFilePath))
-                        {
-                            return zipFile.GetEntry("_MANIFEST.txt") != null;
-                        }
-                    }
-                    catch { return false; }
-                }
-                catch { return false; }
-            });
-        }
-        catch { return false; }
-    }
-
-    private async Task<string?> GetManifestRootCategoryAsync(string zipFilePath)
-    {
-        if (!File.Exists(zipFilePath))
-            return null;
-
-        try
-        {
-            return await Task.Run(() =>
-            {
-                try
-                {
-                    using (var archive = ZipFile.OpenRead(zipFilePath))
-                    {
-                        var manifestEntry = archive.GetEntry("_MANIFEST.txt");
-                        if (manifestEntry == null)
-                            return null;
-
-                        using (var stream = manifestEntry.Open())
-                        using (var reader = new StreamReader(stream))
-                        {
-                            var content = reader.ReadToEnd();
-                            var match = Regex.Match(content, @"Root Category:\s*(.+)", RegexOptions.Multiline);
-                            if (match.Success)
-                            {
-                                return match.Groups[1].Value.Trim();
-                            }
-                            return null;
-                        }
-                    }
-                }
-                catch (InvalidDataException)
-                {
-                    return "Password Protected";
-                }
-                catch { return null; }
-            });
-        }
-        catch { return null; }
-    }
-
     /// <summary>
     /// Adds an "Open in Explorer" button for directories.
     /// </summary>
@@ -1262,372 +662,5 @@ public class LinkDetailsBuilder
             return openButton;
         }
         catch { return null; }
-    }
-
-    /// <summary>
-    /// Adds Git repository information including branch, commit info, and pull button.
-    /// </summary>
-    private async Task AddGitRepositoryInfoAsync(LinkItem linkItem)
-    {
-        try
-        {
-            string gitDir = Path.Combine(linkItem.Url, ".git");
-            if (!Directory.Exists(gitDir))
-                return;
-
-            using var repo = new Repository(linkItem.Url);
-
-            // Create Git info section
-            _detailsPanel.Children.Add(new TextBlock
-            {
-                Text = "Git Repository",
-                FontSize = 18,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 8),
-                IsTextSelectionEnabled = true
-            });
-
-            var gitInfoPanel = new StackPanel
-            {
-                Spacing = 8,
-                Margin = new Thickness(0, 0, 0, 16)
-            };
-
-            // Current branch
-            if (!repo.Info.IsHeadDetached && repo.Head != null)
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Branch:", repo.Head.FriendlyName));
-            }
-            else if (repo.Info.IsHeadDetached)
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Branch:", "HEAD detached"));
-            }
-
-            // Latest commit info
-            var latestCommit = repo.Head?.Tip;
-            if (latestCommit != null)
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Latest Commit:", latestCommit.MessageShort));
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Commit SHA:", latestCommit.Sha.Substring(0, 8)));
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Author:", $"{latestCommit.Author.Name} <{latestCommit.Author.Email}>"));
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Date:", latestCommit.Author.When.DateTime.ToString("yyyy-MM-dd HH:mm:ss")));
-            }
-
-            // Remote info
-            var remote = repo.Network.Remotes.FirstOrDefault(r => r.Name == "origin");
-            if (remote != null)
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Remote URL:", remote.Url));
-            }
-
-            // Repository status
-            var status = repo.RetrieveStatus();
-            int modifiedCount = status.Modified.Count() + status.Added.Count() + status.Removed.Count();
-            if (modifiedCount > 0)
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Local Changes:", $"{modifiedCount} file(s) modified"));
-            }
-            else
-            {
-                gitInfoPanel.Children.Add(CreateGitInfoLine("Status:", "Working tree clean"));
-            }
-
-            _detailsPanel.Children.Add(gitInfoPanel);
-
-            // Add pull button if there's a remote
-            if (remote != null && repo.Head?.TrackedBranch != null)
-            {
-                await AddPullButtonAsync(repo, linkItem.Url);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AddGitRepositoryInfoAsync] Error: {ex.Message}");
-            DetailsUIHelpers.AddWarning(_detailsPanel, $"Unable to read Git repository information: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Creates a Git info line with label and value.
-    /// </summary>
-    private StackPanel CreateGitInfoLine(string label, string value)
-    {
-        var panel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8
-        };
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = label,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Width = 120,
-            IsTextSelectionEnabled = true
-        });
-
-        panel.Children.Add(new TextBlock
-        {
-            Text = value,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Colors.Gray),
-            IsTextSelectionEnabled = true
-        });
-
-        return panel;
-    }
-
-    /// <summary>
-    /// Adds a pull button that checks for remote changes and is only enabled if there are changes to pull.
-    /// Fetches from remote to compare current branch hash with repository.
-    /// </summary>
-    private async Task AddPullButtonAsync(Repository repo, string repoPath)
-    {
-        try
-        {
-            var pullButton = new Button
-            {
-                Content = "Pull Changes",
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 8, 0, 0)
-            };
-
-            var statusText = new TextBlock
-            {
-                Margin = new Thickness(0, 8, 0, 0),
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(Colors.Gray)
-            };
-
-            // Initially show checking status
-            statusText.Text = "Checking for remote changes...";
-
-            // Check if there are changes to pull
-            await Task.Run(() =>
-            {
-                try
-                {
-                    var remoteBranch = repo.Head?.TrackedBranch;
-                    if (remoteBranch == null)
-                    {
-                        pullButton.DispatcherQueue.TryEnqueue(() =>
-                        {
-                            pullButton.IsEnabled = false;
-                            statusText.Text = "No tracking branch configured";
-                        });
-                        return;
-                    }
-
-                    // Attempt to fetch from remote to get the latest commit hashes
-                    var remote = repo.Network.Remotes["origin"];
-                    bool fetchSucceeded = false;
-                    string fetchError = string.Empty;
-                    
-                    if (remote != null)
-                    {
-                        try
-                        {
-                            var refSpecs = remote.FetchRefSpecs.Select(x => x.Specification);
-                            
-                            // Track credential attempts to avoid infinite retry loops
-                            int fetchCredentialAttempts = 0;
-                            
-                            var fetchOptions = new FetchOptions
-                            {
-                                CredentialsProvider = (url, usernameFromUrl, types) =>
-                                {
-                                    try
-                                    {
-                                        fetchCredentialAttempts++;
-                                        
-                                        // Only provide credentials on the first attempt
-                                        // Return null on subsequent attempts to signal authentication failure
-                                        if (fetchCredentialAttempts > 1)
-                                        {
-                                            return null;
-                                        }
-                                        
-                                        // Always provide empty username/password credentials on first attempt
-                                        // This works for anonymous HTTPS access
-                                        return new UsernamePasswordCredentials
-                                        {
-                                            Username = string.Empty,
-                                            Password = string.Empty
-                                        };
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        // If credentials provider fails, log and return null
-                                        System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Credentials provider error: {ex.Message}");
-                                        return null;
-                                    }
-                                }
-                            };
-                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "");
-                            fetchSucceeded = true;
-                        }
-                        catch (LibGit2SharpException ex)
-                        {
-                            // Fetch may fail if credentials are required, network issues, etc.
-                            // We'll work with the existing remote branch information
-                            fetchError = ex.Message;
-                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch failed: {ex.Message}");
-                        }
-                        catch (Exception ex)
-                        {
-                            fetchError = ex.Message;
-                            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Fetch error: {ex.Message}");
-                        }
-                    }
-
-                    // Compare local and remote branch hashes
-                    var localCommit = repo.Head?.Tip;
-                    var remoteCommit = remoteBranch.Tip;
-
-                    if (localCommit != null && remoteCommit != null)
-                    {
-                        // Compare the commit SHAs directly
-                        if (localCommit.Sha == remoteCommit.Sha)
-                        {
-                            // Current branch hash matches remote - no changes to pull
-                            pullButton.DispatcherQueue.TryEnqueue(() =>
-                            {
-                                pullButton.IsEnabled = false;
-                                if (fetchSucceeded)
-                                {
-                                    statusText.Text = "Already up to date";
-                                }
-                                else if (!string.IsNullOrEmpty(fetchError))
-                                {
-                                    statusText.Text = $"Up to date (fetch failed: {fetchError})";
-                                }
-                                else
-                                {
-                                    statusText.Text = "Up to date (based on last fetch)";
-                                }
-                            });
-                        }
-                        else
-                        {
-                            // Branch hashes differ - check if we need to pull
-                            var mergeBase = repo.ObjectDatabase.FindMergeBase(localCommit, remoteCommit);
-                            
-                            if (mergeBase?.Sha == remoteCommit.Sha)
-                            {
-                                // Local is ahead - no changes to pull
-                                pullButton.DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    pullButton.IsEnabled = false;
-                                    if (fetchSucceeded)
-                                    {
-                                        statusText.Text = "Local is ahead of remote";
-                                    }
-                                    else if (!string.IsNullOrEmpty(fetchError))
-                                    {
-                                        statusText.Text = $"Local is ahead (fetch failed: {fetchError})";
-                                    }
-                                    else
-                                    {
-                                        statusText.Text = "Local is ahead (based on last fetch)";
-                                    }
-                                });
-                            }
-                            else
-                            {
-                                // There are changes to pull
-                                var commitsBehind = repo.Commits.QueryBy(new CommitFilter
-                                {
-                                    IncludeReachableFrom = remoteCommit,
-                                    ExcludeReachableFrom = localCommit
-                                }).Count();
-
-                                pullButton.DispatcherQueue.TryEnqueue(() =>
-                                {
-                                    pullButton.IsEnabled = true;
-                                    if (fetchSucceeded)
-                                    {
-                                        statusText.Text = $"{commitsBehind} commit(s) available";
-                                    }
-                                    else if (!string.IsNullOrEmpty(fetchError))
-                                    {
-                                        statusText.Text = $"{commitsBehind} commit(s) available (fetch failed: {fetchError})";
-                                    }
-                                    else
-                                    {
-                                        statusText.Text = $"{commitsBehind} commit(s) available (based on last fetch)";
-                                    }
-                                });
-                            }
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(fetchError))
-                    {
-                        // Fetch failed and no cached remote tracking info available
-                        pullButton.DispatcherQueue.TryEnqueue(() =>
-                        {
-                            pullButton.IsEnabled = false;
-                            statusText.Text = $"Unable to fetch: {fetchError}";
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Error checking for changes: {ex.Message}");
-                    pullButton.DispatcherQueue.TryEnqueue(() =>
-                    {
-                        pullButton.IsEnabled = false;
-                        statusText.Text = "Unable to check for remote changes";
-                    });
-                }
-            });
-
-            pullButton.Click += async (s, e) =>
-            {
-                try
-                {
-                    pullButton.IsEnabled = false;
-                    statusText.Text = "Pulling changes...";
-
-                    await Task.Run(() =>
-                    {
-                        try
-                        {
-                            var signature = new Signature("MyMemories", "mymemories@local", DateTimeOffset.Now);
-                            var pullOptions = new PullOptions();
-                            
-                            LibGit2Sharp.Commands.Pull(repo, signature, pullOptions);
-
-                            pullButton.DispatcherQueue.TryEnqueue(() =>
-                            {
-                                statusText.Text = "Pull completed successfully";
-                                statusText.Foreground = new SolidColorBrush(Colors.Green);
-                            });
-                        }
-                        catch (Exception pullEx)
-                        {
-                            pullButton.DispatcherQueue.TryEnqueue(() =>
-                            {
-                                statusText.Text = $"Pull failed: {pullEx.Message}";
-                                statusText.Foreground = new SolidColorBrush(Colors.Red);
-                                pullButton.IsEnabled = true;
-                            });
-                        }
-                    });
-                }
-                catch (Exception ex)
-                {
-                    statusText.Text = $"Error: {ex.Message}";
-                    statusText.Foreground = new SolidColorBrush(Colors.Red);
-                    pullButton.IsEnabled = true;
-                }
-            };
-
-            _detailsPanel.Children.Add(pullButton);
-            _detailsPanel.Children.Add(statusText);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[AddPullButtonAsync] Error: {ex.Message}");
-        }
     }
 }
