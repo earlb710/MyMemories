@@ -225,7 +225,7 @@ public class GitDetailsBuilder
                                 }
                             };
                             
-                            Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "Checking for updates");
+                            LibGit2Sharp.Commands.Fetch(repo, remote.Name, refSpecs, fetchOptions, "Checking for updates");
                             fetchSucceeded = true;
                         }
                         catch (Exception ex)
@@ -328,7 +328,7 @@ public class GitDetailsBuilder
                         };
 
                         var signature = new Signature("MyMemories", "noreply@mymemories.local", DateTimeOffset.Now);
-                        Commands.Pull(repo, signature, pullOptions);
+                        LibGit2Sharp.Commands.Pull(repo, signature, pullOptions);
 
                         pullButton.DispatcherQueue.TryEnqueue(() =>
                         {
