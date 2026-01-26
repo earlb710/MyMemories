@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using MyMemories.Services;
 
 namespace MyMemories.Services.Details;
 

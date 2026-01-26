@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using LibGit2Sharp;
@@ -28,8 +29,8 @@ public class GitDetailsBuilder
     {
         try
         {
-            string gitDir = System.IO.Path.Combine(linkItem.Url, ".git");
-            if (!System.IO.Directory.Exists(gitDir))
+            string gitDir = Path.Combine(linkItem.Url, ".git");
+            if (!Directory.Exists(gitDir))
                 return;
 
             using var repo = new Repository(linkItem.Url);
@@ -204,7 +205,8 @@ public class GitDetailsBuilder
                                             return null;
                                         }
                                         
-                                        // Always provide empty username/password credentials on first attempt
+                                        // Provide empty credentials to support anonymous HTTPS access to public repositories.
+                                        // For repositories requiring authentication, users will need to configure Git credentials separately.
                                         return new UsernamePasswordCredentials
                                         {
                                             Username = string.Empty,
@@ -308,7 +310,8 @@ public class GitDetailsBuilder
                                             return null;
                                         }
                                         
-                                        // Always provide empty username/password credentials on first attempt
+                                        // Provide empty credentials to support anonymous HTTPS access to public repositories.
+                                        // For repositories requiring authentication, users will need to configure Git credentials separately.
                                         return new UsernamePasswordCredentials
                                         {
                                             Username = string.Empty,
