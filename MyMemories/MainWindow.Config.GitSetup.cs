@@ -46,15 +46,6 @@ public sealed partial class MainWindow
         };
         stackPanel.Children.Add(infoBanner);
 
-        // Status banner (initially hidden)
-        var statusBanner = new InfoBar
-        {
-            IsOpen = false,
-            IsClosable = true,
-            Margin = new Thickness(0, 0, 0, 16)
-        };
-        stackPanel.Children.Add(statusBanner);
-
         // Repository Name ComboBox with + and - icons
         var repoNamePanel = new StackPanel
         {
@@ -147,6 +138,14 @@ public sealed partial class MainWindow
         };
         ToolTipService.SetToolTip(testConnectionButton, "Test if repository is valid");
 
+        // Status banner (initially hidden) - positioned below Test Connection button
+        var statusBanner = new InfoBar
+        {
+            IsOpen = false,
+            IsClosable = true,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
         browseRepoButton.Click += (s, args) =>
         {
             var selectedPath = _folderPickerService?.BrowseForFolder(repoPathTextBox.Text, "Select Git Repository");
@@ -164,6 +163,7 @@ public sealed partial class MainWindow
         repoButtonPanel.Children.Add(browseRepoButton);
         repoButtonPanel.Children.Add(testConnectionButton);
         stackPanel.Children.Add(repoButtonPanel);
+        stackPanel.Children.Add(statusBanner);
 
         // Username (optional for remote repos)
         stackPanel.Children.Add(new TextBlock
@@ -369,9 +369,58 @@ public sealed partial class MainWindow
             }
         }
 
+        // Helper method to fetch branches with debouncing
+        async Task FetchBranchesWithCurrentCredentialsAsync()
+        {
+            string path = string.Empty;
+            string username = string.Empty;
+            string password = string.Empty;
+            
+            // Get current values from UI thread using TaskCompletionSource
+            var tcs = new TaskCompletionSource<bool>();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                path = repoPathTextBox.Text;
+                username = usernameTextBox.Text;
+                password = passwordBox.Password;
+                tcs.SetResult(true);
+            });
+            await tcs.Task;
+            
+            // Fetch branches if path is valid - ALL UI access must happen on UI thread
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                var fetchTcs = new TaskCompletionSource<bool>();
+                DispatcherQueue.TryEnqueue(async () =>
+                {
+                    try
+                    {
+                        cloneStatusBanner.IsOpen = false;
+                        await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
+                        UpdateCloneButtonState();
+                        fetchTcs.SetResult(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        fetchTcs.SetException(ex);
+                    }
+                });
+                
+                try
+                {
+                    await fetchTcs.Task;
+                }
+                catch
+                {
+                    // Fetch failed, ignore
+                }
+            }
+        }
+
         // Enable/disable buttons based on input
         repoNameComboBox.SelectionChanged += (s, args) => UpdateCloneButtonState();
         repoNameComboBox.TextSubmitted += (s, args) => UpdateCloneButtonState();
+        
         // Add debouncing timer for path changes to avoid excessive branch fetching
         System.Threading.Timer? pathChangeTimer = null;
         
@@ -383,52 +432,39 @@ public sealed partial class MainWindow
             pathChangeTimer?.Dispose();
             pathChangeTimer = new System.Threading.Timer(async _ =>
             {
-                string path = string.Empty;
-                string username = string.Empty;
-                string password = string.Empty;
-                
-                // Get current values from UI thread using TaskCompletionSource
-                var tcs = new TaskCompletionSource<bool>();
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    path = repoPathTextBox.Text;
-                    username = usernameTextBox.Text;
-                    password = passwordBox.Password;
-                    tcs.SetResult(true);
-                });
-                await tcs.Task;
-                
-                // Fetch branches if path is valid - ALL UI access must happen on UI thread
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    var fetchTcs = new TaskCompletionSource<bool>();
-                    DispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            cloneStatusBanner.IsOpen = false;
-                            await FetchRemoteBranchesAsync(path, username, password, branchComboBox, cloneStatusBanner);
-                            UpdateCloneButtonState();
-                            fetchTcs.SetResult(true);
-                        }
-                        catch (Exception ex)
-                        {
-                            fetchTcs.SetException(ex);
-                        }
-                    });
-                    
-                    try
-                    {
-                        await fetchTcs.Task;
-                    }
-                    catch
-                    {
-                        // Fetch failed, ignore
-                    }
-                }
-                
+                await FetchBranchesWithCurrentCredentialsAsync();
                 pathChangeTimer?.Dispose();
                 pathChangeTimer = null;
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        };
+        
+        // Add debouncing timer for username changes to fetch branches when credentials change
+        System.Threading.Timer? usernameChangeTimer = null;
+        
+        usernameTextBox.TextChanged += (s, args) =>
+        {
+            // Debounce branch fetching - wait 1.5 seconds after user stops typing
+            usernameChangeTimer?.Dispose();
+            usernameChangeTimer = new System.Threading.Timer(async _ =>
+            {
+                await FetchBranchesWithCurrentCredentialsAsync();
+                usernameChangeTimer?.Dispose();
+                usernameChangeTimer = null;
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        };
+
+        // Add debouncing timer for password changes to fetch branches when credentials change
+        System.Threading.Timer? passwordChangeTimer = null;
+        
+        passwordBox.PasswordChanged += (s, args) =>
+        {
+            // Debounce branch fetching - wait 1.5 seconds after user stops typing
+            passwordChangeTimer?.Dispose();
+            passwordChangeTimer = new System.Threading.Timer(async _ =>
+            {
+                await FetchBranchesWithCurrentCredentialsAsync();
+                passwordChangeTimer?.Dispose();
+                passwordChangeTimer = null;
             }, null, 1500, System.Threading.Timeout.Infinite);
         };
         
@@ -1027,6 +1063,9 @@ public sealed partial class MainWindow
                         }
                     }
 
+                    // Update any existing Git links to point to the local clone path
+                    await UpdateGitRepositoryLinksAsync(repoName, repoDirectory, repoUrl);
+
                     DispatcherQueue.TryEnqueue(() =>
                     {
                         statusBanner.Title = "Clone Successful";
@@ -1054,6 +1093,97 @@ public sealed partial class MainWindow
                 });
             }
         });
+    }
+
+    /// <summary>
+    /// Updates all Git repository links to use the local clone path instead of remote URL.
+    /// This ensures cloned repositories are properly linked to their local directories.
+    /// </summary>
+    private async Task UpdateGitRepositoryLinksAsync(string repoName, string localClonePath, string originalUrl)
+    {
+        if (_categoryService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Load all categories to search for Git links
+            var categories = await _categoryService.LoadAllCategoriesAsync();
+            bool anyUpdated = false;
+
+            foreach (var categoryNode in categories)
+            {
+                if (categoryNode.Content is not CategoryItem categoryItem)
+                    continue;
+
+                if (categoryItem.Links == null || categoryItem.Links.Count == 0)
+                    continue;
+
+                bool categoryModified = false;
+
+                // Check all links in this category
+                foreach (var linkItem in categoryItem.Links)
+                {
+                    // Check if this is a Git link pointing to the repository we just cloned
+                    // Match by URL (exact match or normalized comparison) to avoid false positives
+                    if (linkItem.Type == LinkType.Git)
+                    {
+                        bool isMatch = false;
+                        
+                        // Primary match: exact URL match
+                        if (linkItem.Url == originalUrl)
+                        {
+                            isMatch = true;
+                        }
+                        // Secondary match: normalized URL comparison (handle trailing slashes, .git extension)
+                        else
+                        {
+                            var normalizedLinkUrl = linkItem.Url.TrimEnd('/').TrimEnd('\\');
+                            var normalizedOriginalUrl = originalUrl.TrimEnd('/').TrimEnd('\\');
+                            
+                            // Remove .git extension for comparison
+                            if (normalizedLinkUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                                normalizedLinkUrl = normalizedLinkUrl.Substring(0, normalizedLinkUrl.Length - 4);
+                            if (normalizedOriginalUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+                                normalizedOriginalUrl = normalizedOriginalUrl.Substring(0, normalizedOriginalUrl.Length - 4);
+                            
+                            isMatch = normalizedLinkUrl.Equals(normalizedOriginalUrl, StringComparison.OrdinalIgnoreCase);
+                        }
+                        
+                        if (isMatch)
+                        {
+                            // Update the URL to point to the local clone path
+                            linkItem.Url = localClonePath;
+                            categoryModified = true;
+                            anyUpdated = true;
+                            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Updated Git link '{linkItem.Title}' from '{originalUrl}' to '{localClonePath}'");
+                        }
+                    }
+                }
+
+                // Save the category if any links were updated
+                if (categoryModified)
+                {
+                    await _categoryService.SaveCategoryAsync(categoryNode);
+                }
+            }
+
+            if (anyUpdated)
+            {
+                // Refresh the UI to show updated links
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    // Trigger a reload of categories to reflect the updated URLs
+                    _ = LoadAllCategoriesAsync();
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UpdateGitRepositoryLinksAsync] Error updating Git links: {ex.Message}");
+            // Don't throw - this is a non-critical operation
+        }
     }
 
     private async Task FetchRemoteBranchesAsync(string repoUrl, string username, string password, ComboBox branchComboBox, InfoBar statusBanner)
