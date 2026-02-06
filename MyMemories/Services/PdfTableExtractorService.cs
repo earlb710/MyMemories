@@ -25,6 +25,11 @@ public class PdfTableExtractorService
     private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
     private const double MinRowDensity = 0.30; // Minimum fraction of columns that must have data in a row (30%) - filters sparse header/footer rows
     
+    // Constants for line-based table detection
+    private const double MinVerticalLineLength = 15.0; // Minimum length for a line to be considered a column separator (in points)
+    private const double VerticalLineAngleTolerance = 5.0; // Degrees - maximum deviation from vertical for a line to be considered vertical
+    private const double LineMergeTolerance = 2.0; // Points - lines within this distance are considered the same column boundary
+    
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
     /// </summary>
@@ -127,12 +132,27 @@ public class PdfTableExtractorService
                 return null;
             }
 
-            // Analyze column structure from first few rows (or all rows if less than 10)
-            var sampleRowCount = Math.Min(10, rowGroups.Count); // Increased from 5 to 10
-            var columnPositions = DetectColumnPositions(rowGroups.Take(sampleRowCount).ToList());
+            // First, try to detect column boundaries from vertical lines in the PDF
+            var columnPositions = DetectVerticalLinesFromPaths(page, pageNumber);
             
-            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
-                $"Page {pageNumber}: Detected {columnPositions.Count} columns from {sampleRowCount} sample rows");
+            // If no vertical lines found, fall back to text-based column detection
+            if (columnPositions.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No vertical lines found, using text-based column detection");
+                
+                // Analyze column structure from first few rows (or all rows if less than 10)
+                var sampleRowCount = Math.Min(10, rowGroups.Count); // Increased from 5 to 10
+                columnPositions = DetectColumnPositions(rowGroups.Take(sampleRowCount).ToList());
+                
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: Detected {columnPositions.Count} columns from {sampleRowCount} sample rows (text-based)");
+            }
+            else
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: Using {columnPositions.Count} columns from vertical line detection");
+            }
             
             if (columnPositions.Count < 1) // Need at least 1 column (relaxed from 2)
             {
@@ -403,6 +423,145 @@ public class PdfTableExtractorService
         }
         
         return rowsToKeep;
+    }
+
+    /// <summary>
+    /// Extracts vertical lines from PDF page that could represent column boundaries.
+    /// Uses PdfPig's path extraction to find graphical table borders.
+    /// </summary>
+    private List<double> DetectVerticalLinesFromPaths(Page page, int pageNumber)
+    {
+        var verticalLines = new List<double>();
+        
+        try
+        {
+            // Try to access experimental paths API to get graphical elements
+            // This may not be available in all PdfPig versions
+            var experimentalAccess = page.ExperimentalAccess;
+            if (experimentalAccess == null)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                    $"Page {pageNumber}: ExperimentalAccess not available");
+                return verticalLines;
+            }
+            
+            var paths = experimentalAccess.Paths;
+            if (paths == null || !paths.Any())
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                    $"Page {pageNumber}: No paths found in PDF");
+                return verticalLines;
+            }
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                $"Page {pageNumber}: Found {paths.Count} paths to analyze");
+            
+            // Try to extract line segments from paths
+            // The exact API may vary by PdfPig version, so we use defensive coding
+            foreach (var path in paths)
+            {
+                try
+                {
+                    // Access path commands/segments
+                    var commands = path.Commands;
+                    if (commands == null) continue;
+                    
+                    // Iterate through commands looking for lines
+                    foreach (var command in commands)
+                    {
+                        // Try to extract line coordinates
+                        // Different PdfPig versions may have different command types
+                        var commandType = command.GetType().Name;
+                        
+                        // Look for line-like commands
+                        if (commandType.Contains("Line") || commandType.Contains("line"))
+                        {
+                            // Try to get start and end points via reflection if needed
+                            var startProp = command.GetType().GetProperty("Start");
+                            var endProp = command.GetType().GetProperty("End");
+                            
+                            if (startProp != null && endProp != null)
+                            {
+                                var start = startProp.GetValue(command) as UglyToad.PdfPig.Core.PdfPoint?;
+                                var end = endProp.GetValue(command) as UglyToad.PdfPig.Core.PdfPoint?;
+                                
+                                if (start.HasValue && end.HasValue)
+                                {
+                                    var x1 = start.Value.X;
+                                    var y1 = start.Value.Y;
+                                    var x2 = end.Value.X;
+                                    var y2 = end.Value.Y;
+                                    
+                                    // Check if line is vertical (X positions very close)
+                                    var xDiff = Math.Abs(x2 - x1);
+                                    var yDiff = Math.Abs(y2 - y1);
+                                    var lineLength = Math.Sqrt(xDiff * xDiff + yDiff * yDiff);
+                                    
+                                    // Vertical line: X values similar, Y values different, and long enough
+                                    if (xDiff <= VerticalLineAngleTolerance && 
+                                        yDiff > xDiff && 
+                                        lineLength >= MinVerticalLineLength)
+                                    {
+                                        // Use average X position as column boundary
+                                        var xPos = (x1 + x2) / 2.0;
+                                        verticalLines.Add(xPos);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Silently skip paths that can't be processed
+                    continue;
+                }
+            }
+            
+            if (verticalLines.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                    $"Page {pageNumber}: No vertical lines detected from paths");
+                return verticalLines;
+            }
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                $"Page {pageNumber}: Found {verticalLines.Count} vertical line segments");
+            
+            // Sort and merge nearby lines (they might be the same column boundary drawn multiple times)
+            verticalLines = verticalLines.OrderBy(x => x).ToList();
+            var mergedLines = new List<double>();
+            
+            if (verticalLines.Count > 0)
+            {
+                mergedLines.Add(verticalLines[0]);
+                
+                for (int i = 1; i < verticalLines.Count; i++)
+                {
+                    // If this line is close to the previous merged line, merge them (duplicate)
+                    if (verticalLines[i] - mergedLines[mergedLines.Count - 1] < LineMergeTolerance)
+                    {
+                        // Update to average position
+                        mergedLines[mergedLines.Count - 1] = (mergedLines[mergedLines.Count - 1] + verticalLines[i]) / 2.0;
+                    }
+                    else
+                    {
+                        mergedLines.Add(verticalLines[i]);
+                    }
+                }
+            }
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                $"Page {pageNumber}: Detected {mergedLines.Count} column boundaries after merging");
+            
+            return mergedLines;
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths",
+                $"Page {pageNumber}: Could not extract vertical lines (will use text-based detection): {ex.Message}");
+            return verticalLines;
+        }
     }
 
     /// <summary>
