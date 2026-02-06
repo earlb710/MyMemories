@@ -44,7 +44,8 @@ public class PdfTableExtractorService
 
                 using var document = PdfDocument.Open(pdfPath);
                 
-                LogUtilities.LogInfo($"[PdfTableExtractorService] Processing PDF with {document.NumberOfPages} pages");
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                    $"Processing PDF with {document.NumberOfPages} pages");
 
                 for (int i = 1; i <= document.NumberOfPages; i++)
                 {
@@ -54,13 +55,15 @@ public class PdfTableExtractorService
                     if (pageTable != null && pageTable.RowCount > 0)
                     {
                         tables.Add(pageTable);
-                        LogUtilities.LogInfo($"[PdfTableExtractorService] Found table on page {i} with {pageTable.RowCount} rows and {pageTable.ColumnCount} columns");
+                        LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                            $"Found table on page {i} with {pageTable.RowCount} rows and {pageTable.ColumnCount} columns");
                     }
                 }
 
                 if (tables.Count == 0)
                 {
-                    LogUtilities.LogInfo("[PdfTableExtractorService] No tables detected in PDF");
+                    LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                        "No tables detected in PDF");
                 }
             }
             catch (Exception ex)
@@ -217,7 +220,8 @@ public class PdfTableExtractorService
             }
 
             await File.WriteAllTextAsync(outputPath, csv.ToString());
-            LogUtilities.LogInfo($"[PdfTableExtractorService] Exported table to CSV: {outputPath}");
+            LogUtilities.LogInfo("PdfTableExtractorService.ExportToCsvAsync", 
+                $"Exported table to CSV: {outputPath}");
             
             return outputPath;
         }
@@ -265,7 +269,8 @@ public class PdfTableExtractorService
             dataPackage.SetText(tsv.ToString());
             Clipboard.SetContent(dataPackage);
             
-            LogUtilities.LogInfo("[PdfTableExtractorService] Copied table to clipboard");
+            LogUtilities.LogInfo("PdfTableExtractorService.CopyToClipboard", 
+                "Copied table to clipboard");
         }
         catch (Exception ex)
         {

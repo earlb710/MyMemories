@@ -55,7 +55,8 @@ public sealed partial class DataExtractorWindow : Window
             // Load PDF in WebView2
             PdfViewer.Source = new Uri(_pdfPath);
             
-            LogUtilities.LogInfo($"[DataExtractorWindow] Loaded PDF: {_pdfPath}");
+            LogUtilities.LogInfo("DataExtractorWindow.LoadPdfAsync", 
+                $"Loaded PDF: {_pdfPath}");
         }
         catch (Exception ex)
         {
@@ -100,7 +101,8 @@ public sealed partial class DataExtractorWindow : Window
             CopyButton.IsEnabled = true;
             
             StatusText.Text = $"Successfully extracted {_extractedTables.Count} table(s)";
-            LogUtilities.LogInfo($"[DataExtractorWindow] Extracted {_extractedTables.Count} tables");
+            LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", 
+                $"Extracted {_extractedTables.Count} tables");
         }
         catch (Exception ex)
         {
@@ -222,7 +224,8 @@ public sealed partial class DataExtractorWindow : Window
                 await _extractorService.ExportToCsvAsync(table, file.Path);
                 
                 StatusText.Text = $"Table exported successfully to {file.Name}";
-                LogUtilities.LogInfo($"[DataExtractorWindow] Exported table to: {file.Path}");
+                LogUtilities.LogInfo("DataExtractorWindow.ExportButton_Click", 
+                    $"Exported table to: {file.Path}");
             }
         }
         catch (Exception ex)
@@ -246,7 +249,8 @@ public sealed partial class DataExtractorWindow : Window
             _extractorService.CopyToClipboard(table);
             
             StatusText.Text = "Table copied to clipboard";
-            LogUtilities.LogInfo("[DataExtractorWindow] Copied table to clipboard");
+            LogUtilities.LogInfo("DataExtractorWindow.CopyButton_Click", 
+                "Copied table to clipboard");
         }
         catch (Exception ex)
         {
