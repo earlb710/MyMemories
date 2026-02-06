@@ -19,8 +19,8 @@ namespace MyMemories.Services;
 public class PdfTableExtractorService
 {
     // Constants for table detection
-    private const double ColumnGapThreshold = 20.0; // Minimum gap between columns in points
-    private const double ColumnMargin = 10.0; // Margin for column boundary detection
+    private const double ColumnGapThreshold = 10.0; // Minimum gap between columns in points (reduced for better numeric column detection)
+    private const double ColumnMargin = 5.0; // Margin for column boundary detection (reduced for tighter columns)
     
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
@@ -86,7 +86,14 @@ public class PdfTableExtractorService
             var words = page.GetWords().ToList();
             
             if (words.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No words found");
                 return null;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                $"Page {pageNumber}: Found {words.Count} words");
 
             // Group words by their Y position (rows)
             var rowGroups = words
@@ -94,14 +101,29 @@ public class PdfTableExtractorService
                 .OrderByDescending(g => g.Key) // Top to bottom
                 .ToList();
 
-            if (rowGroups.Count < 2) // Need at least 2 rows for a table
-                return null;
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                $"Page {pageNumber}: Grouped into {rowGroups.Count} potential rows");
 
-            // Analyze column structure from first few rows
-            var columnPositions = DetectColumnPositions(rowGroups.Take(Math.Min(5, rowGroups.Count)).ToList());
-            
-            if (columnPositions.Count < 2) // Need at least 2 columns for a table
+            if (rowGroups.Count < 1) // Need at least 1 row (relaxed from 2)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: Not enough rows for a table");
                 return null;
+            }
+
+            // Analyze column structure from first few rows (or all rows if less than 10)
+            var sampleRowCount = Math.Min(10, rowGroups.Count); // Increased from 5 to 10
+            var columnPositions = DetectColumnPositions(rowGroups.Take(sampleRowCount).ToList());
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                $"Page {pageNumber}: Detected {columnPositions.Count} columns from {sampleRowCount} sample rows");
+            
+            if (columnPositions.Count < 1) // Need at least 1 column (relaxed from 2)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: Not enough columns detected");
+                return null;
+            }
 
             // Extract rows
             var tableRows = new List<List<string>>();
@@ -131,7 +153,14 @@ public class PdfTableExtractorService
             }
 
             if (tableRows.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No valid rows after processing");
                 return null;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                $"Page {pageNumber}: Successfully extracted {tableRows.Count} rows with {columnPositions.Count} columns");
 
             return new TableData
             {
@@ -149,9 +178,11 @@ public class PdfTableExtractorService
 
     /// <summary>
     /// Detects column positions by analyzing word clustering on X-axis.
+    /// Improved to better handle closely-spaced numeric columns.
     /// </summary>
     private List<double> DetectColumnPositions(List<IGrouping<double, Word>> sampleRows)
     {
+        // Collect all unique X positions from all sample rows
         var allXPositions = sampleRows
             .SelectMany(row => row.Select(w => w.BoundingBox.Left))
             .OrderBy(x => x)
@@ -167,12 +198,17 @@ public class PdfTableExtractorService
         
         for (int i = 1; i < allXPositions.Count; i++)
         {
-            if (allXPositions[i] - allXPositions[i - 1] < ColumnGapThreshold)
+            double gap = allXPositions[i] - allXPositions[i - 1];
+            
+            // Use adaptive threshold: smaller gap for positions that appear consistently
+            // This helps separate closely-spaced numeric columns
+            if (gap < ColumnGapThreshold)
             {
                 currentCluster.Add(allXPositions[i]);
             }
             else
             {
+                // Create column from cluster
                 columns.Add(currentCluster.Average());
                 currentCluster = new List<double> { allXPositions[i] };
             }
@@ -183,7 +219,27 @@ public class PdfTableExtractorService
             columns.Add(currentCluster.Average());
         }
 
-        return columns;
+        // Post-process: merge columns that are too close (likely same column with slight variations)
+        var mergedColumns = new List<double>();
+        if (columns.Count > 0)
+        {
+            mergedColumns.Add(columns[0]);
+            
+            for (int i = 1; i < columns.Count; i++)
+            {
+                // If this column is within 3 points of the previous, merge them
+                if (columns[i] - mergedColumns[mergedColumns.Count - 1] < 3.0)
+                {
+                    mergedColumns[mergedColumns.Count - 1] = (mergedColumns[mergedColumns.Count - 1] + columns[i]) / 2;
+                }
+                else
+                {
+                    mergedColumns.Add(columns[i]);
+                }
+            }
+        }
+
+        return mergedColumns;
     }
 
     /// <summary>
