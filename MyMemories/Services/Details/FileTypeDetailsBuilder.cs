@@ -226,6 +226,28 @@ public class FileTypeDetailsBuilder
             Margin = new Thickness(0, 0, 0, 8)
         });
 
+        // Add Data Extractor button at the top
+        var extractButton = new Button
+        {
+            Content = "📊 Data Extractor",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        extractButton.Click += (s, e) =>
+        {
+            try
+            {
+                var extractorWindow = new DataExtractorWindow(path);
+                extractorWindow.Activate();
+            }
+            catch (Exception ex)
+            {
+                LogUtilities.LogError("FileTypeDetailsBuilder.AddPdfFileInfoAsync", 
+                    "Error opening Data Extractor window", ex);
+            }
+        };
+        _detailsPanel.Children.Add(extractButton);
+
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
         
         // Basic file info
@@ -350,28 +372,6 @@ public class FileTypeDetailsBuilder
         }
 
         _detailsPanel.Children.Add(infoPanel);
-        
-        // Add Data Extractor button
-        var extractButton = new Button
-        {
-            Content = "📊 Data Extractor",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-        extractButton.Click += (s, e) =>
-        {
-            try
-            {
-                var extractorWindow = new DataExtractorWindow(path);
-                extractorWindow.Activate();
-            }
-            catch (Exception ex)
-            {
-                LogUtilities.LogError("FileTypeDetailsBuilder.AddPdfFileInfoAsync", 
-                    "Error opening Data Extractor window", ex);
-            }
-        };
-        _detailsPanel.Children.Add(extractButton);
     }
 
     private StackPanel CreateIconStatLine(string glyph, string text)
