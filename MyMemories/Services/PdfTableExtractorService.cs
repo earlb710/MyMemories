@@ -23,6 +23,7 @@ public class PdfTableExtractorService
     private const double ColumnMargin = 5.0; // Margin for column boundary detection (reduced for tighter columns)
     private const double MinColumnOccupancy = 0.10; // Minimum fraction of rows that must have data in a column (10% - reduced to handle smaller tables)
     private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
+    private const double MinRowDensity = 0.30; // Minimum fraction of columns that must have data in a row (30%) - filters sparse header/footer rows
     
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
@@ -184,6 +185,16 @@ public class PdfTableExtractorService
                 return null;
             }
 
+            // Remove sparse rows (rows with mostly empty cells - typically headers/footers)
+            tableRows = RemoveSparseRows(tableRows, pageNumber);
+            
+            if (tableRows.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No valid rows after filtering sparse rows");
+                return null;
+            }
+
             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
                 $"Page {pageNumber}: Successfully extracted {tableRows.Count} rows with {tableRows[0].Count} columns");
 
@@ -332,6 +343,48 @@ public class PdfTableExtractorService
         }
         
         return filteredRows;
+    }
+
+    /// <summary>
+    /// Removes rows that are mostly empty (sparse rows with little data).
+    /// This helps eliminate header/footer text and other non-table content.
+    /// A row must have data in at least MinRowDensity% of columns to be kept.
+    /// </summary>
+    private List<List<string>> RemoveSparseRows(List<List<string>> rows, int pageNumber)
+    {
+        if (rows.Count == 0)
+            return rows;
+        
+        int columnCount = rows[0].Count;
+        var rowsToKeep = new List<List<string>>();
+        int removedCount = 0;
+        
+        foreach (var row in rows)
+        {
+            // Count non-empty cells in this row
+            int nonEmptyCount = row.Count(cell => !string.IsNullOrWhiteSpace(cell));
+            double density = (double)nonEmptyCount / columnCount;
+            
+            // Keep row if it meets minimum density threshold
+            if (density >= MinRowDensity)
+            {
+                rowsToKeep.Add(row);
+            }
+            else
+            {
+                removedCount++;
+                LogUtilities.LogInfo("PdfTableExtractorService.RemoveSparseRows", 
+                    $"Page {pageNumber}: Removed sparse row with density {density:P0} ({nonEmptyCount}/{columnCount} cells)");
+            }
+        }
+        
+        if (removedCount > 0)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.RemoveSparseRows", 
+                $"Page {pageNumber}: Removed {removedCount} sparse rows (kept {rowsToKeep.Count})");
+        }
+        
+        return rowsToKeep;
     }
 
     /// <summary>
