@@ -349,6 +349,7 @@ public class PdfTableExtractorService
     /// Removes rows that are mostly empty (sparse rows with little data).
     /// This helps eliminate header/footer text and other non-table content.
     /// A row must have data in at least MinRowDensity% of columns to be kept.
+    /// Uses adaptive threshold: more lenient when there are fewer rows to avoid over-filtering.
     /// </summary>
     private List<List<string>> RemoveSparseRows(List<List<string>> rows, int pageNumber)
     {
@@ -359,6 +360,15 @@ public class PdfTableExtractorService
         var rowsToKeep = new List<List<string>>();
         int removedCount = 0;
         
+        // Use adaptive threshold based on row count
+        // If we have very few rows (< 10), be more lenient to avoid filtering everything
+        double effectiveThreshold = rows.Count < 10 
+            ? 0.20  // 20% for small sets (avoid over-filtering continuation pages)
+            : MinRowDensity;  // 30% for larger sets
+        
+        LogUtilities.LogInfo("PdfTableExtractorService.RemoveSparseRows", 
+            $"Page {pageNumber}: Using row density threshold {effectiveThreshold:P0} for {rows.Count} rows");
+        
         foreach (var row in rows)
         {
             // Count non-empty cells in this row
@@ -366,7 +376,7 @@ public class PdfTableExtractorService
             double density = (double)nonEmptyCount / columnCount;
             
             // Keep row if it meets minimum density threshold
-            if (density >= MinRowDensity)
+            if (density >= effectiveThreshold)
             {
                 rowsToKeep.Add(row);
             }
@@ -376,6 +386,14 @@ public class PdfTableExtractorService
                 LogUtilities.LogInfo("PdfTableExtractorService.RemoveSparseRows", 
                     $"Page {pageNumber}: Removed sparse row with density {density:P0} ({nonEmptyCount}/{columnCount} cells)");
             }
+        }
+        
+        // If we would remove everything, keep all rows (fallback to avoid losing data)
+        if (rowsToKeep.Count == 0 && rows.Count > 0)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.RemoveSparseRows", 
+                $"Page {pageNumber}: Would remove all {rows.Count} rows, keeping all instead");
+            return rows;
         }
         
         if (removedCount > 0)
