@@ -349,6 +349,27 @@ public class FileTypeDetailsBuilder
         }
 
         _detailsPanel.Children.Add(infoPanel);
+        
+        // Add Data Extractor button
+        var extractButton = new Button
+        {
+            Content = "📊 Data Extractor",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 16, 0, 0)
+        };
+        extractButton.Click += (s, e) =>
+        {
+            try
+            {
+                var extractorWindow = new DataExtractorWindow(path);
+                extractorWindow.Activate();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[FileTypeDetailsBuilder] Error opening Data Extractor: {ex.Message}");
+            }
+        };
+        _detailsPanel.Children.Add(extractButton);
     }
 
     private StackPanel CreateIconStatLine(string glyph, string text)
