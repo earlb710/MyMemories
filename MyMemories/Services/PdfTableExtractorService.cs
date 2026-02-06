@@ -21,6 +21,8 @@ public class PdfTableExtractorService
     // Constants for table detection
     private const double ColumnGapThreshold = 10.0; // Minimum gap between columns in points (reduced for better numeric column detection)
     private const double ColumnMargin = 5.0; // Margin for column boundary detection (reduced for tighter columns)
+    private const double MinColumnOccupancy = 0.15; // Minimum fraction of rows that must have data in a column (15%)
+    private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
     
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
@@ -95,8 +97,21 @@ public class PdfTableExtractorService
             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
                 $"Page {pageNumber}: Found {words.Count} words");
 
+            // Filter out vertical/rotated text (it's usually labels, not table data)
+            var horizontalWords = FilterHorizontalText(words, pageNumber);
+            
+            if (horizontalWords.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No horizontal words after filtering");
+                return null;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                $"Page {pageNumber}: {horizontalWords.Count} horizontal words ({words.Count - horizontalWords.Count} vertical/rotated filtered)");
+
             // Group words by their Y position (rows)
-            var rowGroups = words
+            var rowGroups = horizontalWords
                 .GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1))
                 .OrderByDescending(g => g.Key) // Top to bottom
                 .ToList();
@@ -159,8 +174,18 @@ public class PdfTableExtractorService
                 return null;
             }
 
+            // Remove empty/sparse columns
+            tableRows = RemoveEmptyColumns(tableRows, pageNumber);
+            
+            if (tableRows.Count == 0 || tableRows[0].Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
+                    $"Page {pageNumber}: No valid columns after filtering empty columns");
+                return null;
+            }
+
             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
-                $"Page {pageNumber}: Successfully extracted {tableRows.Count} rows with {columnPositions.Count} columns");
+                $"Page {pageNumber}: Successfully extracted {tableRows.Count} rows with {tableRows[0].Count} columns");
 
             return new TableData
             {
@@ -177,40 +202,182 @@ public class PdfTableExtractorService
     }
 
     /// <summary>
+    /// Filters out vertical or rotated text, keeping only horizontal text for table extraction.
+    /// Vertical text is often used for labels/headers and causes issues with row grouping.
+    /// </summary>
+    private List<Word> FilterHorizontalText(List<Word> words, int pageNumber)
+    {
+        var horizontalWords = new List<Word>();
+        int verticalCount = 0;
+        
+        foreach (var word in words)
+        {
+            // Check if the word contains any letters to determine rotation
+            var letters = word.Letters;
+            if (letters.Any())
+            {
+                // Calculate average rotation of letters in the word
+                var avgRotation = letters.Average(l => Math.Abs(l.GlyphRectangle.Rotation));
+                
+                // Keep words that are approximately horizontal (rotation close to 0 or 180)
+                if (avgRotation < VerticalTextThreshold || avgRotation > (180 - VerticalTextThreshold))
+                {
+                    horizontalWords.Add(word);
+                }
+                else
+                {
+                    verticalCount++;
+                }
+            }
+            else
+            {
+                // If no letters, keep the word (might be numbers/symbols)
+                horizontalWords.Add(word);
+            }
+        }
+        
+        if (verticalCount > 0)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.FilterHorizontalText", 
+                $"Page {pageNumber}: Filtered {verticalCount} vertical/rotated words");
+        }
+        
+        return horizontalWords;
+    }
+
+    /// <summary>
+    /// Removes columns that are mostly empty (sparse columns with little data).
+    /// This helps eliminate columns created from marginal text or spacing variations.
+    /// </summary>
+    private List<List<string>> RemoveEmptyColumns(List<List<string>> rows, int pageNumber)
+    {
+        if (rows.Count == 0 || rows[0].Count == 0)
+            return rows;
+        
+        int columnCount = rows[0].Count;
+        var columnsToKeep = new List<int>();
+        
+        // Check each column for occupancy
+        for (int col = 0; col < columnCount; col++)
+        {
+            int nonEmptyCount = 0;
+            
+            foreach (var row in rows)
+            {
+                if (col < row.Count && !string.IsNullOrWhiteSpace(row[col]))
+                {
+                    nonEmptyCount++;
+                }
+            }
+            
+            double occupancy = (double)nonEmptyCount / rows.Count;
+            
+            // Keep column if it meets minimum occupancy threshold
+            if (occupancy >= MinColumnOccupancy)
+            {
+                columnsToKeep.Add(col);
+            }
+        }
+        
+        // If we would remove all columns, keep all of them (fallback)
+        if (columnsToKeep.Count == 0)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.RemoveEmptyColumns", 
+                $"Page {pageNumber}: Would remove all columns, keeping all instead");
+            return rows;
+        }
+        
+        // If we're removing some columns, log it
+        if (columnsToKeep.Count < columnCount)
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.RemoveEmptyColumns", 
+                $"Page {pageNumber}: Removing {columnCount - columnsToKeep.Count} sparse columns (keeping {columnsToKeep.Count})");
+        }
+        
+        // Create new rows with only the columns we want to keep
+        var filteredRows = new List<List<string>>();
+        foreach (var row in rows)
+        {
+            var filteredRow = new List<string>();
+            foreach (int colIndex in columnsToKeep)
+            {
+                if (colIndex < row.Count)
+                {
+                    filteredRow.Add(row[colIndex]);
+                }
+                else
+                {
+                    filteredRow.Add("");
+                }
+            }
+            filteredRows.Add(filteredRow);
+        }
+        
+        return filteredRows;
+    }
+
+    /// <summary>
     /// Detects column positions by analyzing word clustering on X-axis.
-    /// Improved to better handle closely-spaced numeric columns.
+    /// Improved to better handle closely-spaced numeric columns and avoid creating too many empty columns.
+    /// Only creates columns that appear consistently across multiple rows.
     /// </summary>
     private List<double> DetectColumnPositions(List<IGrouping<double, Word>> sampleRows)
     {
-        // Collect all unique X positions from all sample rows
-        var allXPositions = sampleRows
-            .SelectMany(row => row.Select(w => w.BoundingBox.Left))
+        if (sampleRows.Count == 0)
+            return new List<double>();
+
+        // Count how many rows each X position appears in
+        var xPositionFrequency = new Dictionary<double, int>();
+        
+        foreach (var row in sampleRows)
+        {
+            // Get unique X positions in this row (rounded to nearest point)
+            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left))
+                                   .Distinct()
+                                   .ToList();
+            
+            foreach (var x in rowXPositions)
+            {
+                if (!xPositionFrequency.ContainsKey(x))
+                    xPositionFrequency[x] = 0;
+                xPositionFrequency[x]++;
+            }
+        }
+        
+        // Only keep X positions that appear in multiple rows (at least 20% of sample rows)
+        int minFrequency = Math.Max(1, (int)(sampleRows.Count * 0.2));
+        var significantXPositions = xPositionFrequency
+            .Where(kvp => kvp.Value >= minFrequency)
+            .Select(kvp => kvp.Key)
             .OrderBy(x => x)
             .ToList();
+        
+        LogUtilities.LogInfo("PdfTableExtractorService.DetectColumnPositions", 
+            $"Found {significantXPositions.Count} significant X positions (from {xPositionFrequency.Count} total, min frequency: {minFrequency})");
 
-        if (allXPositions.Count == 0)
+        if (significantXPositions.Count == 0)
             return new List<double>();
 
         // Use clustering to find column start positions
         var columns = new List<double>();
         
-        var currentCluster = new List<double> { allXPositions[0] };
+        var currentCluster = new List<double> { significantXPositions[0] };
         
-        for (int i = 1; i < allXPositions.Count; i++)
+        for (int i = 1; i < significantXPositions.Count; i++)
         {
-            double gap = allXPositions[i] - allXPositions[i - 1];
+            double gap = significantXPositions[i] - significantXPositions[i - 1];
             
             // Use adaptive threshold: smaller gap for positions that appear consistently
             // This helps separate closely-spaced numeric columns
             if (gap < ColumnGapThreshold)
             {
-                currentCluster.Add(allXPositions[i]);
+                currentCluster.Add(significantXPositions[i]);
             }
             else
             {
                 // Create column from cluster
                 columns.Add(currentCluster.Average());
-                currentCluster = new List<double> { allXPositions[i] };
+                currentCluster = new List<double> { significantXPositions[i] };
             }
         }
         
