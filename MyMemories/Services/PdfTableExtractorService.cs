@@ -21,7 +21,7 @@ public class PdfTableExtractorService
     // Constants for table detection
     private const double ColumnGapThreshold = 10.0; // Minimum gap between columns in points (reduced for better numeric column detection)
     private const double ColumnMargin = 5.0; // Margin for column boundary detection (reduced for tighter columns)
-    private const double MinColumnOccupancy = 0.15; // Minimum fraction of rows that must have data in a column (15%)
+    private const double MinColumnOccupancy = 0.10; // Minimum fraction of rows that must have data in a column (10% - reduced to handle smaller tables)
     private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
     
     /// <summary>
@@ -248,6 +248,7 @@ public class PdfTableExtractorService
     /// <summary>
     /// Removes columns that are mostly empty (sparse columns with little data).
     /// This helps eliminate columns created from marginal text or spacing variations.
+    /// Uses adaptive threshold: more lenient for smaller tables.
     /// </summary>
     private List<List<string>> RemoveEmptyColumns(List<List<string>> rows, int pageNumber)
     {
@@ -256,6 +257,16 @@ public class PdfTableExtractorService
         
         int columnCount = rows[0].Count;
         var columnsToKeep = new List<int>();
+        
+        // Use adaptive threshold: more lenient for smaller tables
+        // For tables with < 10 rows, require only 1 non-empty cell
+        // For larger tables, use the MinColumnOccupancy threshold
+        double effectiveThreshold = rows.Count < 10 
+            ? (1.0 / rows.Count)  // At least 1 cell must have data
+            : MinColumnOccupancy;
+        
+        LogUtilities.LogInfo("PdfTableExtractorService.RemoveEmptyColumns", 
+            $"Page {pageNumber}: Using occupancy threshold {effectiveThreshold:P0} for {rows.Count} rows");
         
         // Check each column for occupancy
         for (int col = 0; col < columnCount; col++)
@@ -273,9 +284,16 @@ public class PdfTableExtractorService
             double occupancy = (double)nonEmptyCount / rows.Count;
             
             // Keep column if it meets minimum occupancy threshold
-            if (occupancy >= MinColumnOccupancy)
+            if (occupancy >= effectiveThreshold)
             {
                 columnsToKeep.Add(col);
+                LogUtilities.LogInfo("PdfTableExtractorService.RemoveEmptyColumns", 
+                    $"Page {pageNumber}: Column {col} kept (occupancy: {occupancy:P0}, {nonEmptyCount}/{rows.Count} rows)");
+            }
+            else
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.RemoveEmptyColumns", 
+                    $"Page {pageNumber}: Column {col} removed (occupancy: {occupancy:P0}, {nonEmptyCount}/{rows.Count} rows)");
             }
         }
         
@@ -331,8 +349,8 @@ public class PdfTableExtractorService
         
         foreach (var row in sampleRows)
         {
-            // Get unique X positions in this row (rounded to nearest point)
-            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left))
+            // Get unique X positions in this row (rounded to 0.1 point precision for better numeric column separation)
+            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left, 1))
                                    .Distinct()
                                    .ToList();
             
