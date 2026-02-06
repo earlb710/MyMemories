@@ -5,9 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="PDF Data Extractor"
-    Width="1200"
-    Height="700">
+    Title="PDF Data Extractor">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -88,8 +86,7 @@
             <Border 
                 Grid.Column="1"
                 Width="5"
-                Background="{ThemeResource CardStrokeColorDefaultBrush}"
-                Cursor="SizeWE">
+                Background="{ThemeResource CardStrokeColorDefaultBrush}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

@@ -34,7 +34,7 @@ public sealed partial class DataExtractorWindow : Window
         
         Title = $"PDF Data Extractor - {Path.GetFileName(pdfPath)}";
         
-        // Set minimum window size
+        // Set initial window size (1000x600) - WinUI 3 requires programmatic sizing
         this.AppWindow.Resize(new Windows.Graphics.SizeInt32(1000, 600));
         
         LoadPdfAsync();
