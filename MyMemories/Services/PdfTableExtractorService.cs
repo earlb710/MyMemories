@@ -433,8 +433,8 @@ public class PdfTableExtractorService
             }
         }
         
-        // Only keep X positions that appear in multiple rows (at least 20% of sample rows)
-        int minFrequency = Math.Max(1, (int)(sampleRows.Count * 0.2));
+        // Only keep X positions that appear in multiple rows (at least 15% of sample rows, reduced from 20% to catch more columns including dates)
+        int minFrequency = Math.Max(1, (int)(sampleRows.Count * 0.15));
         var significantXPositions = xPositionFrequency
             .Where(kvp => kvp.Value >= minFrequency)
             .Select(kvp => kvp.Key)
