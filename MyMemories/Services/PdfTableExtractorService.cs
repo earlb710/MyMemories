@@ -18,6 +18,10 @@ namespace MyMemories.Services;
 /// </summary>
 public class PdfTableExtractorService
 {
+    // Constants for table detection
+    private const double ColumnGapThreshold = 20.0; // Minimum gap between columns in points
+    private const double ColumnMargin = 10.0; // Margin for column boundary detection
+    
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
     /// </summary>
@@ -155,13 +159,12 @@ public class PdfTableExtractorService
 
         // Use clustering to find column start positions
         var columns = new List<double>();
-        var threshold = 20.0; // Minimum gap between columns in points
         
         var currentCluster = new List<double> { allXPositions[0] };
         
         for (int i = 1; i < allXPositions.Count; i++)
         {
-            if (allXPositions[i] - allXPositions[i - 1] < threshold)
+            if (allXPositions[i] - allXPositions[i - 1] < ColumnGapThreshold)
             {
                 currentCluster.Add(allXPositions[i]);
             }
@@ -189,8 +192,8 @@ public class PdfTableExtractorService
         var index = allColumns.IndexOf(columnPos);
         
         // Find the range for this column
-        double minPos = columnPos - 10;
-        double maxPos = index < allColumns.Count - 1 ? allColumns[index + 1] - 10 : double.MaxValue;
+        double minPos = columnPos - ColumnMargin;
+        double maxPos = index < allColumns.Count - 1 ? allColumns[index + 1] - ColumnMargin : double.MaxValue;
         
         return wordLeft >= minPos && wordLeft < maxPos;
     }

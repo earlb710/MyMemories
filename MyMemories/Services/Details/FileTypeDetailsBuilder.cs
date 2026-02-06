@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using MyMemories.Services;
+using MyMemories.Utilities;
 
 namespace MyMemories.Services.Details;
 
@@ -366,7 +367,8 @@ public class FileTypeDetailsBuilder
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[FileTypeDetailsBuilder] Error opening Data Extractor: {ex.Message}");
+                LogUtilities.LogError("FileTypeDetailsBuilder.AddPdfFileInfoAsync", 
+                    "Error opening Data Extractor window", ex);
             }
         };
         _detailsPanel.Children.Add(extractButton);
