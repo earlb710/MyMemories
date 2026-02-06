@@ -462,12 +462,24 @@ public class PdfTableExtractorService
             {
                 try
                 {
-                    // Access path commands/segments
-                    var commands = path.Commands;
+                    // Access path commands/segments via reflection for compatibility
+                    var commandsProp = path.GetType().GetProperty("Commands");
+                    if (commandsProp == null)
+                    {
+                        // Commands property not available in this PdfPig version
+                        LogUtilities.LogInfo("PdfTableExtractorService.DetectVerticalLinesFromPaths", 
+                            $"Page {pageNumber}: Commands property not available on PdfPath, skipping line detection");
+                        return new List<double>();
+                    }
+                    
+                    var commands = commandsProp.GetValue(path);
                     if (commands == null) continue;
                     
+                    // Safely cast to enumerable
+                    if (!(commands is System.Collections.IEnumerable enumerable)) continue;
+                    
                     // Iterate through commands looking for lines
-                    foreach (var command in commands)
+                    foreach (var command in enumerable)
                     {
                         // Try to extract line coordinates
                         // Different PdfPig versions may have different command types
