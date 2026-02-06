@@ -19,8 +19,8 @@ namespace MyMemories.Services;
 public class PdfTableExtractorService
 {
     // Constants for table detection
-    private const double ColumnGapThreshold = 10.0; // Minimum gap between columns in points (reduced for better numeric column detection)
-    private const double ColumnMargin = 5.0; // Margin for column boundary detection (reduced for tighter columns)
+    private const double ColumnGapThreshold = 5.0; // Minimum gap between columns in points (reduced to 5.0 for better separation of closely-spaced numeric columns)
+    private const double ColumnMargin = 3.0; // Margin for column boundary detection (reduced to 3.0 for tighter columns)
     private const double MinColumnOccupancy = 0.10; // Minimum fraction of rows that must have data in a column (10% - reduced to handle smaller tables)
     private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
     private const double MinRowDensity = 0.30; // Minimum fraction of columns that must have data in a row (30%) - filters sparse header/footer rows
@@ -483,8 +483,8 @@ public class PdfTableExtractorService
             
             for (int i = 1; i < columns.Count; i++)
             {
-                // If this column is within 3 points of the previous, merge them
-                if (columns[i] - mergedColumns[mergedColumns.Count - 1] < 3.0)
+                // If this column is within 2 points of the previous, merge them (reduced from 3.0 to avoid over-merging numeric columns)
+                if (columns[i] - mergedColumns[mergedColumns.Count - 1] < 2.0)
                 {
                     mergedColumns[mergedColumns.Count - 1] = (mergedColumns[mergedColumns.Count - 1] + columns[i]) / 2;
                 }

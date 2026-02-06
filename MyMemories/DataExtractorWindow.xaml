@@ -43,6 +43,29 @@
                 Click="CopyButton_Click"
                 IsEnabled="False"/>
             
+            <!-- Table Navigation -->
+            <Border 
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1,0,0,0"
+                Padding="8,0,0,0"
+                Margin="8,0,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button 
+                        x:Name="PreviousTableButton"
+                        Content="◀ Previous"
+                        Click="PreviousTableButton_Click"
+                        IsEnabled="False"
+                        MinWidth="80"/>
+                    
+                    <Button 
+                        x:Name="NextTableButton"
+                        Content="Next ▶"
+                        Click="NextTableButton_Click"
+                        IsEnabled="False"
+                        MinWidth="80"/>
+                </StackPanel>
+            </Border>
+            
             <TextBlock 
                 x:Name="StatusText"
                 VerticalAlignment="Center"

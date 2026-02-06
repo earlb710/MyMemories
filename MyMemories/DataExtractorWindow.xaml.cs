@@ -100,6 +100,9 @@ public sealed partial class DataExtractorWindow : Window
             ExportButton.IsEnabled = true;
             CopyButton.IsEnabled = true;
             
+            // Enable navigation buttons if multiple tables
+            UpdateNavigationButtons();
+            
             StatusText.Text = $"Successfully extracted {_extractedTables.Count} table(s)";
             LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", 
                 $"Extracted {_extractedTables.Count} tables");
@@ -114,6 +117,49 @@ public sealed partial class DataExtractorWindow : Window
             ExtractButton.IsEnabled = true;
             ExtractionProgressRing.IsActive = false;
             ExtractionProgressRing.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Updates the enabled state of navigation buttons based on current table index.
+    /// </summary>
+    private void UpdateNavigationButtons()
+    {
+        if (_extractedTables.Count <= 1)
+        {
+            PreviousTableButton.IsEnabled = false;
+            NextTableButton.IsEnabled = false;
+        }
+        else
+        {
+            PreviousTableButton.IsEnabled = _currentTableIndex > 0;
+            NextTableButton.IsEnabled = _currentTableIndex < _extractedTables.Count - 1;
+        }
+    }
+
+    /// <summary>
+    /// Navigates to the previous table.
+    /// </summary>
+    private void PreviousTableButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTableIndex > 0)
+        {
+            _currentTableIndex--;
+            DisplayCurrentTable();
+            UpdateNavigationButtons();
+        }
+    }
+
+    /// <summary>
+    /// Navigates to the next table.
+    /// </summary>
+    private void NextTableButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTableIndex < _extractedTables.Count - 1)
+        {
+            _currentTableIndex++;
+            DisplayCurrentTable();
+            UpdateNavigationButtons();
         }
     }
 
