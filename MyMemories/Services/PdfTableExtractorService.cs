@@ -133,7 +133,7 @@ public class PdfTableExtractorService
             var rowGroups = horizontalWords
                 .GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1))
                 .OrderByDescending(g => g.Key) // Top to bottom
-                .Select(g => new { YPosition = g.Key, Words = g.ToList() })
+                .Select(g => (dynamic)new { YPosition = g.Key, Words = g.ToList() })
                 .ToList();
 
             if (rowGroups.Count < 1)
