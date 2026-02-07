@@ -31,7 +31,7 @@ public class PdfTableExtractorService
     private const double LineMergeTolerance = 2.0; // Points - lines within this distance are considered the same column boundary
     
     // Constants for table segmentation (detecting multiple tables on same page)
-    private const double MinVerticalGapForTableSplit = 30.0; // Minimum vertical gap (points) between rows to consider a table boundary
+    private const double MinVerticalGapForTableSplit = 20.0; // Minimum vertical gap (points) between rows to consider a table boundary
     private const double ColumnStructureChangeThreshold = 0.4; // If column positions differ by >40%, consider it a new table
     
     /// <summary>
@@ -1024,6 +1024,98 @@ public class PdfTableExtractorService
         {
             LogUtilities.LogError("PdfTableExtractorService.CopyToClipboard", 
                 "Error copying table to clipboard", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Exports all tables to a single CSV file.
+    /// </summary>
+    public async Task<string> ExportAllToCsvAsync(List<TableData> tables, string outputPath)
+    {
+        try
+        {
+            var csv = new StringBuilder();
+            
+            for (int i = 0; i < tables.Count; i++)
+            {
+                var table = tables[i];
+                
+                // Add separator header between tables
+                if (i > 0)
+                {
+                    csv.AppendLine(); // Blank line separator
+                    csv.AppendLine($"--- Table {i + 1} (Page {table.PageNumber}) ---");
+                }
+                else
+                {
+                    csv.AppendLine($"--- Table {i + 1} (Page {table.PageNumber}) ---");
+                }
+                
+                // Add table data
+                foreach (var row in table.Rows)
+                {
+                    var escapedCells = row.Select(cell => EscapeCsvCell(cell));
+                    csv.AppendLine(string.Join(",", escapedCells));
+                }
+            }
+
+            await File.WriteAllTextAsync(outputPath, csv.ToString());
+            LogUtilities.LogInfo("PdfTableExtractorService.ExportAllToCsvAsync", 
+                $"Exported {tables.Count} tables to CSV: {outputPath}");
+            
+            return outputPath;
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("PdfTableExtractorService.ExportAllToCsvAsync", 
+                "Error exporting tables to CSV", ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Copies all tables to clipboard in tab-separated format.
+    /// </summary>
+    public void CopyAllToClipboard(List<TableData> tables)
+    {
+        try
+        {
+            var tsv = new StringBuilder();
+            
+            for (int i = 0; i < tables.Count; i++)
+            {
+                var table = tables[i];
+                
+                // Add separator header between tables
+                if (i > 0)
+                {
+                    tsv.AppendLine(); // Blank line separator
+                    tsv.AppendLine($"--- Table {i + 1} (Page {table.PageNumber}) ---");
+                }
+                else
+                {
+                    tsv.AppendLine($"--- Table {i + 1} (Page {table.PageNumber}) ---");
+                }
+                
+                // Add table data
+                foreach (var row in table.Rows)
+                {
+                    tsv.AppendLine(string.Join("\t", row));
+                }
+            }
+
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(tsv.ToString());
+            Clipboard.SetContent(dataPackage);
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.CopyAllToClipboard", 
+                $"Copied {tables.Count} tables to clipboard");
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("PdfTableExtractorService.CopyAllToClipboard", 
+                "Error copying tables to clipboard", ex);
             throw;
         }
     }

@@ -260,24 +260,24 @@ public sealed partial class DataExtractorWindow : Window
             
             savePicker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
             savePicker.FileTypeChoices.Add("CSV Files", new List<string> { ".csv" });
-            savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(_pdfPath)}_table{_currentTableIndex + 1}";
+            savePicker.SuggestedFileName = $"{Path.GetFileNameWithoutExtension(_pdfPath)}_all_tables";
             
             var file = await savePicker.PickSaveFileAsync();
             
             if (file != null)
             {
-                var table = _extractedTables[_currentTableIndex];
-                await _extractorService.ExportToCsvAsync(table, file.Path);
+                // Export ALL tables to CSV
+                await _extractorService.ExportAllToCsvAsync(_extractedTables, file.Path);
                 
-                StatusText.Text = $"Table exported successfully to {file.Name}";
+                StatusText.Text = $"Exported {_extractedTables.Count} table(s) successfully to {file.Name}";
                 LogUtilities.LogInfo("DataExtractorWindow.ExportButton_Click", 
-                    $"Exported table to: {file.Path}");
+                    $"Exported {_extractedTables.Count} tables to: {file.Path}");
             }
         }
         catch (Exception ex)
         {
             LogUtilities.LogError("DataExtractorWindow.ExportButton_Click", "Error exporting to CSV", ex);
-            StatusText.Text = "Error exporting table to CSV";
+            StatusText.Text = "Error exporting tables to CSV";
         }
     }
 
@@ -291,17 +291,17 @@ public sealed partial class DataExtractorWindow : Window
 
         try
         {
-            var table = _extractedTables[_currentTableIndex];
-            _extractorService.CopyToClipboard(table);
+            // Copy ALL tables to clipboard
+            _extractorService.CopyAllToClipboard(_extractedTables);
             
-            StatusText.Text = "Table copied to clipboard";
+            StatusText.Text = $"Copied {_extractedTables.Count} table(s) to clipboard";
             LogUtilities.LogInfo("DataExtractorWindow.CopyButton_Click", 
-                "Copied table to clipboard");
+                $"Copied {_extractedTables.Count} tables to clipboard");
         }
         catch (Exception ex)
         {
             LogUtilities.LogError("DataExtractorWindow.CopyButton_Click", "Error copying to clipboard", ex);
-            StatusText.Text = "Error copying table to clipboard";
+            StatusText.Text = "Error copying tables to clipboard";
         }
     }
 }
