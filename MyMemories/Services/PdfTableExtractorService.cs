@@ -671,15 +671,38 @@ public class PdfTableExtractorService
 
     /// <summary>
     /// Determines if a word belongs to a specific column.
+    /// Uses midpoints between columns as boundaries.
     /// </summary>
     private bool IsWordInColumn(Word word, double columnPos, List<double> allColumns)
     {
         var wordLeft = word.BoundingBox.Left;
         var index = allColumns.IndexOf(columnPos);
         
-        // Find the range for this column
-        double minPos = columnPos - ColumnMargin;
-        double maxPos = index < allColumns.Count - 1 ? allColumns[index + 1] - ColumnMargin : double.MaxValue;
+        // Calculate column boundaries using midpoints between adjacent columns
+        double minPos;
+        double maxPos;
+        
+        if (index == 0)
+        {
+            // First column: from negative infinity to midpoint with next column
+            minPos = double.MinValue;
+        }
+        else
+        {
+            // Use midpoint between this column and previous column
+            minPos = (allColumns[index - 1] + columnPos) / 2.0;
+        }
+        
+        if (index == allColumns.Count - 1)
+        {
+            // Last column: from midpoint with previous to positive infinity
+            maxPos = double.MaxValue;
+        }
+        else
+        {
+            // Use midpoint between this column and next column
+            maxPos = (columnPos + allColumns[index + 1]) / 2.0;
+        }
         
         return wordLeft >= minPos && wordLeft < maxPos;
     }
