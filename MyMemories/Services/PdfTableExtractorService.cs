@@ -19,11 +19,11 @@ namespace MyMemories.Services;
 public class PdfTableExtractorService
 {
     // Constants for table detection
-    private const double ColumnGapThreshold = 5.0; // Minimum gap between columns in points (reduced to 5.0 for better separation of closely-spaced numeric columns)
-    private const double ColumnMargin = 3.0; // Margin for column boundary detection (reduced to 3.0 for tighter columns)
+    private const double ColumnGapThreshold = 15.0; // Minimum gap between columns in points (increased to reduce over-detection)
+    private const double ColumnMargin = 8.0; // Margin for column boundary detection (increased for better grouping)
     private const double MinColumnOccupancy = 0.10; // Minimum fraction of rows that must have data in a column (10% - reduced to handle smaller tables)
     private const double VerticalTextThreshold = 45.0; // Degrees - text rotated more than this is considered vertical
-    private const double MinRowDensity = 0.30; // Minimum fraction of columns that must have data in a row (30%) - filters sparse header/footer rows
+    private const double MinRowDensity = 0.15; // Minimum fraction of columns that must have data in a row (15%) - reduced to prevent filtering valid rows
     
     // Constants for line-based table detection
     private const double MinVerticalLineLength = 15.0; // Minimum length for a line to be considered a column separator (in points)
@@ -591,8 +591,8 @@ public class PdfTableExtractorService
         
         foreach (var row in sampleRows)
         {
-            // Get unique X positions in this row (rounded to 0.1 point precision for better numeric column separation)
-            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left, 1))
+            // Get unique X positions in this row (rounded to 1 point precision to avoid over-detecting columns)
+            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left))
                                    .Distinct()
                                    .ToList();
             
@@ -604,8 +604,8 @@ public class PdfTableExtractorService
             }
         }
         
-        // Only keep X positions that appear in multiple rows (at least 15% of sample rows, reduced from 20% to catch more columns including dates)
-        int minFrequency = Math.Max(1, (int)(sampleRows.Count * 0.15));
+        // Only keep X positions that appear in multiple rows (at least 30% of sample rows to filter noise)
+        int minFrequency = Math.Max(1, (int)(sampleRows.Count * 0.30));
         var significantXPositions = xPositionFrequency
             .Where(kvp => kvp.Value >= minFrequency)
             .Select(kvp => kvp.Key)
@@ -654,8 +654,8 @@ public class PdfTableExtractorService
             
             for (int i = 1; i < columns.Count; i++)
             {
-                // If this column is within 2 points of the previous, merge them (reduced from 3.0 to avoid over-merging numeric columns)
-                if (columns[i] - mergedColumns[mergedColumns.Count - 1] < 2.0)
+                // If this column is within 5 points of the previous, merge them (slight alignment variations)
+                if (columns[i] - mergedColumns[mergedColumns.Count - 1] < 5.0)
                 {
                     mergedColumns[mergedColumns.Count - 1] = (mergedColumns[mergedColumns.Count - 1] + columns[i]) / 2;
                 }
