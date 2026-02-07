@@ -207,7 +207,7 @@ public class PdfTableExtractorService
         // Add the last region if it has rows
         if (currentRegion.Count >= 1)
         {
-            regions.Add(currentRegion);
+            regions.Add(new List<dynamic>(currentRegion));
         }
 
         return regions;
