@@ -30,6 +30,10 @@ public class PdfTableExtractorService
     private const double VerticalLineAngleTolerance = 5.0; // Degrees - maximum deviation from vertical for a line to be considered vertical
     private const double LineMergeTolerance = 2.0; // Points - lines within this distance are considered the same column boundary
     
+    // Constants for table segmentation (detecting multiple tables on same page)
+    private const double MinVerticalGapForTableSplit = 30.0; // Minimum vertical gap (points) between rows to consider a table boundary
+    private const double ColumnStructureChangeThreshold = 0.4; // If column positions differ by >40%, consider it a new table
+    
     /// <summary>
     /// Extracts tables from a PDF file by analyzing text positions and alignment.
     /// </summary>
@@ -58,13 +62,19 @@ public class PdfTableExtractorService
                 for (int i = 1; i <= document.NumberOfPages; i++)
                 {
                     var page = document.GetPage(i);
-                    var pageTable = ExtractTableFromPage(page, i);
+                    var pageTables = ExtractTablesFromPage(page, i);
                     
-                    if (pageTable != null && pageTable.RowCount > 0)
+                    if (pageTables.Count > 0)
                     {
-                        tables.Add(pageTable);
+                        tables.AddRange(pageTables);
                         LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
-                            $"Found table on page {i} with {pageTable.RowCount} rows and {pageTable.ColumnCount} columns");
+                            $"Found {pageTables.Count} table(s) on page {i}");
+                        
+                        for (int t = 0; t < pageTables.Count; t++)
+                        {
+                            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                                $"  Table {t + 1}: {pageTables[t].RowCount} rows, {pageTables[t].ColumnCount} columns");
+                        }
                     }
                 }
 
@@ -85,7 +95,239 @@ public class PdfTableExtractorService
     }
 
     /// <summary>
+    /// Extracts multiple tables from a single PDF page by detecting table regions.
+    /// This handles pages with multiple distinct tables (e.g., summary table + transaction table).
+    /// </summary>
+    private List<TableData> ExtractTablesFromPage(Page page, int pageNumber)
+    {
+        var tables = new List<TableData>();
+        
+        try
+        {
+            var words = page.GetWords().ToList();
+            
+            if (words.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                    $"Page {pageNumber}: No words found");
+                return tables;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                $"Page {pageNumber}: Found {words.Count} words");
+
+            // Filter out vertical/rotated text
+            var horizontalWords = FilterHorizontalText(words, pageNumber);
+            
+            if (horizontalWords.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                    $"Page {pageNumber}: No horizontal words after filtering");
+                return tables;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                $"Page {pageNumber}: {horizontalWords.Count} horizontal words");
+
+            // Group words by Y position (rows)
+            var rowGroups = horizontalWords
+                .GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1))
+                .OrderByDescending(g => g.Key) // Top to bottom
+                .Select(g => new { YPosition = g.Key, Words = g.ToList() })
+                .ToList();
+
+            if (rowGroups.Count < 1)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                    $"Page {pageNumber}: No rows found");
+                return tables;
+            }
+
+            // Detect table regions by finding large vertical gaps or column structure changes
+            var tableRegions = DetectTableRegions(rowGroups, pageNumber);
+            
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesFromPage", 
+                $"Page {pageNumber}: Detected {tableRegions.Count} table region(s)");
+
+            // Extract each table region separately
+            for (int regionIndex = 0; regionIndex < tableRegions.Count; regionIndex++)
+            {
+                var region = tableRegions[regionIndex];
+                var regionTable = ExtractTableFromRegion(region, page, pageNumber, regionIndex + 1);
+                
+                if (regionTable != null && regionTable.RowCount > 0)
+                {
+                    tables.Add(regionTable);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("PdfTableExtractorService.ExtractTablesFromPage", 
+                $"Error extracting tables from page {pageNumber}", ex);
+        }
+
+        return tables;
+    }
+
+    /// <summary>
+    /// Detects distinct table regions on a page by analyzing vertical gaps and column structure.
+    /// </summary>
+    private List<List<dynamic>> DetectTableRegions(List<dynamic> rowGroups, int pageNumber)
+    {
+        var regions = new List<List<dynamic>>();
+        var currentRegion = new List<dynamic>();
+
+        for (int i = 0; i < rowGroups.Count; i++)
+        {
+            var currentRow = rowGroups[i];
+            currentRegion.Add(currentRow);
+
+            // Check if this is the last row or if there's a large gap to the next row
+            if (i < rowGroups.Count - 1)
+            {
+                var nextRow = rowGroups[i + 1];
+                double verticalGap = currentRow.YPosition - nextRow.YPosition;
+
+                // If large vertical gap detected, consider this a table boundary
+                if (verticalGap > MinVerticalGapForTableSplit)
+                {
+                    LogUtilities.LogInfo("PdfTableExtractorService.DetectTableRegions", 
+                        $"Page {pageNumber}: Large vertical gap detected ({verticalGap:F1} pts) - splitting table");
+                    
+                    if (currentRegion.Count >= 1) // Need at least 1 row
+                    {
+                        regions.Add(new List<dynamic>(currentRegion));
+                    }
+                    currentRegion.Clear();
+                }
+            }
+        }
+
+        // Add the last region if it has rows
+        if (currentRegion.Count >= 1)
+        {
+            regions.Add(currentRegion);
+        }
+
+        return regions;
+    }
+
+    /// <summary>
+    /// Extracts a table from a specific region of rows on a page.
+    /// </summary>
+    private TableData? ExtractTableFromRegion(List<dynamic> rowGroups, Page page, int pageNumber, int regionNumber)
+    {
+        try
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                $"Page {pageNumber}, Region {regionNumber}: Processing {rowGroups.Count} rows");
+
+            // First, try to detect column boundaries from vertical lines in the PDF
+            var columnPositions = DetectVerticalLinesFromPaths(page, pageNumber);
+            
+            // If no vertical lines found, fall back to text-based column detection
+            if (columnPositions.Count == 0)
+            {
+                // Analyze column structure from rows in this region
+                var sampleRowCount = Math.Min(10, rowGroups.Count);
+                var sampleRows = rowGroups.Take(sampleRowCount)
+                    .Select(rg => rg.Words as List<Word>)
+                    .Select(words => words.GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1)).First())
+                    .ToList();
+                
+                columnPositions = DetectColumnPositions(sampleRows);
+                
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: Detected {columnPositions.Count} columns (text-based)");
+            }
+            else
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: Using {columnPositions.Count} columns (line-based)");
+            }
+            
+            if (columnPositions.Count < 1)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: Not enough columns detected");
+                return null;
+            }
+
+            // Extract rows
+            var tableRows = new List<List<string>>();
+            
+            foreach (var rowGroup in rowGroups)
+            {
+                var row = new List<string>();
+                var rowWords = (rowGroup.Words as List<Word>).OrderBy(w => w.BoundingBox.Left).ToList();
+                
+                // Assign words to columns based on position
+                foreach (var colPos in columnPositions)
+                {
+                    var cellWords = rowWords
+                        .Where(w => IsWordInColumn(w, colPos, columnPositions))
+                        .OrderBy(w => w.BoundingBox.Left)
+                        .ToList();
+                    
+                    var cellText = string.Join(" ", cellWords.Select(w => w.Text));
+                    row.Add(cellText);
+                }
+                
+                // Only add rows that have at least some content
+                if (row.Any(cell => !string.IsNullOrWhiteSpace(cell)))
+                {
+                    tableRows.Add(row);
+                }
+            }
+
+            if (tableRows.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: No valid rows after processing");
+                return null;
+            }
+
+            // Remove empty/sparse columns
+            tableRows = RemoveEmptyColumns(tableRows, pageNumber);
+            
+            if (tableRows.Count == 0 || tableRows[0].Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: No valid columns after filtering");
+                return null;
+            }
+
+            // Remove sparse rows
+            tableRows = RemoveSparseRows(tableRows, pageNumber);
+            
+            if (tableRows.Count == 0)
+            {
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: No valid rows after filtering");
+                return null;
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                $"Page {pageNumber}, Region {regionNumber}: Successfully extracted {tableRows.Count} rows with {tableRows[0].Count} columns");
+
+            return new TableData
+            {
+                PageNumber = pageNumber,
+                Rows = tableRows
+            };
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("PdfTableExtractorService.ExtractTableFromRegion", 
+                $"Error extracting table from page {pageNumber}, region {regionNumber}", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Extracts a table from a single PDF page by analyzing text positions.
+    /// DEPRECATED: Use ExtractTablesFromPage instead which handles multiple tables per page.
     /// </summary>
     private TableData? ExtractTableFromPage(Page page, int pageNumber)
     {
