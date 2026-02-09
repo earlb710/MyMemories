@@ -407,27 +407,28 @@ public class PdfTableExtractorService
             else
             {
                 // First, try to detect column boundaries from vertical lines in the PDF
-            var columnPositions = DetectVerticalLinesFromPaths(page, pageNumber);
-            
-            // If no vertical lines found, fall back to text-based column detection
-            if (columnPositions.Count == 0)
-            {
-                // Analyze column structure from rows in this region
-                var sampleRowCount = Math.Min(10, rowGroups.Count);
-                var sampleRows = rowGroups.Take(sampleRowCount)
-                    .Select(rg => rg.Words as List<Word>)
-                    .Select(words => words.GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1)).First())
-                    .ToList();
+                columnPositions = DetectVerticalLinesFromPaths(page, pageNumber);
                 
-                columnPositions = DetectColumnPositions(sampleRows);
-                
-                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
-                    $"Page {pageNumber}, Region {regionNumber}: Detected {columnPositions.Count} columns (text-based)");
-            }
-            else
-            {
-                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
-                    $"Page {pageNumber}, Region {regionNumber}: Using {columnPositions.Count} columns (line-based)");
+                // If no vertical lines found, fall back to text-based column detection
+                if (columnPositions.Count == 0)
+                {
+                    // Analyze column structure from rows in this region
+                    var sampleRowCount = Math.Min(10, rowGroups.Count);
+                    var sampleRows = rowGroups.Take(sampleRowCount)
+                        .Select(rg => rg.Words as List<Word>)
+                        .Select(words => words.GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1)).First())
+                        .ToList();
+                    
+                    columnPositions = DetectColumnPositions(sampleRows);
+                    
+                    LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                        $"Page {pageNumber}, Region {regionNumber}: Detected {columnPositions.Count} columns (text-based)");
+                }
+                else
+                {
+                    LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                        $"Page {pageNumber}, Region {regionNumber}: Using {columnPositions.Count} columns (line-based)");
+                }
             }
             
             if (columnPositions.Count < 1)
