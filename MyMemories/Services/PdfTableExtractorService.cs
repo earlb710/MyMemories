@@ -34,8 +34,14 @@ public class PdfTableExtractorService
     private const double MinVerticalGapForTableSplit = 20.0; // Minimum vertical gap (points) between rows to consider a table boundary
     private const double ColumnStructureChangeThreshold = 0.4; // If column positions differ by >40%, consider it a new table
     
+    // Constants for two-pass header-based extraction
+    private const double HeaderSimilarityThreshold = 0.7; // 70% similarity to match templates
+    private const int MinHeaderKeywords = 2; // Minimum keywords to consider a row as header
+    
     /// <summary>
-    /// Extracts tables from a PDF file by analyzing text positions and alignment.
+    /// Extracts tables from a PDF file using a two-pass approach:
+    /// Pass 1: Discover table structures and headers across all pages
+    /// Pass 2: Extract tables using discovered templates for consistency
     /// </summary>
     /// <param name="pdfPath">Path to the PDF file.</param>
     /// <returns>List of extracted tables.</returns>
@@ -57,23 +63,47 @@ public class PdfTableExtractorService
                 using var document = PdfDocument.Open(pdfPath);
                 
                 LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
-                    $"Processing PDF with {document.NumberOfPages} pages");
+                    $"Processing PDF with {document.NumberOfPages} pages using two-pass approach");
 
+                // PASS 1: Discover table structures and headers across all pages
+                var templates = DiscoverTableTemplates(document);
+                
+                if (templates.Count > 0)
+                {
+                    LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                        $"Pass 1 complete: Discovered {templates.Count} unique table template(s)");
+                    
+                    for (int t = 0; t < templates.Count; t++)
+                    {
+                        var template = templates[t];
+                        LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                            $"  Template {t + 1}: {template.ColumnCount} columns, headers: {string.Join(", ", template.HeaderRow.Take(3))}..., found on {template.PageNumbers.Count} page(s)");
+                    }
+                }
+                else
+                {
+                    LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
+                        "Pass 1: No table templates discovered, using standard extraction");
+                }
+
+                // PASS 2: Extract tables using discovered templates
                 for (int i = 1; i <= document.NumberOfPages; i++)
                 {
                     var page = document.GetPage(i);
-                    var pageTables = ExtractTablesFromPage(page, i);
+                    var pageTables = ExtractTablesFromPage(page, i, templates);
                     
                     if (pageTables.Count > 0)
                     {
                         tables.AddRange(pageTables);
                         LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
-                            $"Found {pageTables.Count} table(s) on page {i}");
+                            $"Pass 2: Found {pageTables.Count} table(s) on page {i}");
                         
                         for (int t = 0; t < pageTables.Count; t++)
                         {
+                            var templateInfo = pageTables[t].TemplateId.HasValue ? 
+                                $" (template {pageTables[t].TemplateId})" : "";
                             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTablesAsync", 
-                                $"  Table {t + 1}: {pageTables[t].RowCount} rows, {pageTables[t].ColumnCount} columns");
+                                $"  Table {t + 1}: {pageTables[t].RowCount} rows, {pageTables[t].ColumnCount} columns{templateInfo}");
                         }
                     }
                 }
@@ -95,10 +125,119 @@ public class PdfTableExtractorService
     }
 
     /// <summary>
+    /// Pass 1: Discovers table templates by analyzing headers across all pages.
+    /// Returns a list of unique table templates found in the document.
+    /// </summary>
+    private List<TableTemplate> DiscoverTableTemplates(PdfDocument document)
+    {
+        var templates = new List<TableTemplate>();
+        var nextTemplateId = 1;
+
+        try
+        {
+            LogUtilities.LogInfo("PdfTableExtractorService.DiscoverTableTemplates", 
+                "Pass 1: Starting table template discovery");
+
+            for (int pageNum = 1; pageNum <= document.NumberOfPages; pageNum++)
+            {
+                var page = document.GetPage(pageNum);
+                var words = page.GetWords().ToList();
+                
+                if (words.Count == 0)
+                    continue;
+
+                // Filter horizontal text
+                var horizontalWords = FilterHorizontalText(words, pageNum);
+                if (horizontalWords.Count == 0)
+                    continue;
+
+                // Group into rows
+                var rowGroups = horizontalWords
+                    .GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1))
+                    .OrderByDescending(g => g.Key)
+                    .Select(g => (dynamic)new { YPosition = g.Key, Words = g.ToList() })
+                    .ToList();
+
+                // Detect table regions
+                var tableRegions = DetectTableRegions(rowGroups, pageNum);
+
+                // For each region, check if first row is a header
+                foreach (var region in tableRegions)
+                {
+                    if (region.Count == 0)
+                        continue;
+
+                    // Get first row of region
+                    var firstRowGroup = region[0];
+                    var firstRowWords = firstRowGroup.Words as List<Word>;
+                    
+                    if (firstRowWords == null || firstRowWords.Count == 0)
+                        continue;
+
+                    // Try to detect columns for this row
+                    var columnPositions = DetectColumnPositions(region);
+                    if (columnPositions.Count == 0)
+                        continue;
+
+                    // Extract first row text using detected columns
+                    var firstRow = ExtractRowFromWords(firstRowWords, columnPositions);
+                    
+                    // Check if it looks like a header row
+                    if (!TableTemplate.IsLikelyHeaderRow(firstRow))
+                        continue;
+
+                    // Check if this matches an existing template
+                    TableTemplate? matchedTemplate = null;
+                    foreach (var template in templates)
+                    {
+                        double similarity = template.CalculateSimilarity(firstRow);
+                        if (similarity >= HeaderSimilarityThreshold)
+                        {
+                            matchedTemplate = template;
+                            break;
+                        }
+                    }
+
+                    if (matchedTemplate != null)
+                    {
+                        // Add this page to existing template
+                        if (!matchedTemplate.PageNumbers.Contains(pageNum))
+                        {
+                            matchedTemplate.PageNumbers.Add(pageNum);
+                        }
+                    }
+                    else
+                    {
+                        // Create new template
+                        var newTemplate = new TableTemplate
+                        {
+                            TemplateId = nextTemplateId++,
+                            HeaderRow = firstRow,
+                            ColumnPositions = columnPositions,
+                            PageNumbers = new List<int> { pageNum }
+                        };
+                        templates.Add(newTemplate);
+                    }
+                }
+            }
+
+            LogUtilities.LogInfo("PdfTableExtractorService.DiscoverTableTemplates", 
+                $"Pass 1 complete: Discovered {templates.Count} table template(s)");
+        }
+        catch (Exception ex)
+        {
+            LogUtilities.LogError("PdfTableExtractorService.DiscoverTableTemplates", 
+                "Error discovering table templates", ex);
+        }
+
+        return templates;
+    }
+
+    /// <summary>
     /// Extracts multiple tables from a single PDF page by detecting table regions.
     /// This handles pages with multiple distinct tables (e.g., summary table + transaction table).
     /// </summary>
-    private List<TableData> ExtractTablesFromPage(Page page, int pageNumber)
+    private List<TableData> ExtractTablesFromPage(Page page, int pageNumber, List<TableTemplate> templates = null)
     {
         var tables = new List<TableData>();
         
@@ -153,7 +292,7 @@ public class PdfTableExtractorService
             for (int regionIndex = 0; regionIndex < tableRegions.Count; regionIndex++)
             {
                 var region = tableRegions[regionIndex];
-                var regionTable = ExtractTableFromRegion(region, page, pageNumber, regionIndex + 1);
+                var regionTable = ExtractTableFromRegion(region, page, pageNumber, regionIndex + 1, templates);
                 
                 if (regionTable != null && regionTable.RowCount > 0)
                 {
@@ -215,15 +354,59 @@ public class PdfTableExtractorService
 
     /// <summary>
     /// Extracts a table from a specific region of rows on a page.
+    /// If templates are provided, attempts to match this region to a template for consistent extraction.
     /// </summary>
-    private TableData? ExtractTableFromRegion(List<dynamic> rowGroups, Page page, int pageNumber, int regionNumber)
+    private TableData? ExtractTableFromRegion(List<dynamic> rowGroups, Page page, int pageNumber, int regionNumber, List<TableTemplate> templates = null)
     {
         try
         {
             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
                 $"Page {pageNumber}, Region {regionNumber}: Processing {rowGroups.Count} rows");
 
-            // First, try to detect column boundaries from vertical lines in the PDF
+            TableTemplate? matchedTemplate = null;
+            List<double> columnPositions;
+
+            // If templates provided, try to match this region to a template
+            if (templates != null && templates.Count > 0 && rowGroups.Count > 0)
+            {
+                // Extract first row to check if it matches a template header
+                var firstRowGroup = rowGroups[0];
+                var firstRowWords = (firstRowGroup.Words as List<Word>)?.OrderBy(w => w.BoundingBox.Left).ToList();
+                
+                if (firstRowWords != null && firstRowWords.Count > 0)
+                {
+                    // Try quick column detection for first row
+                    var tempColumns = DetectColumnPositions(new[] { rowGroups[0] }.ToList());
+                    if (tempColumns.Count > 0)
+                    {
+                        var firstRow = ExtractRowFromWords(firstRowWords, tempColumns);
+                        
+                        // Check if this matches any template
+                        foreach (var template in templates)
+                        {
+                            double similarity = template.CalculateSimilarity(firstRow);
+                            if (similarity >= HeaderSimilarityThreshold)
+                            {
+                                matchedTemplate = template;
+                                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                                    $"Page {pageNumber}, Region {regionNumber}: Matched to template {template.TemplateId} (similarity: {similarity:F2})");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Use template columns if matched, otherwise detect columns
+            if (matchedTemplate != null && matchedTemplate.ColumnPositions.Count > 0)
+            {
+                columnPositions = matchedTemplate.ColumnPositions;
+                LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
+                    $"Page {pageNumber}, Region {regionNumber}: Using template {matchedTemplate.TemplateId} columns ({columnPositions.Count} columns)");
+            }
+            else
+            {
+                // First, try to detect column boundaries from vertical lines in the PDF
             var columnPositions = DetectVerticalLinesFromPaths(page, pageNumber);
             
             // If no vertical lines found, fall back to text-based column detection
@@ -311,10 +494,16 @@ public class PdfTableExtractorService
             LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromRegion", 
                 $"Page {pageNumber}, Region {regionNumber}: Successfully extracted {tableRows.Count} rows with {tableRows[0].Count} columns");
 
+            // Check if first row is a header
+            bool hasHeader = matchedTemplate != null || 
+                            (tableRows.Count > 0 && TableTemplate.IsLikelyHeaderRow(tableRows[0]));
+
             return new TableData
             {
                 PageNumber = pageNumber,
-                Rows = tableRows
+                Rows = tableRows,
+                TemplateId = matchedTemplate?.TemplateId,
+                HasHeaderRow = hasHeader
             };
         }
         catch (Exception ex)
@@ -909,6 +1098,28 @@ public class PdfTableExtractorService
         }
 
         return mergedColumns;
+    }
+
+    /// <summary>
+    /// Extracts a single row from a list of words given column positions.
+    /// Used during template discovery to extract header rows.
+    /// </summary>
+    private List<string> ExtractRowFromWords(List<Word> words, List<double> columnPositions)
+    {
+        var row = new List<string>();
+        
+        foreach (var colPos in columnPositions)
+        {
+            var cellWords = words
+                .Where(w => IsWordInColumn(w, colPos, columnPositions))
+                .OrderBy(w => w.BoundingBox.Left)
+                .ToList();
+            
+            var cellText = string.Join(" ", cellWords.Select(w => w.Text));
+            row.Add(cellText);
+        }
+        
+        return row;
     }
 
     /// <summary>

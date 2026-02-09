@@ -19,6 +19,21 @@ public class TableData
     public List<List<string>> Rows { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets the template ID this table was matched to (if using template-based extraction).
+    /// </summary>
+    public int? TemplateId { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the first row is a header row.
+    /// </summary>
+    public bool HasHeaderRow { get; set; }
+
+    /// <summary>
+    /// Gets the header row if HasHeaderRow is true, otherwise null.
+    /// </summary>
+    public List<string>? HeaderRow => HasHeaderRow && Rows?.Count > 0 ? Rows[0] : null;
+
+    /// <summary>
     /// Gets the number of rows in the table.
     /// </summary>
     public int RowCount => Rows?.Count ?? 0;
