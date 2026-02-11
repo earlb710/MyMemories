@@ -291,7 +291,7 @@ public class PdfTableExtractorService
             // Extract each table region separately
             for (int regionIndex = 0; regionIndex < tableRegions.Count; regionIndex++)
             {
-                var region = tableRegions[regionIndex];
+                List<dynamic> region = tableRegions[regionIndex];
                 var regionTable = ExtractTableFromRegion(region, page, pageNumber, regionIndex + 1, templates);
                 
                 if (regionTable != null && regionTable.RowCount > 0)
