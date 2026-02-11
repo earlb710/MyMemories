@@ -414,10 +414,7 @@ public class PdfTableExtractorService
                 {
                     // Analyze column structure from rows in this region
                     var sampleRowCount = Math.Min(10, rowGroups.Count);
-                    var sampleRows = rowGroups.Take(sampleRowCount)
-                        .Select(rg => rg.Words as List<Word>)
-                        .Select(words => words.GroupBy(w => Math.Round(w.BoundingBox.Bottom, 1)).First())
-                        .ToList();
+                    var sampleRows = rowGroups.Take(sampleRowCount).ToList();
                     
                     columnPositions = DetectColumnPositions(sampleRows);
                     
