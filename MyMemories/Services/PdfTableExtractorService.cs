@@ -237,7 +237,7 @@ public class PdfTableExtractorService
     /// Extracts multiple tables from a single PDF page by detecting table regions.
     /// This handles pages with multiple distinct tables (e.g., summary table + transaction table).
     /// </summary>
-    private List<TableData> ExtractTablesFromPage(Page page, int pageNumber, List<TableTemplate> templates = null)
+    private List<TableData> ExtractTablesFromPage(Page page, int pageNumber, List<TableTemplate>? templates = null)
     {
         var tables = new List<TableData>();
         
@@ -356,7 +356,7 @@ public class PdfTableExtractorService
     /// Extracts a table from a specific region of rows on a page.
     /// If templates are provided, attempts to match this region to a template for consistent extraction.
     /// </summary>
-    private TableData? ExtractTableFromRegion(List<dynamic> rowGroups, Page page, int pageNumber, int regionNumber, List<TableTemplate> templates = null)
+    private TableData? ExtractTableFromRegion(List<dynamic> rowGroups, Page page, int pageNumber, int regionNumber, List<TableTemplate>? templates = null)
     {
         try
         {
