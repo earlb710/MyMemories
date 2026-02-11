@@ -572,7 +572,7 @@ public class PdfTableExtractorService
                 
                 // Analyze column structure from first few rows (or all rows if less than 10)
                 var sampleRowCount = Math.Min(10, rowGroups.Count); // Increased from 5 to 10
-                columnPositions = DetectColumnPositions(rowGroups.Take(sampleRowCount).ToList());
+                columnPositions = DetectColumnPositions(rowGroups.Take(sampleRowCount).Cast<dynamic>().ToList());
                 
                 LogUtilities.LogInfo("PdfTableExtractorService.ExtractTableFromPage", 
                     $"Page {pageNumber}: Detected {columnPositions.Count} columns from {sampleRowCount} sample rows (text-based)");
