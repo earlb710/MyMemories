@@ -162,7 +162,7 @@ public class PdfTableExtractorService
                 var tableRegions = DetectTableRegions(rowGroups, pageNum);
 
                 // For each region, check if first row is a header
-                foreach (var region in tableRegions)
+                foreach (List<dynamic> region in tableRegions)
                 {
                     if (region.Count == 0)
                         continue;
