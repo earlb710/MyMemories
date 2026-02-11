@@ -376,7 +376,7 @@ public class PdfTableExtractorService
                 if (firstRowWords != null && firstRowWords.Count > 0)
                 {
                     // Try quick column detection for first row
-                    var tempColumns = DetectColumnPositions(new[] { rowGroups[0] }.ToList());
+                    var tempColumns = DetectColumnPositions(new List<dynamic> { rowGroups[0] });
                     if (tempColumns.Count > 0)
                     {
                         var firstRow = ExtractRowFromWords(firstRowWords, tempColumns);
