@@ -182,8 +182,8 @@ public class PdfTableExtractorService
                     // Extract first row text using detected columns
                     var firstRow = ExtractRowFromWords(firstRowWords, columnPositions);
                     
-                    // Check if it looks like a header row
-                    if (!TableTemplate.IsLikelyHeaderRow(firstRow))
+                    // Check if it looks like a header row (with bold detection)
+                    if (!TableTemplate.IsLikelyHeaderRow(firstRow, firstRowWords))
                         continue;
 
                     // Check if this matches an existing template

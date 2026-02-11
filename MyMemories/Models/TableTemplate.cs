@@ -105,4 +105,86 @@ public class TableTemplate
         // Consider it a header if at least 2 cells contain keywords and at least 30% of cells match
         return keywordCount >= 2 && (double)keywordCount / row.Count >= 0.3;
     }
+    
+    /// <summary>
+    /// Checks if a row of text appears to be a header row based on common keywords or bold formatting.
+    /// This overload accepts Word objects to check font styling.
+    /// </summary>
+    public static bool IsLikelyHeaderRow(List<string> row, List<UglyToad.PdfPig.Content.Word> words)
+    {
+        if (row == null || row.Count == 0)
+            return false;
+
+        // First check keyword-based detection
+        bool hasKeywords = IsLikelyHeaderRow(row);
+        if (hasKeywords)
+            return true;
+
+        // If no keyword match, check if text is in bold
+        // Bold headers are common in PDFs even without standard keywords
+        if (words != null && words.Count > 0)
+        {
+            int boldCount = 0;
+            foreach (var word in words)
+            {
+                if (IsBoldText(word))
+                    boldCount++;
+            }
+
+            // If >50% of words are bold, likely a header row
+            double boldRatio = (double)boldCount / words.Count;
+            if (boldRatio > 0.5)
+            {
+                // Log that we detected a bold header
+                try
+                {
+                    MyMemories.Utilities.LogUtilities.LogInfo("TableTemplate.IsLikelyHeaderRow", 
+                        $"Detected bold header row: {string.Join(", ", row.Take(3))}... ({boldCount}/{words.Count} bold words)");
+                }
+                catch { /* Logging failure shouldn't break detection */ }
+                
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a Word is rendered in bold font.
+    /// Examines font names and properties to detect bold styling.
+    /// </summary>
+    private static bool IsBoldText(UglyToad.PdfPig.Content.Word word)
+    {
+        try
+        {
+            // Check letters in the word for font information
+            var letters = word.Letters;
+            if (letters == null || letters.Count == 0)
+                return false;
+
+            // Check if any letter has a bold font
+            // Font names often contain "Bold", "Heavy", "Black", "Demi", "SemiBold"
+            foreach (var letter in letters)
+            {
+                var fontName = letter.FontName?.ToUpperInvariant() ?? "";
+                
+                if (fontName.Contains("BOLD") ||
+                    fontName.Contains("HEAVY") ||
+                    fontName.Contains("BLACK") ||
+                    fontName.Contains("DEMI") ||
+                    fontName.Contains("SEMIBOLD"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            // If we can't determine, assume not bold
+            return false;
+        }
+    }
 }
