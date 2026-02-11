@@ -1013,7 +1013,7 @@ public class PdfTableExtractorService
     /// Improved to better handle closely-spaced numeric columns and avoid creating too many empty columns.
     /// Only creates columns that appear consistently across multiple rows.
     /// </summary>
-    private List<double> DetectColumnPositions(List<IGrouping<double, Word>> sampleRows)
+    private List<double> DetectColumnPositions(List<dynamic> sampleRows)
     {
         if (sampleRows.Count == 0)
             return new List<double>();
@@ -1023,10 +1023,15 @@ public class PdfTableExtractorService
         
         foreach (var row in sampleRows)
         {
+            // Get words from the row (row is dynamic with YPosition and Words properties)
+            var words = row.Words as List<Word>;
+            if (words == null || words.Count == 0)
+                continue;
+                
             // Get unique X positions in this row (rounded to 1 point precision to avoid over-detecting columns)
-            var rowXPositions = row.Select(w => Math.Round(w.BoundingBox.Left))
-                                   .Distinct()
-                                   .ToList();
+            var rowXPositions = words.Select(w => Math.Round(w.BoundingBox.Left))
+                                     .Distinct()
+                                     .ToList();
             
             foreach (var x in rowXPositions)
             {
