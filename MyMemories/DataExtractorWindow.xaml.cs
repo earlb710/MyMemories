@@ -22,6 +22,7 @@ public sealed partial class DataExtractorWindow : Window
 {
     private readonly string _pdfPath;
     private readonly PdfTableExtractorService _extractorService;
+    private readonly TabulaTableExtractorService _tabulaExtractorService;
     private List<TableData> _extractedTables = new();
     private int _currentTableIndex = 0;
 
@@ -31,6 +32,7 @@ public sealed partial class DataExtractorWindow : Window
         
         _pdfPath = pdfPath;
         _extractorService = new PdfTableExtractorService();
+        _tabulaExtractorService = new TabulaTableExtractorService();
         
         Title = $"PDF Data Extractor - {Path.GetFileName(pdfPath)}";
         
@@ -81,8 +83,21 @@ public sealed partial class DataExtractorWindow : Window
             ExtractionProgressRing.Visibility = Visibility.Visible;
             StatusText.Text = "Extracting tables from PDF...";
             
-            // Extract tables from PDF
-            _extractedTables = await _extractorService.ExtractTablesAsync(_pdfPath);
+            // Try Tabula-sharp first (more accurate table structure detection)
+            LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Attempting extraction with Tabula-sharp");
+            _extractedTables = await _tabulaExtractorService.ExtractTablesAsync(_pdfPath);
+            
+            // If Tabula-sharp found no tables, fall back to custom text-based extraction
+            if (_extractedTables.Count == 0)
+            {
+                LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Tabula-sharp found no tables, falling back to text-based extraction");
+                StatusText.Text = "Using fallback extraction method...";
+                _extractedTables = await _extractorService.ExtractTablesAsync(_pdfPath);
+            }
+            else
+            {
+                LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", $"Tabula-sharp successfully extracted {_extractedTables.Count} tables");
+            }
             
             if (_extractedTables.Count == 0)
             {
