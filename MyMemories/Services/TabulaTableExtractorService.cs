@@ -224,11 +224,13 @@ namespace MyMemories.Services
             var tableData = new TableData
             {
                 PageNumber = pageNumber,
-                Rows = rows
+                Rows = rows,
+                HasHeaderRow = rows.Count > 0  // Tabula includes headers in first row
             };
 
             LogUtilities.LogInfo("TabulaTableExtractorService.ConvertTabulaTableToTableData", 
-                $"Converted Tabula table: {tableData.RowCount} rows x {tableData.ColumnCount} columns");
+                $"Converted Tabula table: {tableData.RowCount} rows x {tableData.ColumnCount} columns" +
+                (tableData.HasHeaderRow ? $" (header: {string.Join(", ", tableData.HeaderRow ?? new List<string>())})" : ""));
 
             return tableData;
         }
