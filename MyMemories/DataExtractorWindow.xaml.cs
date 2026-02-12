@@ -111,6 +111,31 @@ public sealed partial class DataExtractorWindow : Window
                             }
                             if (tabulaResultsLookBad) break;
                         }
+                        
+                        // Check for column count inconsistencies (indicates failed column detection)
+                        if (!tabulaResultsLookBad && table.Rows.Count > 1 && table.HasHeaderRow)
+                        {
+                            int headerCols = table.Rows[0].Count;
+                            
+                            // Count non-empty cells in data rows
+                            var dataCols = table.Rows.Skip(1)
+                                .Select(r => r.Count(c => !string.IsNullOrWhiteSpace(c)))
+                                .ToList();
+                            
+                            if (dataCols.Any())
+                            {
+                                double avgDataCols = dataCols.Average();
+                                
+                                // If data rows have much fewer columns than header (50% or less), likely column detection failed
+                                if (avgDataCols <= headerCols * 0.5)
+                                {
+                                    tabulaResultsLookBad = true;
+                                    LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", 
+                                        $"Tabula extraction has column mismatch (header: {headerCols} cols, data avg: {avgDataCols:F1} cols), falling back to text-based");
+                                    break;
+                                }
+                            }
+                        }
                     }
                     if (tabulaResultsLookBad) break;
                 }
