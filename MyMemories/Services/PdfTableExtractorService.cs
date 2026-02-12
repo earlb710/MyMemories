@@ -306,6 +306,12 @@ public class PdfTableExtractorService
                 $"Error extracting tables from page {pageNumber}", ex);
         }
 
+        // Apply numeric column splitting to separate merged amount fields
+        for (int i = 0; i < tables.Count; i++)
+        {
+            tables[i] = SplitNumericColumns(tables[i]);
+        }
+
         return tables;
     }
 
@@ -1332,5 +1338,155 @@ public class PdfTableExtractorService
                 "Error copying tables to clipboard", ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Splits columns that contain multiple numeric values (amounts) into separate columns.
+    /// This handles cases where amounts like "202.13 3,639.41" are combined in one cell.
+    /// </summary>
+    private TableData SplitNumericColumns(TableData table)
+    {
+        if (table.Rows.Count == 0)
+            return table;
+
+        // Analyze each column to see if it contains multiple numeric values
+        var columnsToSplit = new List<int>();
+        
+        for (int colIndex = 0; colIndex < table.ColumnCount; colIndex++)
+        {
+            int multiNumericCount = 0;
+            int totalCount = 0;
+            
+            foreach (var row in table.Rows)
+            {
+                if (colIndex < row.Count)
+                {
+                    var cellText = row[colIndex];
+                    if (!string.IsNullOrWhiteSpace(cellText))
+                    {
+                        totalCount++;
+                        var numbers = SplitNumericCell(cellText);
+                        if (numbers.Count > 1)
+                        {
+                            multiNumericCount++;
+                        }
+                    }
+                }
+            }
+            
+            // If 30%+ of cells in this column have multiple numbers, split it
+            if (totalCount > 0 && (double)multiNumericCount / totalCount >= 0.3)
+            {
+                columnsToSplit.Add(colIndex);
+                LogUtilities.LogInfo("PdfTableExtractorService.SplitNumericColumns", 
+                    $"Column {colIndex} has {multiNumericCount}/{totalCount} cells with multiple numbers, will split");
+            }
+        }
+        
+        if (columnsToSplit.Count == 0)
+            return table; // No columns need splitting
+        
+        // Process columns in reverse order to maintain indices
+        columnsToSplit.Reverse();
+        
+        foreach (var colIndex in columnsToSplit)
+        {
+            // Find max number of splits needed
+            int maxSplits = 1;
+            foreach (var row in table.Rows)
+            {
+                if (colIndex < row.Count)
+                {
+                    var numbers = SplitNumericCell(row[colIndex]);
+                    maxSplits = Math.Max(maxSplits, numbers.Count);
+                }
+            }
+            
+            // Split the column
+            var newRows = new List<List<string>>();
+            foreach (var row in table.Rows)
+            {
+                var newRow = new List<string>(row);
+                
+                if (colIndex < row.Count)
+                {
+                    var cellText = row[colIndex];
+                    var numbers = SplitNumericCell(cellText);
+                    
+                    // Remove original cell
+                    newRow.RemoveAt(colIndex);
+                    
+                    // Insert split values
+                    for (int i = 0; i < maxSplits; i++)
+                    {
+                        var value = i < numbers.Count ? numbers[i] : "";
+                        newRow.Insert(colIndex + i, value);
+                    }
+                }
+                else
+                {
+                    // Pad row if needed
+                    while (newRow.Count <= colIndex)
+                        newRow.Add("");
+                    
+                    // Add empty cells for splits
+                    for (int i = 1; i < maxSplits; i++)
+                    {
+                        newRow.Insert(colIndex + i, "");
+                    }
+                }
+                
+                newRows.Add(newRow);
+            }
+            
+            table = new TableData
+            {
+                PageNumber = table.PageNumber,
+                Rows = newRows,
+                TemplateId = table.TemplateId,
+                HasHeaderRow = table.HasHeaderRow
+            };
+        }
+        
+        LogUtilities.LogInfo("PdfTableExtractorService.SplitNumericColumns", 
+            $"Split {columnsToSplit.Count} column(s), final table has {table.ColumnCount} columns");
+        
+        return table;
+    }
+
+    /// <summary>
+    /// Checks if text matches a numeric amount pattern (e.g., 123.45, 1,234.56, 123.45Cr).
+    /// </summary>
+    private bool IsNumericAmount(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        
+        // Match numbers with optional thousands separators, decimals, and Cr/Dr suffix
+        var pattern = @"^\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:Cr|Dr)?$";
+        return System.Text.RegularExpressions.Regex.IsMatch(text.Trim(), pattern);
+    }
+
+    /// <summary>
+    /// Splits a cell containing multiple numeric values into separate values.
+    /// Example: "202.13 3,639.41" -> ["202.13", "3,639.41"]
+    /// </summary>
+    private List<string> SplitNumericCell(string text)
+    {
+        var result = new List<string>();
+        
+        if (string.IsNullOrWhiteSpace(text))
+            return result;
+        
+        // Pattern to match numbers with optional thousands separators, decimals, and Cr/Dr suffix
+        var pattern = @"\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:Cr|Dr)?";
+        var matches = System.Text.RegularExpressions.Regex.Matches(text, pattern);
+        
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            result.Add(match.Value);
+        }
+        
+        return result;
     }
 }
