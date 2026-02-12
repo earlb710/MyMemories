@@ -187,14 +187,38 @@ namespace MyMemories.Services
         {
             var rows = new List<List<string>>();
 
+            LogUtilities.LogInfo("TabulaTableExtractorService.ConvertTabulaTableToTableData", 
+                $"Converting Tabula table with {tabulaTable.RowCount} rows");
+
+            int rowIndex = 0;
             foreach (var tabulaRow in tabulaTable.Rows)
             {
                 var row = new List<string>();
+                int cellIndex = 0;
+                
                 foreach (var cell in tabulaRow)
                 {
-                    row.Add(cell.GetText()?.Trim() ?? string.Empty);
+                    string cellText = cell.GetText()?.Trim() ?? string.Empty;
+                    row.Add(cellText);
+                    
+                    // Log first few rows for debugging
+                    if (rowIndex < 3)
+                    {
+                        LogUtilities.LogInfo("TabulaTableExtractorService.ConvertTabulaTableToTableData", 
+                            $"  Row {rowIndex}, Cell {cellIndex}: [{cellText}]");
+                    }
+                    cellIndex++;
                 }
+                
                 rows.Add(row);
+                
+                if (rowIndex < 3)
+                {
+                    LogUtilities.LogInfo("TabulaTableExtractorService.ConvertTabulaTableToTableData", 
+                        $"  Row {rowIndex} has {row.Count} cells");
+                }
+                
+                rowIndex++;
             }
 
             var tableData = new TableData
