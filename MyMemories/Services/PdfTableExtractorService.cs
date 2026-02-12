@@ -1455,6 +1455,42 @@ public class PdfTableExtractorService
     }
 
     /// <summary>
+    /// Determines if a cell should be split based on validation checks.
+    /// Returns false for card numbers, dates, and other non-amount data.
+    /// </summary>
+    private bool ShouldSplitCell(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+        
+        // Don't split if it contains non-amount separators (card numbers, references)
+        if (text.Contains('*') || text.Contains('#') || text.Contains('/') || text.Contains('-'))
+            return false;
+        
+        // Don't split date patterns like "14 Feb", "21 Jan"
+        var datePattern = @"\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, datePattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return false;
+        
+        // Extract numeric values
+        var pattern = @"\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:Cr|Dr)?";
+        var matches = System.Text.RegularExpressions.Regex.Matches(text, pattern);
+        
+        // Only split if we find 2-3 numeric values (not 1, not 4+)
+        if (matches.Count < 2 || matches.Count > 3)
+            return false;
+        
+        // All extracted values must be valid amounts
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            if (!IsNumericAmount(match.Value))
+                return false;
+        }
+        
+        return true;
+    }
+
+    /// <summary>
     /// Checks if text matches a numeric amount pattern (e.g., 123.45, 1,234.56, 123.45Cr).
     /// </summary>
     private bool IsNumericAmount(string text)
@@ -1477,6 +1513,14 @@ public class PdfTableExtractorService
         
         if (string.IsNullOrWhiteSpace(text))
             return result;
+        
+        // Check if this cell should be split
+        if (!ShouldSplitCell(text))
+        {
+            // Don't split - return original text
+            result.Add(text);
+            return result;
+        }
         
         // Pattern to match numbers with optional thousands separators, decimals, and Cr/Dr suffix
         var pattern = @"\d{1,3}(?:,\d{3})*(?:\.\d+)?(?:Cr|Dr)?";
