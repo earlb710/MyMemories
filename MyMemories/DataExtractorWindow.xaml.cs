@@ -87,10 +87,42 @@ public sealed partial class DataExtractorWindow : Window
             LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Attempting extraction with Tabula-sharp");
             _extractedTables = await _tabulaExtractorService.ExtractTablesAsync(_pdfPath);
             
-            // If Tabula-sharp found no tables, fall back to custom text-based extraction
-            if (_extractedTables.Count == 0)
+            // Check if Tabula extraction looks malformed (all data concatenated in few rows)
+            bool tabulaResultsLookBad = false;
+            if (_extractedTables.Count > 0)
             {
-                LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Tabula-sharp found no tables, falling back to text-based extraction");
+                foreach (var table in _extractedTables)
+                {
+                    // If we have headers but very few data rows, extraction likely failed
+                    if (table.RowCount <= 3 && table.ColumnCount > 0)
+                    {
+                        // Check if any cell has suspiciously long text (many values concatenated)
+                        foreach (var row in table.Rows)
+                        {
+                            foreach (var cell in row)
+                            {
+                                if (cell.Length > 200 || cell.Split(' ').Length > 20)
+                                {
+                                    tabulaResultsLookBad = true;
+                                    LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", 
+                                        $"Tabula extraction looks malformed (cell with {cell.Length} chars), falling back to text-based");
+                                    break;
+                                }
+                            }
+                            if (tabulaResultsLookBad) break;
+                        }
+                    }
+                    if (tabulaResultsLookBad) break;
+                }
+            }
+            
+            // If Tabula-sharp found no tables or results look malformed, fall back to custom text-based extraction
+            if (_extractedTables.Count == 0 || tabulaResultsLookBad)
+            {
+                if (_extractedTables.Count == 0)
+                {
+                    LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Tabula-sharp found no tables, falling back to text-based extraction");
+                }
                 StatusText.Text = "Using fallback extraction method...";
                 _extractedTables = await _extractorService.ExtractTablesAsync(_pdfPath);
             }
