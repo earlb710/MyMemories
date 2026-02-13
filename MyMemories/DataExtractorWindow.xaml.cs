@@ -141,6 +141,9 @@ public sealed partial class DataExtractorWindow : Window
                 }
             }
             
+            // Track which extraction method was used
+            string extractionMethod = "";
+            
             // If Tabula-sharp found no tables or results look malformed, fall back to custom text-based extraction
             if (_extractedTables.Count == 0 || tabulaResultsLookBad)
             {
@@ -148,12 +151,14 @@ public sealed partial class DataExtractorWindow : Window
                 {
                     LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", "Tabula-sharp found no tables, falling back to text-based extraction");
                 }
-                StatusText.Text = "Using fallback extraction method...";
+                StatusText.Text = "Using text-based extraction method...";
                 _extractedTables = await _extractorService.ExtractTablesAsync(_pdfPath);
+                extractionMethod = "text-based (Tabula fallback)";
             }
             else
             {
                 LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", $"Tabula-sharp successfully extracted {_extractedTables.Count} tables");
+                extractionMethod = "Tabula-sharp";
             }
             
             if (_extractedTables.Count == 0)
@@ -175,9 +180,9 @@ public sealed partial class DataExtractorWindow : Window
             // Enable navigation buttons if multiple tables
             UpdateNavigationButtons();
             
-            StatusText.Text = $"Successfully extracted {_extractedTables.Count} table(s)";
+            StatusText.Text = $"Successfully extracted {_extractedTables.Count} table(s) using {extractionMethod}";
             LogUtilities.LogInfo("DataExtractorWindow.ExtractButton_Click", 
-                $"Extracted {_extractedTables.Count} tables");
+                $"Extracted {_extractedTables.Count} tables using {extractionMethod}");
         }
         catch (Exception ex)
         {
