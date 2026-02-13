@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using MyMemories.Services;
+using MyMemories.Utilities;
 
 namespace MyMemories.Services.Details;
 
@@ -224,6 +225,28 @@ public class FileTypeDetailsBuilder
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
+
+        // Add Data Extractor button at the top
+        var extractButton = new Button
+        {
+            Content = "📊 Data Extractor",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+        extractButton.Click += (s, e) =>
+        {
+            try
+            {
+                var extractorWindow = new DataExtractorWindow(path);
+                extractorWindow.Activate();
+            }
+            catch (Exception ex)
+            {
+                LogUtilities.LogError("FileTypeDetailsBuilder.AddPdfFileInfoAsync", 
+                    "Error opening Data Extractor window", ex);
+            }
+        };
+        _detailsPanel.Children.Add(extractButton);
 
         var infoPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 16) };
         
