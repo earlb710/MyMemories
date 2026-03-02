@@ -266,6 +266,9 @@ public sealed partial class MainWindow : Window, INotifyPropertyChanged
             // NOW load categories (password is cached if needed)
             await LoadAllCategoriesAsync();
             
+            // Initialize email service
+            await InitializeEmailServiceAsync();
+
             // Check for outdated backups after categories are loaded
             await CheckOutdatedBackupsAsync();
             

@@ -49,6 +49,12 @@ Title="My Memories - File Viewer">
                     </MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Email Browser..." Click="MenuFile_EmailBrowser_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE715;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Exit" Click="MenuFile_Exit_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE7E8;"/>
@@ -81,6 +87,12 @@ Title="My Memories - File Viewer">
                 <MenuFlyoutItem Text="Rating Management" Click="MenuConfig_RatingManagement_Click">
                     <MenuFlyoutItem.Icon>
                         <FontIcon Glyph="&#xE735;"/>
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator/>
+                <MenuFlyoutItem Text="Email Accounts" Click="MenuConfig_EmailAccounts_Click">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE715;"/>
                     </MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
